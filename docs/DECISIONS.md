@@ -66,3 +66,53 @@ Format:
 **Decision:** on a rejection the relay sends the lobby message and returns `{ ok: false, reason }` with the connection still open. The caller closes it, with the code and reason in the close frame. The phone waits and knocks again on `no-host`, and gives up and asks for a new code on anything else.
 **Consequences:** the reason is part of the relay's contract now, asserted in `index.test.ts` at the socket level. Anything else that rejects a connection must close it too, or the socket leaks. The eviction paths (host lost, host replaced) still close their own sockets, because there the phone is told by the lobby message and no reason is needed.
 
+
+## D-012 — The model mutates in place and reports what happened (2026-09-01, phase 3)
+**Context:** phase 3 asked for one consistent choice between returning a new state and mutating the existing one, and for `applyMessage` to say when it ignored something.
+**Decision:** `applyMessage(state, msg)` and `tick(state, dtMs)` mutate `state` in place. `applyMessage` returns an `ApplyResult`: either `{ applied: true, kind, player }` (`kind` is `joined`, `rejoined`, `input` or `away`) or `{ applied: false, reason }` where `reason` is `unknown-player`, `wrong-phase` or `unsupported`. `setPhase` follows the same shape with `{ changed: true, from, to }` or `{ changed: false, reason: 'same-phase' | 'illegal' }`. Nothing in the model throws.
+**Consequences:** the renderer holds one long-lived `Player` object per blob and can keep a sprite beside it without re-looking-it-up each frame, and the host uses `kind` to decide when to send `assigned`. Immutable snapshots for a future undo or replay would be a rewrite; `snapshot()` exists for the read-only cases.
+
+## D-013 — The model moves the blobs; Phaser only draws them (2026-09-01, phase 3)
+**Context:** `CLAUDE.md`'s Phaser notes say to use arcade physics with `setVelocity` and `setCollideWorldBounds`. The Testing section says the pure model's `tick` moves players by `velocity * dt` and clamps them to the world bounds. Both cannot own a blob's position: two integrators fight, and whichever one the tests assert against is the one that is really in charge.
+**Decision:** the model integrates. `tick(state, dtMs)` moves every blob and clamps it to the world; `WorldScene.update` calls `tick` with the frame delta (capped at `MAX_STEP_MS`) and then sets each sprite's position from the model. Arcade physics is not enabled and no Phaser body exists.
+**Consequences:** every rule about movement is unit-tested in node, the `window.__game` hook and the e2e assertions read the same numbers the TV draws, and nothing is hand-rolled in the Phaser layer — the movement simply is not in that layer. If collisions between blobs, gravity or bouncing are ever wanted, either the model grows them or this decision is revisited deliberately; do not quietly turn arcade physics back on beside a model that is still moving things. **Alex should sanity-check this one**, as it is a deliberate departure from the Phaser notes in the brief.
+
+## D-014 — The first phone through the door starts the game (2026-09-01, phase 3)
+**Context:** the model now starts in the `lobby` phase, but a phone told `phase: lobby` shows "waiting for the TV". Nothing yet knows how to leave the lobby, so the first join would have stranded everyone.
+**Decision:** when a `join` arrives and the world is still in the lobby, the host moves it to `play` and broadcasts the change. Later joins are simply told the phase the world is already in.
+**Consequences:** the behaviour matches phase 2 (join, then drive) with no host interaction needed. Phase 4's keyboard shortcuts can still put the world back into the lobby deliberately.
+
+## D-015 — `window.__game` exposes the model and a snapshot (2026-09-01, phase 3)
+**Context:** D-007 published `{ blobs, world }` on the host page, where `blobs` was a `Map`. Phase 3 replaced that map with the game model, and a `Map` does not survive `page.evaluate` in Playwright anyway.
+**Decision:** the hook is `{ state, snapshot() }`. `state` is the live model for poking about by hand in a console; `snapshot()` returns plain, serialisable data (`world`, `phase`, and a `players` array carrying position, velocity, name, colour, slot, away, bubble text and skin key). It supersedes D-007's shape.
+**Consequences:** phase 6's e2e assertions call `snapshot()`. Fields added to `Player` need adding to `PlayerSnapshot` if a test is to see them.
+
+## D-016 — A blob may talk during play, not only during a text round (2026-09-01, phase 4)
+**Context:** phase 4 asked which phases a `text` message is accepted in.
+**Decision:** `play` and `text`. Anything sent from the lobby, or during a drawing round, is ignored with `wrong-phase`.
+**Consequences:** a phone that is a fraction late sending — the TV changed phase while a thumb was on Send — still gets its bubble, as long as the world went back to `play`. It also leaves room for a future game mode where phones type while everyone is running about. The phone only shows the text box during a `text` round, so this is a tolerance rather than a feature.
+
+## D-017 — Phase shortcuts on the host are P, T, D and L (2026-09-01, phase 4)
+**Context:** the host needs a way to change phase, and there is no host UI beyond the TV screen.
+**Decision:** a `keydown` on the host page: `P` play, `T` text, `D` draw, `L` lobby (case-insensitive; ignored when a modifier is held). The four keys are listed along the bottom of the TV with the current phase in bold, so nobody has to remember them.
+**Consequences:** whoever is at the TV keyboard runs the game. An illegal move — `T` from the lobby, say — is refused by the model and nothing happens, which is why the footer shows the phase the world is actually in. A proper host UI, or driving phases from a phone, would replace this.
+
+## D-018 — A drawing starts as the blob's own colour, in the blob's own shape (2026-09-01, phase 5)
+**Context:** phase 5 asks for "a faint outline of the blob as a guide". A transparent canvas would also have meant the drawing replacing the blob entirely, losing the colour a child has just been told is theirs.
+**Decision:** the drawing canvas is 256x256 and starts filled with that player's assigned colour, drawn as a rounded rectangle with the same corner ratio as the blob on the TV (14/72). The guide is the shape itself rather than an outline on top of it. Seven crayons, a 14px round stroke, "Start again" refills the background, "Done" sends. The texture key is `skin-<playerId>-<n>`.
+**Consequences:** what a child draws is exactly what appears on the TV, corners and all, with no mask needed in Phaser, and a blob stays recognisably its own colour unless the child paints over it. A drawing survives a phone refresh because it lives on the model, not on the phone.
+
+## D-019 — The host page publishes what each blob is *wearing* (2026-09-01, phase 5)
+**Context:** the model saying a player has `skin-p1-1` does not prove the texture ever reached the screen: `addBase64` decodes asynchronously and the swap happens in a Phaser callback. Screenshot-diffing Phaser is ruled out by the brief.
+**Decision:** `window.__game.worn()` returns the texture key each blob's sprite is actually using, read straight off the Phaser game objects.
+**Consequences:** the e2e suite can assert the round trip all the way to the sprite without a single pixel comparison. It is the only place the Phaser layer is observable from outside; keep it that way.
+
+## D-020 — A TV that has been replaced stands down (2026-09-02, phase 6)
+**Context:** the relay closed a replaced host socket quietly. The host page cannot tell a quiet close from a network blip, so it reconnected, took the world back, and closed the other TV — which reconnected in turn. Two host pages open anywhere on the LAN fought over the single world indefinitely, evicting every phone on each swap. It showed up as tests interfering with each other, but it is exactly what a forgotten browser tab would do in the living room.
+**Decision:** `attachHost` closes the host it replaces with close code `4002` and reason `replaced`. That is inside the client's fatal range, so the old page stops reconnecting and says "Another TV has taken over. Reload this page to take it back."
+**Consequences:** the last TV to open the host page wins, once, and stays won. Anything else that hangs up on a client for good must use a 40xx code, or it will be treated as a blip and retried forever.
+
+## D-021 — QR code by `qrcode-generator`, and phones knock while they wait (2026-09-02, phase 6)
+**Context:** phase 6 needed a QR library, and the relay now keeps phones attached when the TV reconnects on the same code (which is what stops a TV reload from clearing the room). A reloaded TV has a brand new, empty model, so it does not know the phones that are still holding sockets.
+**Decision:** `qrcode-generator` 2.0.4 — one file, no dependencies, renders a scalable `<svg>` string, parsed with `DOMParser` rather than assigned as `innerHTML`. And a phone showing the waiting screen re-sends `join` every two seconds until the TV answers.
+**Consequences:** a TV reload puts every phone back on screen within about two seconds with nothing to retype and no reconnect. The cost is one tiny message per waiting phone every two seconds, which is nothing for eight phones on a LAN. Blob positions do not survive a TV reload — the model is in memory and always was — but names, colours and slots do, because the phone sends them again.

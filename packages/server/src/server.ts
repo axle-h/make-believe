@@ -91,8 +91,8 @@ function toConnection(ws: WebSocket): Connection {
     send(message) {
       if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(message))
     },
-    close() {
-      ws.close()
+    close(code, reason) {
+      ws.close(code, reason)
     },
   }
 }

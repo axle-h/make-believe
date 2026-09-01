@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: Text phase
-status: not-started
+status: done
 updated: 2026-09-01
 ---
 
@@ -17,12 +17,12 @@ The host can switch the room into the `text` phase. Phones then show a text inpu
 
 ## Tasks
 
-- [ ] Host: a way to change phase. For now a keyboard shortcut on the host page (for example `T` for text, `P` for play, `L` for lobby) is enough; record the mapping in `DECISIONS.md`. Sends `phase` to `'*'`.
-- [ ] Model: `text` message creates a bubble on the player with an expiry; `tick` removes bubbles whose time has run out. Tests: bubble appears, bubble expires after N ms of ticks, a new text replaces the old bubble.
-- [ ] Model: `text` is ignored when the phase is not `text` or `play` (decide which, record it).
-- [ ] Player: on `phase: text` show a single-line input (max 60 chars, counter shown) and a Send button; on `phase: play` return to the joystick. The input must not be obscured by the mobile keyboard; use `visualViewport` or a scroll-into-view and test on a real Android phone.
-- [ ] Phaser: speech bubble drawn as a `Text` over a rounded rectangle, positioned above the name label each frame, faded out with a tween then destroyed when the model drops the bubble.
-- [ ] `shared` schema already caps `text` at 60 chars; confirm the server drops longer messages (existing test) and the player trims before sending.
+- [x] Host: a way to change phase. For now a keyboard shortcut on the host page (for example `T` for text, `P` for play, `L` for lobby) is enough; record the mapping in `DECISIONS.md`. Sends `phase` to `'*'`.
+- [x] Model: `text` message creates a bubble on the player with an expiry; `tick` removes bubbles whose time has run out. Tests: bubble appears, bubble expires after N ms of ticks, a new text replaces the old bubble.
+- [x] Model: `text` is ignored when the phase is not `text` or `play` (decide which, record it).
+- [x] Player: on `phase: text` show a single-line input (max 60 chars, counter shown) and a Send button; on `phase: play` return to the joystick. The input must not be obscured by the mobile keyboard; use `visualViewport` or a scroll-into-view and test on a real Android phone. (the box asks for focus on arrival and scrolls itself back into view on every `visualViewport` resize — **still to be tried on a real Android phone**)
+- [x] Phaser: speech bubble drawn as a `Text` over a rounded rectangle, positioned above the name label each frame, faded out with a tween then destroyed when the model drops the bubble.
+- [x] `shared` schema already caps `text` at 60 chars; confirm the server drops longer messages (existing test) and the player trims before sending.
 
 ## Acceptance
 
@@ -34,6 +34,6 @@ Manual check: press the text shortcut on the host; phone shows the input; sent t
 
 ## Handoff
 
-- **State:** not started.
-- **Next step:** add bubbles to the model with tests.
-- **Known issues:** none.
+- **State:** done. `P`/`T`/`D`/`L` on the TV change phase and the current one is shown along the bottom. A `text` message puts a bubble on the model with a 6 second life (`BUBBLE_MS`), `tick` counts it down, and Phaser draws it as a rounded box with a tail above the name, fading out when the model drops it. The phone shows a text box with a counter during a `text` round and goes back to the joystick on `play`.
+- **Next step:** phase 5 — the drawing screen on the phone.
+- **Known issues:** the mobile-keyboard handling (focus, then `scrollIntoView` on every `visualViewport` resize) has only been checked in a desktop browser. It needs trying on a real Android phone, which is the one thing in this phase a laptop cannot prove.

@@ -12,11 +12,12 @@
     "build": "pnpm --filter @make-believe/web build && pnpm --filter @make-believe/server build",
     "start": "node packages/server/dist/index.js",
     "test": "vitest run",
-    "test:e2e": "echo 'e2e tests arrive in phase 6' && exit 0",
+    "test:e2e": "playwright test",
     "lint": "oxlint",
     "typecheck": "pnpm -r --parallel typecheck"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.10.2",
     "oxlint": "^1.80.0",
     "typescript": "^5.7.2",

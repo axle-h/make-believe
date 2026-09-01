@@ -13,8 +13,17 @@ import type {
 
 export interface Connection {
   send(message: unknown): void
-  close(): void
+  /** A code and reason travel in the close frame so the client knows why. */
+  close(code?: number, reason?: string): void
 }
+
+/**
+ * A second TV took over the world. The old one is told so, rather than being
+ * closed quietly: a quiet close looks like a network blip, and the old TV would
+ * reconnect, take the world back, and the two would fight over it forever
+ * (see docs/DECISIONS.md, D-020).
+ */
+export const CLOSE_REPLACED = 4002
 
 export type RejectReason = 'no-host' | 'wrong-room'
 
@@ -68,12 +77,19 @@ export function createRelay(): Relay {
 
     attachHost(code, connection) {
       const previous = host
+      // The same code from a new socket is the same TV coming back — a reload,
+      // or a connection that dropped. The phones keep their sockets and are
+      // told to show the lobby, which is their cue to knock again; a TV that
+      // arrives with a different code is a new world and clears the room.
+      const sameSession = previous !== null && roomCode === code
       host = connection
       roomCode = code
-      // A new host is a new world: the old TV goes, and every player rejoins
-      // with the new code.
-      evictAllPlayers()
-      if (previous && previous !== connection) previous.close()
+      if (sameSession) {
+        for (const player of players.values()) player.send(LOBBY)
+      } else {
+        evictAllPlayers()
+      }
+      if (previous && previous !== connection) previous.close(CLOSE_REPLACED, 'replaced')
     },
 
     attachPlayer(code, playerId, connection) {

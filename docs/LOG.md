@@ -26,3 +26,36 @@ Append-only. Newest entry at the bottom. Format is in `README.md`.
 - Notes for next time: the away purge was proven by unit test and by winding one blob's clock forward in the page — a backgrounded tab's `requestAnimationFrame` is paused, so wall-clock waits in a background tab prove nothing. `sirv` caches its file listing at startup, so a rebuild needs the dev server restarted or new hashed assets 404.
 - Next: phase 3 — grow `blobs.ts` into the pure game model under `src/host/game/` and swap the canvas for Phaser.
 
+
+## 2026-09-01 — phase 3 — Claude (Opus 5)
+- Did: grew `blobs.ts` into the pure game model under `src/host/game/` (`state`, `apply`, `tick`, `phases`, `selectors`, `constants`) with 41 tests, then replaced the plain canvas with Phaser 4.2.1. `main.ts` is now socket and wiring only; `phaser/worldScene.ts` draws the model and nothing else. Added `snapshot()` so the e2e hook can get plain data out of the page, and a `purity.test.ts` that greps the model directory for Phaser and DOM references.
+- Decided on the way: D-012 (mutate in place, report the outcome), D-013 (the model integrates movement, Phaser only draws — a deliberate departure from the brief's arcade-physics note, worth Alex's eye), D-014 (the first join starts the game), D-015 (`window.__game` is now `{ state, snapshot() }`, superseding D-007).
+- Also: the host page now fits one screen with no scrollbars. Phaser's `Scale.FIT` measures its parent, so the canvas is taken out of flow — in flow it grew its own parent and overflowed the TV.
+- Verified: `pnpm typecheck`, `pnpm lint`, `pnpm test` (111 tests, 12 files), `pnpm build` (player bundle 4 kB + 86 kB shared, host 1.38 MB — Phaser never reaches a phone). Checked in Chrome against `pnpm build && pnpm start`: two players joined, both blobs drawn with names, movement and world bounds correct, no page overflow.
+- Next: phase 4 — text phase and speech bubbles.
+
+## 2026-09-01 — phase 4 — Claude (Opus 5)
+- Did: the text round. `BUBBLE_MS` bubbles on the model with `tick` counting them down, a Phaser bubble with a tail that fades out when the model drops it, phase shortcuts on the TV with the current phase shown along the bottom, and a text box with a live counter on the phone.
+- Decisions: D-016 (text is accepted during `play` as well as `text`), D-017 (the `P`/`T`/`D`/`L` mapping).
+- Verified: `pnpm typecheck`, `pnpm lint`, `pnpm test` (120 tests, 12 files), `pnpm build`. Checked in Chrome against the built app: a phone joined, `T` on the TV moved it to the text screen, "hello mum" appeared as a bubble above the right blob.
+- Next: phase 5 — the drawing round.
+
+## 2026-09-01 — phase 5 — Claude (Opus 5)
+- Did: the drawing round. A 256x256 canvas on the phone that starts as a rounded square of the player's own colour, seven crayons, "Start again" and "Done"; pure pointer-to-canvas maths and the size guard in `src/player/drawing.ts` with tests. The model keeps `{ key, png }` per player and the Phaser scene turns a new key into a texture with `addBase64`, dropping the old one so the GPU does not fill up.
+- Decisions: D-018 (the canvas starts as the blob, so the guide is the shape itself), D-019 (`window.__game.worn()` reports the texture each sprite is really using).
+- Verified: `pnpm typecheck`, `pnpm lint`, `pnpm test` (131 tests, 13 files), `pnpm build`. Checked in Chrome against the built app: `D` on the TV moved the phone to the drawing screen, strokes drew, Done sent a 5 kB PNG and the model picked up a new skin key.
+- Notes for next time: a Chrome tab driven by the extension while the window is in the background gets **zero** `requestAnimationFrame` callbacks, so Phaser's loop is completely stopped and nothing rendered can be judged from a screenshot. Anything that has to be seen needs a visible page — which in practice means the Playwright suite.
+- Next: phase 6 — QR code, reconnect, e2e.
+
+## 2026-09-02 — phase 6 — Claude (Opus 5)
+- Did: QR code on the TV (`qrcode-generator`, rendered as an SVG beside the room code), the room code kept in `sessionStorage` so a TV reload reuses it, the relay keeping phones attached when the TV comes back on the same code, a two-second knock from any waiting phone, a "Reconnecting…" badge, Wake Lock on the phone, and the Playwright suite in `/e2e` with three tests.
+- Fixed on the way, and it is a real bug rather than a test artefact: a replaced TV was closed quietly, so it reconnected and took the world back, and two host pages anywhere on the LAN fought over the single world forever, evicting every phone on each swap. The relay now closes a replaced host with `4002 replaced` and the old page stands down and says so (D-020). It surfaced as tests interfering with each other — and as a stray browser tab of mine stealing the world mid-run.
+- Decisions: D-020 (a replaced TV stands down), D-021 (the QR library, and the knock heartbeat).
+- Verified: `pnpm typecheck`, `pnpm lint`, `pnpm test` (137 tests, 14 files), `pnpm build`, `pnpm test:e2e` (3 tests, run twice through with `--repeat-each=2`, all green). The e2e covers: two phones joining by code, names on the TV, one joystick moving only its own blob and stopping on release, a speech bubble appearing and expiring, a drawing round-tripping as far as the sprite's texture (`window.__game.worn()`), a phone reload keeping its blob, and a TV reload with the phones carrying on.
+- Next: phase 7 — k3s. It needs the cluster and a GHCR push, so it wants Alex.
+
+## 2026-09-02 — phase 7 (part) — Claude (Opus 5)
+- Did: the manifests only. `k8s/make-believe/deployment.yml`, `k8s/make-believe/service.yml` and `k8s/README.md`, in the sibling projects' house style. Rebuilt the container with the phase 3 to 6 code and ran it `--read-only --cap-drop ALL --user 1000:1000` to prove the security context in the deployment is actually what the image can live with.
+- Not done, deliberately: nothing was pushed to GHCR and nothing was applied to the cluster. There are no ghcr.io credentials on this machine, so the push needs Alex; applying before the image exists would only park an `ImagePullBackOff` in the cluster. Alex also asked this session to stop at the deployment.
+- Verified: `kubectl apply --dry-run=client -f k8s/make-believe/` passes; the local image serves `/healthz`, `/host/` and `/` read-only as uid 1000.
+- Next: Alex pushes the image and applies, then phase 8.

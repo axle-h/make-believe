@@ -1,21 +1,24 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Connection, Relay } from './relay.js'
-import { createRelay } from './relay.js'
+import { CLOSE_REPLACED, createRelay } from './relay.js'
 
 interface Fake extends Connection {
   sent: unknown[]
   closed: boolean
+  closedWith: { code?: number | undefined; reason?: string | undefined } | null
 }
 
 function fakeConnection(): Fake {
   const fake: Fake = {
     sent: [],
     closed: false,
+    closedWith: null,
     send(message) {
       fake.sent.push(message)
     },
-    close() {
+    close(code, reason) {
       fake.closed = true
+      fake.closedWith = { code, reason }
     },
   }
   return fake
@@ -197,6 +200,37 @@ describe('relay', () => {
     expect(relay.attachPlayer('WXYZ', 'p1', rejoin)).toEqual({ ok: true })
     relay.routeFromPlayer('p1', { type: 'join', playerId: 'p1', name: 'Wilf' })
     expect(second.sent).toEqual([{ type: 'join', playerId: 'p1', name: 'Wilf' }])
+  })
+
+  it('keeps the players when the same TV comes back on the same code', () => {
+    relay.attachHost('ABCD', host)
+    const one = fakeConnection()
+    const two = fakeConnection()
+    relay.attachPlayer('ABCD', 'p1', one)
+    relay.attachPlayer('ABCD', 'p2', two)
+
+    // The TV reloaded: a new socket, the same code kept in sessionStorage.
+    const second = fakeConnection()
+    relay.attachHost('ABCD', second)
+
+    expect(host.closed).toBe(true)
+    expect(relay.playerIds()).toEqual(['p1', 'p2'])
+    expect(one.closed).toBe(false)
+    expect(two.closed).toBe(false)
+    // Told to show the lobby, which is a phone's cue to knock again.
+    expect(one.sent).toEqual([lobby])
+    expect(two.sent).toEqual([lobby])
+
+    // And their next knock reaches the new TV without reconnecting anything.
+    relay.routeFromPlayer('p1', { type: 'join', playerId: 'p1', name: 'Wilf' })
+    expect(second.sent).toEqual([{ type: 'join', playerId: 'p1', name: 'Wilf' }])
+  })
+
+  it('tells the TV it replaced why it was hung up on', () => {
+    relay.attachHost('ABCD', host)
+    relay.attachHost('WXYZ', fakeConnection())
+
+    expect(host.closedWith).toEqual({ code: CLOSE_REPLACED, reason: 'replaced' })
   })
 
   it('ignores a stale host socket closing after it was replaced', () => {

@@ -51,6 +51,24 @@ h1 {
   font-size: 1.8rem;
 }
 
+.link-status {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 0.4rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  margin: 0;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.85rem;
+  color: #10121a;
+  background: #ffd23f;
+  border-radius: 999px;
+}
+
+.link-status[hidden] {
+  display: none;
+}
+
 .hint {
   margin: 0;
   opacity: 0.7;
@@ -121,6 +139,75 @@ h1 {
   color: var(--ink);
   background: transparent;
   border: 2px solid #2c3350;
+}
+
+.text-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 22rem;
+}
+
+.text-input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.9rem 1rem;
+  font-family: inherit;
+  font-size: 1.3rem;
+  color: var(--ink);
+  background: #1b1f2e;
+  border: 2px solid #2c3350;
+  border-radius: 12px;
+  /* Typing is the one place a phone may select text. */
+  user-select: text;
+}
+
+.text-input:focus-visible {
+  outline: none;
+  border-color: var(--blob);
+}
+
+.counter {
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
+  text-align: right;
+  opacity: 0.55;
+}
+
+.draw-canvas {
+  width: min(80vw, 60dvh);
+  aspect-ratio: 1;
+  height: auto;
+  border-radius: 14%;
+  background: #1b1f2e;
+  box-shadow: 0 0 0 2px #2c3350;
+  /* A finger on the canvas draws; it never scrolls the page. */
+  touch-action: none;
+}
+
+.crayons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.crayon {
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border: 3px solid transparent;
+  border-radius: 50%;
+}
+
+.crayon[aria-pressed='true'] {
+  border-color: var(--ink);
+}
+
+.draw-buttons {
+  display: flex;
+  gap: 0.75rem;
 }
 
 .waiting-detail {

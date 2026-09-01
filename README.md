@@ -29,6 +29,12 @@ pnpm start            # serve the built app on :3000 (same as the container)
 
 In production mode open `http://<your-lan-ip>:3000/host/` on the TV and `http://<your-lan-ip>:3000/` on phones. The port can be changed with the `PORT` environment variable.
 
+**Open the TV by LAN address, never `localhost`.** The QR code on the TV is built from the address that page was opened with, so a TV on `localhost` hands every phone a link back to itself.
+
+While the game is running, the keys `P`, `T`, `D` and `L` on the TV switch the phones between the joystick, the text box, the drawing pad and the lobby. The current phase is shown along the bottom of the screen.
+
+Only one TV at a time: opening the host page a second time takes the world over, and the first TV says so and stands down.
+
 ## Test
 
 ```sh

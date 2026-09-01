@@ -9,14 +9,20 @@
   <body>
     <main class="stage">
       <header class="banner">
-        <h1>MAKE believe</h1>
-        <p class="join">
-          Join at <span id="join-url" class="join-url">…</span> with code
-          <strong id="room-code" class="room-code">····</strong>
-        </p>
+        <div class="banner-text">
+          <h1>MAKE believe</h1>
+          <p class="join">
+            Join at <span id="join-url" class="join-url">…</span> with code
+            <strong id="room-code" class="room-code">····</strong>
+          </p>
+        </div>
+        <div id="qr" class="qr" role="img" aria-label="Scan to join"></div>
       </header>
-      <canvas id="world" class="world" width="1280" height="720"></canvas>
-      <p id="status" class="status">Connecting…</p>
+      <div id="world" class="world"></div>
+      <footer class="footer">
+        <p id="phase" class="phase"></p>
+        <p id="status" class="status">Connecting…</p>
+      </footer>
     </main>
   </body>
 </html>

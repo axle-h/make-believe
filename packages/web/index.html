@@ -8,6 +8,7 @@
     <script type="module" src="/src/player/main.ts"></script>
   </head>
   <body>
+    <p id="link-status" class="link-status" role="status" hidden>Reconnecting…</p>
     <main class="phone">
       <section id="screen-join" class="screen">
         <h1>MAKE believe</h1>
@@ -53,6 +54,39 @@
         <button id="change-code-button" class="button button-quiet" type="button">
           Use a different code
         </button>
+      </section>
+
+      <section id="screen-text" class="screen" hidden>
+        <p class="hint">Say something to the TV.</p>
+        <form id="text-form" class="text-form">
+          <input
+            id="text-input"
+            class="text-input"
+            name="say"
+            type="text"
+            inputmode="text"
+            autocomplete="off"
+            autocapitalize="sentences"
+            enterkeyhint="send"
+            maxlength="60"
+            placeholder="Say something…"
+            aria-label="What your blob says"
+          />
+          <p id="text-count" class="counter" aria-hidden="true">0/60</p>
+          <button id="text-send" class="button" type="submit" disabled>Send</button>
+        </form>
+        <p id="text-sent" class="hint" role="status"></p>
+      </section>
+
+      <section id="screen-draw" class="screen" hidden>
+        <p class="hint">Draw your blob.</p>
+        <canvas id="draw-canvas" class="draw-canvas" width="256" height="256"></canvas>
+        <div id="draw-crayons" class="crayons" role="group" aria-label="Colours"></div>
+        <div class="draw-buttons">
+          <button id="draw-clear" class="button button-quiet" type="button">Start again</button>
+          <button id="draw-done" class="button" type="button">Done</button>
+        </div>
+        <p id="draw-status" class="hint" role="status"></p>
       </section>
 
       <section id="screen-play" class="screen" hidden>

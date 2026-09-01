@@ -10,26 +10,47 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  /* The TV shows one screenful and never scrolls. */
+  height: 100vh;
+  overflow: hidden;
   display: grid;
-  place-items: center;
+  place-items: stretch;
   background: var(--ground);
   color: var(--ink);
   font-family: system-ui, sans-serif;
 }
 
 .stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  height: 100%;
+  width: 100%;
+  display: grid;
+  /* banner, world, status: the world takes whatever is left. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  justify-items: center;
   gap: 1rem;
   padding: 1.5rem;
-  width: 100%;
-  max-width: 1400px;
 }
 
 .banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1rem, 3vw, 3rem);
   text-align: center;
+}
+
+/* Big enough to scan from a sofa, small enough to stay out of the way. */
+.qr {
+  width: clamp(5rem, 14vh, 9rem);
+  padding: 0.4rem;
+  border-radius: 10px;
+  background: var(--ink);
+}
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 h1 {
@@ -54,17 +75,51 @@ h1 {
   letter-spacing: 0.25em;
 }
 
+/* Phaser fills this box with a 16:9 canvas, letterboxed as needed. */
 .world {
+  position: relative;
   width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
+  height: 100%;
+}
+
+/*
+ * Out of flow on purpose: a canvas that could push its own parent about would
+ * make Phaser's FIT scaling chase its own tail and overflow the screen.
+ */
+.world canvas {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  display: block;
   border-radius: 12px;
-  background: #1b1f2e;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.footer {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  min-height: 1.6em;
+}
+
+.phase {
+  margin: 0;
+  font-size: 1.1rem;
+  opacity: 0.75;
+}
+
+.phase-key {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.phase-now {
+  font-weight: 700;
+  opacity: 1;
 }
 
 .status {
   margin: 0;
-  min-height: 1.4em;
   opacity: 0.6;
 }
