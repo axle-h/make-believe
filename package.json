@@ -1,0 +1,25 @@
+{
+  "name": "make-believe",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm --filter @make-believe/web build && pnpm --filter @make-believe/server build",
+    "start": "node packages/server/dist/index.js",
+    "test": "vitest run",
+    "test:e2e": "echo 'e2e tests arrive in phase 6' && exit 0",
+    "lint": "oxlint",
+    "typecheck": "pnpm -r --parallel typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "oxlint": "^1.80.0",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
+  }
+}

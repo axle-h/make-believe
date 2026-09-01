@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+.git
+.idea
+docs
+e2e
+k8s
+androidtv
+test-results
+playwright-report

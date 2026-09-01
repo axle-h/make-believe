@@ -1,0 +1,117 @@
+:root {
+  color-scheme: dark;
+  --ink: #f4f1ea;
+  --ground: #10121a;
+  --blob: #4ea8ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: system-ui, sans-serif;
+  /* A controller should never scroll or zoom under a thumb. */
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.phone {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+  padding: 1.5rem;
+}
+
+.screen[hidden] {
+  display: none;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.hint {
+  margin: 0;
+  opacity: 0.7;
+}
+
+.error {
+  margin: 0;
+  min-height: 1.4em;
+  color: #ff8f8f;
+}
+
+.join-form {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 22rem;
+}
+
+.room-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.9rem 1rem;
+  font-family: ui-monospace, monospace;
+  font-size: 2rem;
+  letter-spacing: 0.35em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: #1b1f2e;
+  border: 2px solid #2c3350;
+  border-radius: 12px;
+}
+
+.button {
+  padding: 0.9rem 1.4rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #10121a;
+  background: var(--blob);
+  border: 0;
+  border-radius: 12px;
+}
+
+.pad {
+  position: relative;
+  width: min(70vw, 60dvh);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #1b1f2e;
+  border: 2px solid #2c3350;
+  touch-action: none;
+}
+
+.thumb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 38%;
+  aspect-ratio: 1;
+  margin: -19% 0 0 -19%;
+  border-radius: 50%;
+  background: var(--blob);
+  transition: transform 60ms linear;
+}

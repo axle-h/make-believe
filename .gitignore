@@ -1,1 +1,10 @@
+node_modules/
+dist/
 .idea
+*.tsbuildinfo
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/

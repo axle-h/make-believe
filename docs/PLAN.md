@@ -4,7 +4,7 @@ Phases follow the milestones in `CLAUDE.md`. Each phase is a runnable increment:
 
 | # | Phase | Status | Updated | Summary |
 |---|---|---|---|---|
-| 1 | [Skeleton](phases/01-skeleton.md) | not-started | 2026-09-01 | Workspace, shared schemas, relay server, both web pages on a plain canvas, Dockerfile. |
+| 1 | [Skeleton](phases/01-skeleton.md) | done | 2026-09-01 | Workspace, shared schemas, relay server, both web pages on a plain canvas, Dockerfile. |
 | 2 | [Join and names](phases/02-join-and-names.md) | not-started | 2026-09-01 | Proper join screen with name entry; name label above each square. |
 | 3 | [Game model and Phaser](phases/03-game-model-and-phaser.md) | not-started | 2026-09-01 | Pure TS game model with tests; replace the plain canvas with Phaser 4. |
 | 4 | [Text phase](phases/04-text-phase.md) | not-started | 2026-09-01 | Phone text input shown as a speech bubble above the blob. |
