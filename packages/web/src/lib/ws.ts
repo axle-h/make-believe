@@ -21,6 +21,11 @@ export interface WsClientOptions<Schema extends z.ZodType> {
   schema: Schema
   onMessage: (message: z.infer<Schema>) => void
   onStatus?: (status: ConnectionStatus) => void
+  /**
+   * The server hung up for good and there will be no reconnect. `reason` is
+   * whatever it put in the close frame, such as `no-host` or `wrong-room`.
+   */
+  onFatal?: (info: { code: number; reason: string }) => void
 }
 
 export interface WsClient {
@@ -69,7 +74,10 @@ export function connect<Schema extends z.ZodType>(options: WsClientOptions<Schem
       socket = null
       setStatus('closed')
       if (closedByUs) return
-      if (event.code >= FATAL_CLOSE_MIN && event.code <= FATAL_CLOSE_MAX) return
+      if (event.code >= FATAL_CLOSE_MIN && event.code <= FATAL_CLOSE_MAX) {
+        options.onFatal?.({ code: event.code, reason: event.reason })
+        return
+      }
       retryTimer = setTimeout(open, retryMs)
       retryMs = Math.min(retryMs * 2, MAX_RETRY_MS)
     })

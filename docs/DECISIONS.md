@@ -50,3 +50,19 @@ Format:
 **Context:** `CLAUDE.md` says a new host connection replaces the current one, and that a host disconnect tears the world down. It does not say what happens to the phones still holding sockets.
 **Decision:** attaching a host, or losing one, sends every registered player `{ type: 'phase', value: 'lobby' }`, closes their socket and forgets them. The relay never carries players across a host change.
 **Consequences:** a TV refresh mints a new code and sends every phone back to the code screen — correct while the host keeps no state across reloads, and the thing phase 6's reconnect work has to soften.
+
+## D-009 — A blob waits for a phone that has gone (2026-09-01, phase 2)
+**Context:** phase 2 asks that a phone refresh reattach to the same square with the same name. A refresh drops the WebSocket, so the relay sends the host `left`, and the host deleted the blob on the spot — the rejoining phone then got a brand new blob at the spawn point, which is not "the same square".
+**Decision:** `left` marks the blob `away` instead of deleting it. It stays on the TV at 30% opacity, stopped dead, holding its slot, colour, name and position. A `join` from the same `playerId` revives it. `tick` forgets an away blob after `AWAY_TIMEOUT_MS`, 30 seconds, which frees its slot and colour.
+**Consequences:** a refresh, a dropped connection or a walk out of wifi range is a non-event for up to 30 seconds. A child who puts the phone down leaves a faded square for half a minute. Phase 3 moves position into Phaser bodies, so `away` will have to stop a body rather than just skip a branch in a loop.
+
+## D-010 — The phone remembers the last room code (2026-09-01, phase 2)
+**Context:** the brief says to remember the name in localStorage but says nothing about the code. With only the name remembered, every refresh made a child retype the code from the TV, which makes "refreshing a phone keeps its square" true in the model but tedious in the hand.
+**Decision:** remember the code as well, under `make-believe.room`. On load the code comes from `?room=` if present, else from storage; if that plus the remembered name is enough to join, the page joins immediately without showing the form.
+**Consequences:** a refresh asks for nothing at all. A stale code auto-joins and is turned away, which is fine because the phone is told why (D-011) and lands back on the form with a message. The QR link in phase 6 still wins over storage.
+
+## D-011 — The relay leaves a rejected player socket open (2026-09-01, phase 2)
+**Context:** `attachPlayer` sent the lobby message and closed the socket itself, then `server.ts` called `ws.close(4001, reason)` on the already-closing socket. The second close was ignored, so the phone saw close code 1005 with no reason and could not tell "no TV yet" from "that code is stale".
+**Decision:** on a rejection the relay sends the lobby message and returns `{ ok: false, reason }` with the connection still open. The caller closes it, with the code and reason in the close frame. The phone waits and knocks again on `no-host`, and gives up and asks for a new code on anything else.
+**Consequences:** the reason is part of the relay's contract now, asserted in `index.test.ts` at the socket level. Anything else that rejects a connection must close it too, or the socket leaks. The eviction paths (host lost, host replaced) still close their own sockets, because there the phone is told by the lobby message and no reason is needed.
+

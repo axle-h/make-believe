@@ -6,6 +6,7 @@ import {
   type PlayerToHostMessage,
 } from '@make-believe/shared'
 import { connect, type WsClient } from '../lib/ws.js'
+import { evaluateJoinForm, joinFormError } from './joinForm.js'
 import { ZERO, createInputThrottle, vectorFromPointer, type Vector } from './joystick.js'
 import './player.css'
 
@@ -15,14 +16,28 @@ import './player.css'
  */
 
 const PLAYER_ID_KEY = 'make-believe.playerId'
-/** Phase 2 puts a real name here. */
-const PLACEHOLDER_NAME = 'Blob'
+const NAME_KEY = 'make-believe.name'
+const ROOM_KEY = 'make-believe.room'
 
-const joinScreen = requireElement<HTMLElement>('#screen-join')
-const playScreen = requireElement<HTMLElement>('#screen-play')
+/** How long to wait before trying the TV again while it is away. */
+const FIRST_WAIT_RETRY_MS = 800
+const MAX_WAIT_RETRY_MS = 4_000
+
+type Screen = 'join' | 'waiting' | 'play'
+
+const screens: Record<Screen, HTMLElement> = {
+  join: requireElement<HTMLElement>('#screen-join'),
+  waiting: requireElement<HTMLElement>('#screen-waiting'),
+  play: requireElement<HTMLElement>('#screen-play'),
+}
 const joinForm = requireElement<HTMLFormElement>('#join-form')
 const roomInput = requireElement<HTMLInputElement>('#room-input')
+const nameInput = requireElement<HTMLInputElement>('#name-input')
+const joinButton = requireElement<HTMLButtonElement>('#join-button')
 const joinError = requireElement<HTMLElement>('#join-error')
+const waitingCode = requireElement<HTMLElement>('#waiting-code')
+const waitingName = requireElement<HTMLElement>('#waiting-name')
+const changeCodeButton = requireElement<HTMLButtonElement>('#change-code-button')
 const playStatus = requireElement<HTMLElement>('#play-status')
 const pad = requireElement<HTMLElement>('#pad')
 const thumb = requireElement<HTMLElement>('#thumb')
@@ -34,45 +49,100 @@ function requireElement<T extends Element>(selector: string): T {
 }
 
 const playerId = loadPlayerId()
-let client: WsClient | null = null
 const throttle = createInputThrottle()
 
-// Scanning the QR code (phase 6) or following the link on the TV fills the code in.
+let client: WsClient | null = null
+/** What we joined with, so a retry can use the same thing. */
+let session: { room: string; name: string } | null = null
+let retryTimer: ReturnType<typeof setTimeout> | null = null
+let retryMs = FIRST_WAIT_RETRY_MS
+let screen: Screen = 'join'
+/** The pointer holding the pad down, if any. */
+let activePointer: number | null = null
+/** Where the thumb is right now; the send loop drains it. */
+let latest: Vector = ZERO
+
+// --- the join screen -----------------------------------------------------
+
+nameInput.value = loadStored(NAME_KEY) ?? ''
+
+// Scanning the QR code (phase 6) or following the link on the TV fills the code
+// in; failing that, the code from last time, so a refresh asks for nothing.
 const roomFromUrl = normaliseRoomCode(new URLSearchParams(window.location.search).get('room') ?? '')
-if (isValidRoomCode(roomFromUrl)) {
-  roomInput.value = roomFromUrl
-  join(roomFromUrl)
+const roomFromStorage = normaliseRoomCode(loadStored(ROOM_KEY) ?? '')
+if (isValidRoomCode(roomFromUrl)) roomInput.value = roomFromUrl
+else if (isValidRoomCode(roomFromStorage)) roomInput.value = roomFromStorage
+
+refreshJoinButton()
+for (const input of [roomInput, nameInput]) {
+  input.addEventListener('input', () => {
+    joinError.textContent = ''
+    refreshJoinButton()
+  })
 }
 
 joinForm.addEventListener('submit', (event) => {
   event.preventDefault()
-  const code = normaliseRoomCode(roomInput.value)
-  roomInput.value = code
-  if (!isValidRoomCode(code)) {
-    joinError.textContent = 'That is not a code from the TV.'
+  submitJoin()
+})
+
+changeCodeButton.addEventListener('click', () => {
+  stop()
+  showScreen('join')
+  joinError.textContent = ''
+})
+
+function refreshJoinButton(): void {
+  joinButton.disabled = !evaluateJoinForm(roomInput.value, nameInput.value).canJoin
+}
+
+function submitJoin(): void {
+  const state = evaluateJoinForm(roomInput.value, nameInput.value)
+  roomInput.value = state.room
+  if (!state.canJoin) {
+    joinError.textContent = joinFormError(state)
     return
   }
   joinError.textContent = ''
-  join(code)
-})
+  store(NAME_KEY, state.name)
+  store(ROOM_KEY, state.room)
+  session = { room: state.room, name: state.name }
+  waitingCode.textContent = state.room
+  waitingName.textContent = state.name
+  showScreen('waiting')
+  openSocket()
+}
 
-function join(room: string): void {
+// --- the connection ------------------------------------------------------
+
+/** Open a socket for the current session. The TV decides what happens next. */
+function openSocket(): void {
+  if (!session) return
+  const { room, name } = session
   client?.close()
-  showScreen('play')
-  playStatus.textContent = 'Connecting…'
   client = connect({
     query: { role: 'player', room, playerId },
     schema: HostToPlayerMessageSchema,
     onMessage: applyMessage,
     onStatus: (status) => {
       if (status === 'open') {
-        playStatus.textContent = 'Waiting for the TV…'
-        sendMessage({ type: 'join', playerId, name: PLACEHOLDER_NAME })
-      } else if (status === 'connecting') {
-        playStatus.textContent = 'Connecting…'
-      } else {
+        retryMs = FIRST_WAIT_RETRY_MS
+        sendMessage({ type: 'join', playerId, name })
+      } else if (status === 'closed' && screen === 'play') {
         playStatus.textContent = 'Lost the TV — retrying…'
       }
+    },
+    onFatal: ({ reason }) => {
+      // The relay hung up for good. A TV that is not there yet is worth
+      // waiting for; anything else means this code will never work.
+      if (reason === 'no-host') {
+        retryLater()
+        return
+      }
+      stop()
+      showScreen('join')
+      joinError.textContent =
+        reason === 'wrong-room' ? 'The TV has a new code now.' : 'The TV would not let that in.'
     },
   })
 }
@@ -80,40 +150,62 @@ function join(room: string): void {
 function applyMessage(message: HostToPlayerMessage): void {
   if (message.type === 'assigned') {
     document.documentElement.style.setProperty('--blob', message.colour)
-    playStatus.textContent = `You are blob ${message.slot + 1}`
+    playStatus.textContent = session?.name ?? ''
     return
   }
   if (message.value === 'lobby') {
-    // The TV has gone, or this code is stale. Back to the code screen.
-    client?.close()
-    client = null
-    showScreen('join')
-    joinError.textContent = 'Waiting for the TV. Enter the code again when it is back.'
+    // The TV has gone. The relay hangs up right behind this message, so the
+    // close handler is what decides whether to wait or ask for a new code.
+    // Closing the socket here instead would throw that reason away.
+    release()
+    showScreen('waiting')
+    return
   }
+  if (message.value === 'play') {
+    showScreen('play')
+    playStatus.textContent = session?.name ?? ''
+  }
+  // 'draw' and 'text' get their own screens in phases 5 and 4.
+}
+
+/** Sit on the waiting screen and knock again shortly, until the TV answers. */
+function retryLater(): void {
+  if (!session) return
+  client?.close()
+  client = null
+  release()
+  showScreen('waiting')
+  if (retryTimer !== null) clearTimeout(retryTimer)
+  retryTimer = setTimeout(openSocket, retryMs)
+  retryMs = Math.min(retryMs * 2, MAX_WAIT_RETRY_MS)
+}
+
+/** Give up on the current session entirely. */
+function stop(): void {
+  if (retryTimer !== null) clearTimeout(retryTimer)
+  retryTimer = null
+  retryMs = FIRST_WAIT_RETRY_MS
+  client?.close()
+  client = null
+  session = null
 }
 
 function sendMessage(message: PlayerToHostMessage): void {
   client?.send(message)
 }
 
-function showScreen(which: 'join' | 'play'): void {
-  joinScreen.hidden = which !== 'join'
-  playScreen.hidden = which !== 'play'
+function showScreen(which: Screen): void {
+  screen = which
+  for (const [name, element] of Object.entries(screens)) element.hidden = name !== which
 }
 
+// --- identity ------------------------------------------------------------
+
 function loadPlayerId(): string {
-  try {
-    const stored = window.localStorage.getItem(PLAYER_ID_KEY)
-    if (stored) return stored
-  } catch {
-    // Private browsing, or storage turned off: a fresh id each load will do.
-  }
+  const stored = loadStored(PLAYER_ID_KEY)
+  if (stored) return stored
   const created = createPlayerId()
-  try {
-    window.localStorage.setItem(PLAYER_ID_KEY, created)
-  } catch {
-    // Nothing to do; the blob just will not survive a refresh.
-  }
+  store(PLAYER_ID_KEY, created)
   return created
 }
 
@@ -123,11 +215,24 @@ function createPlayerId(): string {
   return `p-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`
 }
 
-// --- the joystick --------------------------------------------------------
+function loadStored(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    // Private browsing, or storage turned off: nothing is remembered.
+    return null
+  }
+}
 
-let activePointer: number | null = null
-/** Where the thumb is right now; the send loop below drains it. */
-let latest: Vector = ZERO
+function store(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // Nothing to do; the blob just will not survive a refresh.
+  }
+}
+
+// --- the joystick --------------------------------------------------------
 
 pad.addEventListener('pointerdown', (event) => {
   activePointer = event.pointerId
@@ -181,6 +286,7 @@ function drain(): void {
 
 /** Letting go must stop the blob at once, throttle or no throttle. */
 function release(): void {
+  activePointer = null
   latest = ZERO
   moveThumb(ZERO)
   throttle.record(performance.now(), ZERO)
@@ -192,3 +298,7 @@ function moveThumb(vector: Vector): void {
   const reach = rect.width / 2 - rect.width * 0.19
   thumb.style.transform = `translate(${vector.dx * reach}px, ${vector.dy * reach}px)`
 }
+
+// A remembered name and a code, from the QR link or from last time, means there
+// is nothing to ask. Last, so every handler above is wired before it can fire.
+if (evaluateJoinForm(roomInput.value, nameInput.value).canJoin) submitJoin()

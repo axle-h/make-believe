@@ -26,6 +26,10 @@ export interface Relay {
   readonly hasHost: boolean
   playerIds(): string[]
   attachHost(code: string, connection: Connection): void
+  /**
+   * Register a player. On `{ ok: false }` the connection has been sent the
+   * lobby message but is left open: the caller closes it, so it can say why.
+   */
   attachPlayer(code: string, playerId: string, connection: Connection): AttachPlayerResult
   detachHost(connection: Connection): void
   detachPlayer(playerId: string, connection: Connection): void
@@ -73,14 +77,16 @@ export function createRelay(): Relay {
     },
 
     attachPlayer(code, playerId, connection) {
+      // A rejected connection is told to show the lobby but is left open: the
+      // caller closes it, so that it can say *why* in the close frame. The
+      // phone needs that reason to tell "the TV is not here yet" (wait and
+      // knock again) from "the TV has a different code now" (give up, ask).
       if (host === null || roomCode === null) {
         connection.send(LOBBY)
-        connection.close()
         return { ok: false, reason: 'no-host' }
       }
       if (code !== roomCode) {
         connection.send(LOBBY)
-        connection.close()
         return { ok: false, reason: 'wrong-room' }
       }
       const previous = players.get(playerId)

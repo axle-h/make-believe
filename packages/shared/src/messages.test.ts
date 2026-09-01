@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MAX_NAME_LENGTH } from './blobName.js'
 import {
   AssignedMessageSchema,
   DrawingMessageSchema,
@@ -38,8 +39,14 @@ describe('join', () => {
   })
 
   it('rejects an oversize name', () => {
-    const name = 'x'.repeat(17)
+    const name = 'x'.repeat(MAX_NAME_LENGTH + 1)
     expect(JoinMessageSchema.safeParse({ type: 'join', playerId: 'abc', name }).success).toBe(false)
+  })
+
+  it('rejects a name that is only whitespace', () => {
+    expect(JoinMessageSchema.safeParse({ type: 'join', playerId: 'abc', name: '   ' }).success).toBe(
+      false,
+    )
   })
 })
 

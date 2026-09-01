@@ -12,11 +12,16 @@ afterEach(async () => {
   await app.close()
 })
 
+interface CloseInfo {
+  code: number
+  reason: string
+}
+
 interface Client {
   ws: WebSocket
   /** Next message, from a queue, so nothing is missed between awaits. */
   next(): Promise<unknown>
-  closed: Promise<void>
+  closed: Promise<CloseInfo>
   send(message: unknown): void
 }
 
@@ -36,7 +41,9 @@ function connect(query: string): Promise<Client> {
     }
   })
 
-  const closed = new Promise<void>((resolve) => ws.once('close', () => resolve()))
+  const closed = new Promise<CloseInfo>((resolve) =>
+    ws.once('close', (code, reason) => resolve({ code, reason: reason.toString() })),
+  )
 
   const client: Client = {
     ws,
@@ -92,14 +99,22 @@ it('serves healthz and relays between a host and two players', async () => {
   one.ws.close()
 })
 
-it('sends a player with the wrong room code back to the lobby and hangs up', async () => {
+it('sends a player with the wrong room code back to the lobby and says why', async () => {
   const host = await connect('role=host&room=ABCD')
   const stale = await connect('role=player&room=WXYZ&playerId=p1')
 
   expect(await stale.next()).toEqual({ type: 'phase', value: 'lobby' })
-  await stale.closed
+  // The phone tells "wrong code" from "no TV yet" by this reason alone.
+  expect(await stale.closed).toEqual({ code: 4001, reason: 'wrong-room' })
 
   host.ws.close()
+})
+
+it('tells a player who arrives before the TV that there is no host', async () => {
+  const early = await connect('role=player&room=ABCD&playerId=p1')
+
+  expect(await early.next()).toEqual({ type: 'phase', value: 'lobby' })
+  expect(await early.closed).toEqual({ code: 4001, reason: 'no-host' })
 })
 
 it('hangs up on a bad room code, a bad role and a bad playerId', async () => {

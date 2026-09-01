@@ -114,7 +114,8 @@ describe('relay', () => {
     expect(relay.attachPlayer('WXYZ', 'p1', stale)).toEqual({ ok: false, reason: 'wrong-room' })
 
     expect(stale.sent).toEqual([lobby])
-    expect(stale.closed).toBe(true)
+    // Left open on purpose: the caller closes it with the reason in the frame.
+    expect(stale.closed).toBe(false)
     expect(relay.playerIds()).toEqual([])
   })
 
@@ -124,7 +125,7 @@ describe('relay', () => {
     expect(relay.attachPlayer('ABCD', 'p1', early)).toEqual({ ok: false, reason: 'no-host' })
 
     expect(early.sent).toEqual([lobby])
-    expect(early.closed).toBe(true)
+    expect(early.closed).toBe(false)
   })
 
   it('replaces a player reconnecting with the same id', () => {

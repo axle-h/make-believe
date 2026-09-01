@@ -11,7 +11,7 @@
     <main class="phone">
       <section id="screen-join" class="screen">
         <h1>MAKE believe</h1>
-        <p class="hint">Type the code on the TV.</p>
+        <p class="hint">Type the code on the TV and name your blob.</p>
         <form id="join-form" class="join-form">
           <input
             id="room-input"
@@ -25,9 +25,34 @@
             placeholder="CODE"
             aria-label="Room code"
           />
-          <button id="join-button" class="button" type="submit">Join</button>
+          <input
+            id="name-input"
+            class="name-input"
+            name="name"
+            type="text"
+            inputmode="text"
+            autocomplete="off"
+            autocapitalize="words"
+            spellcheck="false"
+            maxlength="16"
+            placeholder="Your name"
+            aria-label="Blob name"
+          />
+          <button id="join-button" class="button" type="submit" disabled>Join</button>
         </form>
         <p id="join-error" class="error" role="status"></p>
+      </section>
+
+      <section id="screen-waiting" class="screen" hidden>
+        <h1>MAKE believe</h1>
+        <p class="hint">Waiting for the TV…</p>
+        <p class="waiting-detail">
+          <span id="waiting-name" class="waiting-name">Blob</span> is ready with code
+          <strong id="waiting-code" class="room-code">····</strong>
+        </p>
+        <button id="change-code-button" class="button button-quiet" type="button">
+          Use a different code
+        </button>
       </section>
 
       <section id="screen-play" class="screen" hidden>

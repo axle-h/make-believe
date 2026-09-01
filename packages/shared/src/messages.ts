@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MAX_NAME_LENGTH, isValidName } from './blobName.js'
 
 /**
  * Every message on the wire, as zod schemas with the TypeScript types derived
@@ -6,8 +7,6 @@ import { z } from 'zod'
  * parse; the host and the players trust nothing that has not been through here.
  */
 
-/** Longest blob name a player may pick. */
-export const MAX_NAME_LENGTH = 16
 /** Longest speech-bubble text a player may send. */
 export const MAX_TEXT_LENGTH = 60
 /** Longest `data:` URL accepted for a drawing (see docs/DECISIONS.md, D-003). */
@@ -31,7 +30,7 @@ export const RecipientSchema = z.union([z.literal('*'), PlayerIdSchema])
 export const JoinMessageSchema = z.object({
   type: z.literal('join'),
   playerId: PlayerIdSchema,
-  name: z.string().min(1).max(MAX_NAME_LENGTH),
+  name: z.string().max(MAX_NAME_LENGTH).refine(isValidName, 'name must not be blank'),
 })
 
 const AxisSchema = z.number().finite().min(-1).max(1)
