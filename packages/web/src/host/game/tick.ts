@@ -1,3 +1,4 @@
+import { resolveCollisions } from './collisions.js'
 import { AWAY_TIMEOUT_MS, SPEED } from './constants.js'
 import { clampToWorld, type GameState } from './state.js'
 
@@ -44,6 +45,9 @@ export function tick(state: GameState, dtMs: number): TickResult {
     player.x = moved.x
     player.y = moved.y
   }
+
+  // Everybody has moved; now stop anyone standing inside anyone else.
+  resolveCollisions(state)
 
   return { removed }
 }

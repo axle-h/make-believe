@@ -6,6 +6,9 @@ import { test as base, expect, type BrowserContext, type Page } from '@playwrigh
  * sensibly, and the model is the thing that decides what is true anyway.
  */
 
+/** The blob's side length in world units, mirroring the model's own constant. */
+export const BLOB_SIZE = 72
+
 export interface PlayerSnapshot {
   playerId: string
   name: string

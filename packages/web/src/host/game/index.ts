@@ -1,4 +1,5 @@
 export * from './apply.js'
+export * from './collisions.js'
 export * from './constants.js'
 export * from './phases.js'
 export * from './selectors.js'

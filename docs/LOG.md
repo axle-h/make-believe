@@ -59,3 +59,10 @@ Append-only. Newest entry at the bottom. Format is in `README.md`.
 - Not done, deliberately: nothing was pushed to GHCR and nothing was applied to the cluster. There are no ghcr.io credentials on this machine, so the push needs Alex; applying before the image exists would only park an `ImagePullBackOff` in the cluster. Alex also asked this session to stop at the deployment.
 - Verified: `kubectl apply --dry-run=client -f k8s/make-believe/` passes; the local image serves `/healthz`, `/host/` and `/` read-only as uid 1000.
 - Next: Alex pushes the image and applies, then phase 8.
+
+## 2026-09-02 — blob collisions (out of phase, at Alex's request) — Claude (Opus 5)
+- Did: blobs are solid. `src/host/game/collisions.ts` separates overlapping blobs at the end of every `tick` — least-overlapping axis, half each, with a wall's share handed to the other blob — plus its own tests and an e2e test that drives one blob into another and watches it get shoved. Away blobs are ghosts and collide with nothing.
+- Decisions: D-022. It stays in the model rather than going back to arcade physics, for the reason D-013 gives: two owners of a blob's position fight.
+- Verified: `pnpm typecheck`, `pnpm lint`, `pnpm test` (146 tests, 15 files), `pnpm test:e2e` (4 tests).
+- Note for Alex: `CLAUDE.md`'s Phaser notes still prescribe arcade physics and `setCollideWorldBounds`, which is no longer what the code does. The brief wants a line changing to match D-013 and D-022.
+- Next: phase 7 still wants the GHCR push and the apply.

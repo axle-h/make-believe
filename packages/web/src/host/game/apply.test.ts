@@ -109,8 +109,10 @@ describe('input', () => {
     const stillSpot = { x: second.x, y: second.y }
     const movedFrom = first.x
 
+    // Short of reaching them: a blob that ran into the other one would shove
+    // it along, which is a collision rather than an input going astray.
     input(state, 'p1', 1, 0)
-    tick(state, 500)
+    tick(state, 100)
 
     expect(first.x).toBeGreaterThan(movedFrom)
     expect({ x: second.x, y: second.y }).toEqual(stillSpot)

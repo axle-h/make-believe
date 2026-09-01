@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test'
-import { playerNamed, pressPhaseKey, pushJoystick, snapshot, test, worn } from './world.js'
+import { BLOB_SIZE, playerNamed, pressPhaseKey, pushJoystick, snapshot, test, worn } from './world.js'
 
 /**
  * One evening in front of the TV: two phones join by code, drive their own
@@ -26,18 +26,20 @@ test.describe('a party', () => {
     expect(before.wilf.colour).not.toBe(before.ida.colour)
 
     // --- a joystick moves only its own blob ---
-    await pushJoystick(wilf, { dx: 1, dy: 0 })
+    // Downwards, into empty floor: driving across would run into Ida, and
+    // shoving her is a collision rather than an input going astray.
+    await pushJoystick(wilf, { dx: 0, dy: 1 })
 
     await expect
-      .poll(async () => (await playerNamed(host, 'Wilf')).x > before.wilf.x + 50)
+      .poll(async () => (await playerNamed(host, 'Wilf')).y > before.wilf.y + 50)
       .toBe(true)
     const idaNow = await playerNamed(host, 'Ida')
     expect({ x: idaNow.x, y: idaNow.y }).toEqual({ x: before.ida.x, y: before.ida.y })
 
     // Letting go stops the blob dead.
-    const stopped = (await playerNamed(host, 'Wilf')).x
+    const stopped = (await playerNamed(host, 'Wilf')).y
     await host.page.waitForTimeout(300)
-    expect((await playerNamed(host, 'Wilf')).x).toBeCloseTo(stopped, 0)
+    expect((await playerNamed(host, 'Wilf')).y).toBeCloseTo(stopped, 0)
 
     // --- the text round ---
     await pressPhaseKey(host, 'T')
@@ -74,6 +76,24 @@ test.describe('a party', () => {
     // ...and the drawing reached the sprite, not just the model.
     await expect.poll(async () => (await worn(host))[wilf.playerId], { timeout: 8_000 }).toBe(skinKey)
     expect((await playerNamed(host, 'Ida')).skinKey).toBeNull()
+  })
+
+  test('blobs are solid and shove each other about', async ({ party }) => {
+    const host = await party.openHost()
+    const wilf = await party.joinAs(host.roomCode, 'Wilf')
+    await party.joinAs(host.roomCode, 'Ida')
+
+    const before = await playerNamed(host, 'Ida')
+    // Wilf spawns to Ida's left; drive straight into her.
+    await pushJoystick(wilf, { dx: 1, dy: 0 }, 900)
+
+    const after = await playerNamed(host, 'Ida')
+    expect(after.x).toBeGreaterThan(before.x + 20)
+    expect(after.y).toBeCloseTo(before.y, 0)
+
+    // ...and nobody ends up standing inside anybody.
+    const wilfNow = await playerNamed(host, 'Wilf')
+    expect(Math.abs(after.x - wilfNow.x)).toBeGreaterThanOrEqual(BLOB_SIZE - 1)
   })
 
   test('a phone that reloads keeps its blob', async ({ party }) => {
