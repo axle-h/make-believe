@@ -17,7 +17,6 @@ kind: Ingress
 metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-production
-    kubernetes.io/ingress.class: traefik
     # <namespace>-<middleware>@kubernetescrd — so this only resolves if the namespace really is
     # `make-believe`.
     traefik.ingress.kubernetes.io/router.middlewares: make-believe-redirect-http-https@kubernetescrd
@@ -25,6 +24,9 @@ metadata:
   labels:
     app: make-believe
 spec:
+  # ⚠️ `spec.ingressClassName`, not the `kubernetes.io/ingress.class` annotation the older siblings
+  # use: the annotation is deprecated and kubectl says so on every apply.
+  ingressClassName: traefik
   rules:
     - host: "believe.ax-h.com"
       http:

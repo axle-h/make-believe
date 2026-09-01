@@ -89,8 +89,10 @@ watches the registry — there is no auto-deploy, by choice:
 kubectl -n make-believe rollout restart deploy/make-believe
 ```
 
-⚠️ **GHCR creates the package private, whatever the repository's visibility.** The first push
-succeeds and the cluster then fails to pull it with `denied`. Fix it once, at
+The package came out **public** on its first push, inheriting the repository's visibility, and the
+cluster pulls it anonymously — verified with `docker pull` from a machine with no ghcr.io
+credentials. ⚠️ If a package here is ever private (GHCR has historically defaulted that way), the
+symptom is a pod stuck on `ImagePullBackOff` with `denied`, and the fix is one visibility change at
 <https://github.com/users/axle-h/packages/container/make-believe/settings> → *Danger Zone* →
 *Change visibility* → **Public**. A private package works too, but then the namespace needs an
 `imagePullSecret`, which nothing here sets up.

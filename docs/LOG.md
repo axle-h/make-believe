@@ -66,3 +66,11 @@ Append-only. Newest entry at the bottom. Format is in `README.md`.
 - Verified: `pnpm typecheck`, `pnpm lint`, `pnpm test` (146 tests, 15 files), `pnpm test:e2e` (4 tests).
 - Note for Alex: `CLAUDE.md`'s Phaser notes still prescribe arcade physics and `setCollideWorldBounds`, which is no longer what the code does. The brief wants a line changing to match D-013 and D-022.
 - Next: phase 7 still wants the GHCR push and the apply.
+
+## 2026-09-02 — phases 7 and 8 — Claude (Opus 5)
+- Did: it is live at <https://believe.ax-h.com>. Created `axle-h/make-believe` (public) and pushed; wrote `.github/workflows/ci.yml` and `container.yml` in gb's shape, so the image is built, smoke-tested and published by CI rather than by hand (D-023). Created the `make-believe` namespace, applied the deployment and service, then the traefik middleware and the ingress; cert-manager issued the certificate in about 30 seconds.
+- Fixed on the way: the container workflow's smoke test proved the relay worked and then hung for twelve minutes — an open WebSocket keeps node's event loop alive, so the script never exited (D-024). It now hangs up and exits, with a three-minute cap on the step.
+- Also: the ingress uses `spec.ingressClassName` rather than the deprecated `kubernetes.io/ingress.class` annotation the siblings still carry, because kubectl warns on every apply.
+- Verified: `https://believe.ax-h.com/healthz` 200 with a valid Let's Encrypt certificate, `http` 301s to `https`, both pages 200. A node WebSocket client carried a join over `wss://` and was still carrying input after 35 seconds idle — traefik does not time the socket out. A real headless Chromium then played a game through the edge: the TV page, a Pixel-7-shaped phone joining from the QR link, and the joystick moving that blob and no other. The QR encodes `https://believe.ax-h.com`, the origin is secure and the Wake Lock API is present. No page errors on either side.
+- Not done: Wake Lock is present but only a real Android phone can prove a lock actually holds a screen awake, and nothing has been tried on real hardware yet — the phone-shaped checks from phases 4, 5 and 6 are all still outstanding and now have a public URL to be done against.
+- Next: phase 9, the PWA.

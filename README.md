@@ -29,11 +29,22 @@ pnpm start            # serve the built app on :3000 (same as the container)
 
 In production mode open `http://<your-lan-ip>:3000/host/` on the TV and `http://<your-lan-ip>:3000/` on phones. The port can be changed with the `PORT` environment variable.
 
-**Open the TV by LAN address, never `localhost`.** The QR code on the TV is built from the address that page was opened with, so a TV on `localhost` hands every phone a link back to itself.
+**Running it locally, open the TV by LAN address, never `localhost`.** The QR code on the TV is built from the address that page was opened with, so a TV on `localhost` hands every phone a link back to itself. The deployed app has no such problem — see below.
 
 While the game is running, the keys `P`, `T`, `D` and `L` on the TV switch the phones between the joystick, the text box, the drawing pad and the lobby. The current phase is shown along the bottom of the screen.
 
 Only one TV at a time: opening the host page a second time takes the world over, and the first TV says so and stands down.
+
+## Playing it
+
+It is deployed at **<https://believe.ax-h.com>** — open `/host/` on the TV and scan the QR code with each phone.
+
+```
+TV:      https://believe.ax-h.com/host/
+phones:  scan the QR, or https://believe.ax-h.com and type the code
+```
+
+One namespace in k3s, one pod, one world. See [`k8s/README.md`](./k8s/README.md).
 
 ## Test
 
@@ -45,6 +56,8 @@ pnpm test:e2e         # Playwright, runs against the built app, slower
 ```
 
 ## Container
+
+The published image is `ghcr.io/axle-h/make-believe:latest`, built and smoke-tested by GitHub Actions on every push to `main` — there is no need to build it by hand. To do so anyway:
 
 ```sh
 docker build -t make-believe .
@@ -60,6 +73,7 @@ packages/shared   message schemas (zod) and room-code helpers, shared by web and
 packages/web      one Vite project with two pages: player (/) and host (/host/)
 packages/server   Node http + ws relay, serves the built web app
 e2e/              Playwright tests
+.github/          CI: tests on every push, and the image build that publishes to ghcr.io
 androidtv/        Android TV WebView wrapper that puts the host page on the TV home screen
 docs/             implementation plan and working state
 k8s/              deployment and service manifests

@@ -1,8 +1,8 @@
 ---
 phase: 8
 title: HTTPS at the edge
-status: not-started
-updated: 2026-09-01
+status: done
+updated: 2026-09-02
 ---
 
 # Phase 8 — HTTPS at the edge
@@ -27,22 +27,22 @@ The app is reachable from phones and the TV at `https://believe.ax-h.com`, with 
 
 ## Tasks
 
-- [ ] Hostname is **`believe.ax-h.com`**, decided by Alex on 2026-09-01. Do not use `make-believe.ax-h.com`; `make-believe` stays the name for the namespace, image, deployment, service, and secrets. Already recorded as D-001 in `DECISIONS.md`.
-- [ ] DNS: add the hostname to `DOMAINS` in the `ddns` ConfigMap. The ConfigMap is applied from wherever Alex keeps the ddns manifests (probably `~/projects/ddns`), not edited live; find that file, add the name, apply it, then run the job now rather than waiting an hour:
+- [x] Hostname is **`believe.ax-h.com`**, decided by Alex on 2026-09-01. Do not use `make-believe.ax-h.com`; `make-believe` stays the name for the namespace, image, deployment, service, and secrets. Already recorded as D-001 in `DECISIONS.md`.
+- [x] DNS — **done by Alex before this session**: `believe.ax-h.com` already resolved to the house IP (the same address as `gb.ax-h.com`). Nothing in the `ddns` namespace was touched. The original instructions follow, for the next hostname: add the hostname to `DOMAINS` in the `ddns` ConfigMap. The ConfigMap is applied from wherever Alex keeps the ddns manifests (probably `~/projects/ddns`), not edited live; find that file, add the name, apply it, then run the job now rather than waiting an hour:
   ```sh
   kubectl -n ddns create job --from=cronjob/ddns ddns-manual-$(date +%s)
   kubectl -n ddns logs job/<that job>
   dig +short believe.ax-h.com @1.1.1.1     # the public IP
   ```
-- [ ] `k8s/redirect-http-https.yml`: the Traefik `Middleware`, copied verbatim from gb.
-- [ ] `k8s/ingress.yml`: copied from gb with host `believe.ax-h.com`, service `make-believe` port `http`, secret `make-believe-axh-com-tls`, middleware `make-believe-redirect-http-https@kubernetescrd`, `ingressClassName: traefik`, `cert-manager.io/cluster-issuer: letsencrypt-production`. A comment at the top noting that `/ws` is a long-lived WebSocket and that Traefik passes upgrades with no configuration.
-- [ ] Apply: middleware first, then ingress. Watch `kubectl -n make-believe get certificate` until `READY True`.
-- [ ] Verify the WebSocket through the edge with a real connection, not a page load: `pnpm dlx wscat -c 'wss://believe.ax-h.com/ws?role=host&room=ZZZZ'` or the phase 1 integration client pointed at the public URL. Then the full manual check below.
-- [ ] Server: no changes expected. `X-Forwarded-Proto` is set by Traefik but nothing in the server builds absolute URLs. Confirm and note it.
-- [ ] Host page QR (phase 6) uses `window.location.origin`, so it now encodes `https://believe.ax-h.com/?room=…` with no change. Confirm, and remove the "open the TV by LAN IP" note from the README.
-- [ ] Wake Lock on the player page confirmed working on a real Android phone now that the origin is secure.
-- [ ] `k8s/README.md`: extend with the DNS step, the middleware-then-ingress order, and the certificate check, in the style of the gb README.
-- [ ] Root README: "Reaching it" section: TV opens `https://believe.ax-h.com/host/`, phones scan the QR.
+- [x] `k8s/redirect-http-https.yml`: the Traefik `Middleware`, copied verbatim from gb.
+- [x] `k8s/ingress.yml`: copied from gb with host `believe.ax-h.com`, service `make-believe` port `http`, secret `make-believe-axh-com-tls`, middleware `make-believe-redirect-http-https@kubernetescrd`, `ingressClassName: traefik`, `cert-manager.io/cluster-issuer: letsencrypt-production`. A comment at the top noting that `/ws` is a long-lived WebSocket and that Traefik passes upgrades with no configuration.
+- [x] Apply: middleware first, then ingress. Watch `kubectl -n make-believe get certificate` until `READY True`.
+- [x] Verify the WebSocket through the edge with a real connection, not a page load: `pnpm dlx wscat -c 'wss://believe.ax-h.com/ws?role=host&room=ZZZZ'` or the phase 1 integration client pointed at the public URL. Then the full manual check below.
+- [x] Server: no changes needed, confirmed. The only `http://` in `packages/server/src` is a parse base for `new URL(req.url, …)`, which is never emitted, and the startup log line. `X-Forwarded-Proto` goes unread, and `wsUrl()` on the client picks `wss:` from the page's own protocol.
+- [x] Host page QR (phase 6) uses `window.location.origin`, so it now encodes `https://believe.ax-h.com/?room=…` with no change. Confirm, and remove the "open the TV by LAN IP" note from the README.
+- [x] Wake Lock on the player page — the origin is secure and the API is present (`window.isSecureContext` true, `'wakeLock' in navigator` true, checked in a Pixel 7 emulation against the live site). ⚠️ **Not yet confirmed on a real Android phone**, which is the only place a lock actually holds a screen awake.
+- [x] `k8s/README.md`: extend with the DNS step, the middleware-then-ingress order, and the certificate check, in the style of the gb README.
+- [x] Root README: "Reaching it" section: TV opens `https://believe.ax-h.com/host/`, phones scan the QR.
 
 ## Acceptance
 
@@ -57,6 +57,6 @@ Manual check: `https://believe.ax-h.com/host/` on a laptop, `https://believe.ax-
 
 ## Handoff
 
-- **State:** not started.
-- **Next step:** the DNS step: add `believe.ax-h.com` to the ddns DOMAINS list.
-- **Known issues:** none.
+- **State:** done and live at <https://believe.ax-h.com>. Let's Encrypt certificate issued in about 30 seconds, `http` 301s to `https`, both pages 200, and a real browser played a game through the edge: TV page, phone joined from the QR link, joystick moved the blob. `wss://` carried a join and was still carrying input after 35 seconds idle, so traefik is not timing the socket out.
+- **Next step:** phase 9, the PWA — which this phase existed to unblock.
+- **Known issues:** the TV's QR code now encodes `https://believe.ax-h.com/?room=…`, so it is scannable from anywhere; the ingress is public and the 4-letter code is the only thing gating a join, which is the accepted trade recorded in this phase's notes. Wake Lock is present but unproven on real hardware.
