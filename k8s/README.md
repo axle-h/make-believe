@@ -1,8 +1,7 @@
 # Kubernetes deployment
 
-k3s, one namespace per app, one pod. Traefik is the ingress controller and cert-manager issues the
-certificates — but neither is used yet: this directory gets the app running *inside* the cluster on
-a `ClusterIP`. The hostname, the ingress and TLS are phase 8.
+k3s, one namespace per app, one pod, reached at <https://believe.ax-h.com> through traefik with a
+cert-manager certificate.
 
 ⚠️ **One replica, always.** The world — the host socket, its players, tonight's room code — is held
 in the pod's memory and nothing is persisted. Two pods would be two worlds behind one address, and
@@ -12,41 +11,82 @@ knob. Scaling this app up is not a trade-off; it is a bug.
 
 ## Deploy
 
+The image has to exist first: it is published by the `container` workflow on every push to `main`,
+so there is nothing to build by hand (see *The image*, below).
+
 ```shell
-# ⚠️ The namespace must be `make-believe`: phase 8's ingress will name its redirect middleware as
-# `make-believe-redirect-http-https@kubernetescrd`, and traefik resolves that by namespace.
+# ⚠️ The namespace must be `make-believe`: the ingress names its redirect middleware as
+# `make-believe-redirect-http-https@kubernetescrd`, and traefik resolves that by namespace. Rename
+# the namespace and the redirect silently stops existing.
 kubectl create namespace make-believe
 
 # Deployment and service in one go.
 kubectl -n make-believe apply -f ./make-believe
 
-# Check it is up: the pod Running and Ready, the service holding an endpoint.
-kubectl -n make-believe get all
+# ⚠️ The middleware before the ingress: an ingress naming a middleware that is not there yet is
+# accepted by the API server and then serves a 500 from traefik until it appears.
+kubectl -n make-believe apply -f ./redirect-http-https.yml
+kubectl -n make-believe apply -f ./ingress.yml
+
+# Check it is up: the pod Running and Ready, the service holding an endpoint, the certificate issued.
 kubectl -n make-believe rollout status deploy/make-believe
+kubectl -n make-believe get all
+kubectl -n make-believe get certificate     # READY True, within a minute or two
 ```
 
-Until there is an ingress, reach it by port-forward:
+### DNS
+
+`believe.ax-h.com` is a public A record pointing at the house's IP, maintained hourly by the `ddns`
+CronJob in the `ddns` namespace from the comma-separated `DOMAINS` list in its ConfigMap. Adding a
+hostname means adding it to that list and then running the job rather than waiting an hour:
 
 ```shell
-kubectl -n make-believe port-forward svc/make-believe 3000:80
-# TV:     http://localhost:3000/host/
-# phones: nothing yet — a phone cannot reach a port-forward, and the QR code on the TV would
-#         hand it `http://localhost:3000`. Phones want phase 8, or `pnpm start` on the LAN.
+kubectl -n ddns create job --from=cronjob/ddns ddns-now-$(date +%s)
+dig +short believe.ax-h.com @1.1.1.1     # the house's public IP
 ```
+
+⚠️ **The certificate cannot be issued before that resolves publicly.** cert-manager solves HTTP-01,
+so Let's Encrypt has to reach `http://believe.ax-h.com/.well-known/acme-challenge/…` from the
+internet. A `Certificate` stuck at `READY False` with an order that never completes is almost always
+DNS, not cert-manager.
+
+### Checking it from outside
+
+```shell
+curl -fsS https://believe.ax-h.com/healthz                                  # ok
+curl -sS -o /dev/null -w '%{http_code}\n' http://believe.ax-h.com/healthz   # 308 to https
+```
+
+The WebSocket is the part worth proving separately, because a page load will not: it opens `/ws`
+only after the JavaScript runs, and a broken upgrade looks like a TV that never gets a player.
+
+```shell
+pnpm dlx wscat -c 'wss://believe.ax-h.com/ws?role=host&room=ZZZZ'
+```
+
+TV: <https://believe.ax-h.com/host/>. Phones scan the QR code on it, which now carries the public
+name because the page builds it from its own origin.
 
 ## The image
 
 `ghcr.io/axle-h/make-believe:latest`, built from the repo root `Dockerfile`: a `node:22-alpine`
 build stage that runs `pnpm build`, and a runtime stage holding one bundled server file and the
-built pages — no `node_modules` at all. CI is out of scope for this project, so it is built and
-pushed by hand:
+built pages — no `node_modules` at all.
+
+`.github/workflows/container.yml` publishes it on every push to `main`, **after** a smoke test that
+starts the image the way the Deployment does and proves it serves both pages and relays a join — so
+`:latest` is always an image that was seen to work. Every build is also tagged with its commit,
+which is the tag to pin or roll back to:
 
 ```shell
-docker build -t ghcr.io/axle-h/make-believe:latest .
-docker login ghcr.io          # once; username is the GitHub user, password is a PAT with write:packages
-docker push ghcr.io/axle-h/make-believe:latest
+kubectl -n make-believe set image deploy/make-believe make-believe=ghcr.io/axle-h/make-believe:<sha>
+```
 
-kubectl -n make-believe rollout restart deploy/make-believe    # pull the new build
+`imagePullPolicy: Always` on `:latest` means a rollout restart picks up the newest build. Nothing
+watches the registry — there is no auto-deploy, by choice:
+
+```shell
+kubectl -n make-believe rollout restart deploy/make-believe
 ```
 
 ⚠️ **GHCR creates the package private, whatever the repository's visibility.** The first push
@@ -66,7 +106,8 @@ docker run --rm --read-only --cap-drop ALL --user 1000:1000 -p 3000:3000 ghcr.io
 Non-root (uid 1000, the image's `node` user), no capabilities, no privilege escalation and a
 read-only root filesystem. The process writes nothing to disk — there is no persistence in this app
 by design — so if `readOnlyRootFilesystem: true` ever starts failing the pod, something has begun
-writing and that is the thing to look at, not the flag.
+writing and that is the thing to look at, not the flag. CI runs the image under exactly these
+constraints before it pushes it, so this should never first be discovered in the cluster.
 
 ## Watching it
 

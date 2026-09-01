@@ -63,6 +63,7 @@ jobs:
             -p 3000:3000 make-believe:ci
 
       - name: It serves both pages and relays a game
+        timeout-minutes: 3
         run: |
           set -euo pipefail
 
@@ -107,11 +108,16 @@ jobs:
           player.send(JSON.stringify({ type: 'join', playerId: 'ci-1', name: 'Wilf' }))
 
           const message = await heard
+          host.close()
+          player.close()
           if (message.type !== 'join' || message.playerId !== 'ci-1' || message.name !== 'Wilf') {
             console.log(`::error::the host heard ${JSON.stringify(message)}, not the join`)
             process.exit(1)
           }
           console.log('the relay carried a join from a player socket to the host socket')
+          // ⚠️ Explicitly: an open (or even a closing) WebSocket keeps node's event loop alive, so
+          // a script that merely runs off the end here hangs the step until the job times out.
+          process.exit(0)
           JS
 
       # ── publish ────────────────────────────────────────────────────────────────────────────────
