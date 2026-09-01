@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: make-believe
+  labels:
+    app: make-believe
+spec:
+  # ⚠️ One replica, and it is not a scaling decision — it is the only correct number. The whole
+  # world lives in this process's memory: the host socket, its players and tonight's room code. Two
+  # pods would be two worlds behind one URL, and the TV and the phones would land in whichever one
+  # the service happened to pick. There is no session affinity that fixes this and no persistence to
+  # add; the design is one deployment, one world. **Never scale this.**
+  replicas: 1
+  # ⚠️ Recreate, not the default RollingUpdate. A rolling update would run two worlds side by side
+  # for the length of the rollout, which is the exact thing above. Recreate means a deploy is a
+  # clean break instead: everyone rejoins, which they have to do anyway because nothing is saved.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: make-believe
+  template:
+    metadata:
+      labels:
+        app: make-believe
+    spec:
+      # Nothing here talks to another service, so the Docker-link-style variables Kubernetes injects
+      # for every Service in the namespace are noise. Off by choice: the server reads `PORT`, and
+      # there is no reason to leave port-shaped variables lying about next to it.
+      enableServiceLinks: false
+      # The image's `USER node` is uid 1000. Stated again here so the cluster refuses to run it as
+      # root even if the image ever changes underneath.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: make-believe
+          image: ghcr.io/axle-h/make-believe:latest
+          # `:latest` plus Always means `kubectl -n make-believe rollout restart deploy/make-believe`
+          # picks up a newly pushed build. Nothing watches the registry; deploys are deliberate.
+          imagePullPolicy: Always
+          env:
+            # The server defaults to 3000 anyway; set here so the port in this file and the port the
+            # process listens on cannot drift apart.
+            - name: PORT
+              value: "3000"
+          ports:
+            - name: http
+              containerPort: 3000
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            # ⚠️ The process writes nothing to disk — no persistence, by design — and the image is
+            # one bundled JS file plus the built pages. Verified by running the image with
+            # `--read-only --cap-drop ALL --user 1000:1000`. If anything here ever needs to write
+            # (a cache, a temp file, an upload), this is the line that will fail it, loudly.
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              # It relays small JSON messages between one TV and a handful of phones. The heavy
+              # lifting — Phaser, the game model — all happens in the browser on the TV.
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              # No CPU limit: a relay that is throttled shows up as laggy blobs, and there is
+              # nothing else on the node competing for it. Memory is capped because a leak here
+              # would be a bug worth crashing on rather than one worth letting grow.
+              memory: 256Mi
+          # `/healthz` is answered by the http server before anything else exists, so this only has
+          # to cover node starting up. A second or two is normal.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 15
+          # ⚠️ This proves the server is answering, not that anybody is playing. A world with no TV
+          # in it is a perfectly healthy pod, and restarting it would only throw away the phones
+          # that are waiting for the TV to come back.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 3

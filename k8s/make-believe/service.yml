@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: make-believe
+  labels:
+    app: make-believe
+spec:
+  type: ClusterIP
+  ports:
+    # Port 80 named `http` targeting the container's `http` port, so the ingress in phase 8 can
+    # reference the port by name and never by number.
+    - port: 80
+      targetPort: http
+      name: http
+  selector:
+    app: make-believe
