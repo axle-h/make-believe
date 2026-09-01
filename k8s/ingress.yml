@@ -1,0 +1,44 @@
+# TLS is terminated here by traefik, with the certificate issued by cert-manager from Let's Encrypt
+# over HTTP-01. Nothing inside the namespace knows or cares about it: the server speaks plain http
+# on 3000 and builds no absolute URLs, so `X-Forwarded-Proto` goes unread.
+#
+# ⚠️ `/ws` is a WebSocket that stays open for the whole evening. Traefik forwards the `Upgrade`
+# handshake and then proxies the connection with no idle timeout by default, so there is nothing to
+# configure here — but if this is ever put behind something else (a CDN, another reverse proxy), that
+# is the first property to check, and the symptom of getting it wrong is phones that connect, work
+# for a minute and then silently stop moving anything.
+#
+# ⚠️ **This is public.** Anyone on the internet can open both pages; the 4-letter room code is the
+# only thing gating a join, and it is only ever shown on the TV. That is an accepted trade for an
+# app with no accounts and no persistence — but it is why the relay must go on rejecting a code that
+# is not the current one, and why the host page must not put the code anywhere but the screen.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    kubernetes.io/ingress.class: traefik
+    # <namespace>-<middleware>@kubernetescrd — so this only resolves if the namespace really is
+    # `make-believe`.
+    traefik.ingress.kubernetes.io/router.middlewares: make-believe-redirect-http-https@kubernetescrd
+  name: make-believe
+  labels:
+    app: make-believe
+spec:
+  rules:
+    - host: "believe.ax-h.com"
+      http:
+        paths:
+          # One prefix for the lot: `/` is the phone, `/host/` is the TV, `/ws` is the relay and
+          # `/healthz` is the probe. They are one process and one Service.
+          - path: "/"
+            pathType: Prefix
+            backend:
+              service:
+                name: make-believe
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - believe.ax-h.com
+      secretName: make-believe-axh-com-tls

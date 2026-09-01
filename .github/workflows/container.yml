@@ -1,0 +1,154 @@
+# Builds the container from a bare checkout, proves the thing it produced actually relays a game,
+# and — on main only — publishes it to ghcr.io/axle-h/make-believe for `k8s/` to pull.
+#
+# The smoke test is the point of the ordering: what reaches the registry is an image that was seen
+# to serve both pages and carry a join from a player socket to a host socket. "It built" is not the
+# claim worth making — an image with an empty `web/dist` builds perfectly and serves 404s.
+name: container
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: container-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # ⚠️ This is what lets GITHUB_TOKEN push to ghcr.io, and it is per-workflow: the repository's
+  # default token permissions can be read-only and this still works. What it cannot do is make the
+  # published package *public* — that is a one-off in the package's own settings after the first
+  # push creates it. See `k8s/README.md`.
+  packages: write
+
+# Derived, not typed: `github.repository` is `axle-h/make-believe`, so this is exactly the string
+# `k8s/make-believe/deployment.yml` pulls.
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # ⚠️ Not "install buildx" — the runner has it. This creates a builder on the
+      # `docker-container` driver, which the GHA layer cache below requires; the default `docker`
+      # driver cannot export cache at all.
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true # into the runner's docker, so the smoke test can run it
+          tags: make-believe:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Exactly how the Deployment runs it: non-root, no capabilities, read-only root filesystem.
+      # If the image ever starts wanting to write something, this is where it is found out, not in
+      # the cluster.
+      - name: Start the container the way Kubernetes will
+        run: |
+          docker run -d --name make-believe-ci \
+            --read-only --cap-drop ALL --user 1000:1000 \
+            -p 3000:3000 make-believe:ci
+
+      - name: It serves both pages and relays a game
+        run: |
+          set -euo pipefail
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/healthz >/dev/null 2>&1; then break; fi
+            if [ "$i" = 30 ]; then echo "::error::/healthz never came up"; exit 1; fi
+            sleep 1
+          done
+
+          # Both pages, from the build stage's `vite build`. The failure this catches is a
+          # successful build with an empty `web/dist`, which 404s and looks like nothing at all.
+          host=$(curl -fsS http://localhost:3000/host/)
+          case "$host" in
+            *'id="world"'*) echo "the host page is there" ;;
+            *) echo "::error::/host/ did not serve the TV page — the web build did not reach the image"
+               printf '%s\n' "$host" | head -20; exit 1 ;;
+          esac
+          player=$(curl -fsS http://localhost:3000/)
+          case "$player" in
+            *'id="screen-join"'*) echo "the player page is there" ;;
+            *) echo "::error::/ did not serve the controller page"; exit 1 ;;
+          esac
+
+          # And the relay actually relays. Node 22 has a WebSocket client built in, so this needs
+          # nothing installed.
+          node --input-type=module <<'JS'
+          const base = 'ws://localhost:3000/ws'
+          const room = 'ABCD'
+          const open = (url) => new Promise((resolve, reject) => {
+            const socket = new WebSocket(url)
+            socket.addEventListener('open', () => resolve(socket))
+            socket.addEventListener('error', () => reject(new Error(`could not open ${url}`)))
+          })
+
+          const host = await open(`${base}?role=host&room=${room}`)
+          const heard = new Promise((resolve, reject) => {
+            host.addEventListener('message', (event) => resolve(JSON.parse(event.data)))
+            setTimeout(() => reject(new Error('the host never heard the join')), 5000)
+          })
+
+          const player = await open(`${base}?role=player&room=${room}&playerId=ci-1`)
+          player.send(JSON.stringify({ type: 'join', playerId: 'ci-1', name: 'Wilf' }))
+
+          const message = await heard
+          if (message.type !== 'join' || message.playerId !== 'ci-1' || message.name !== 'Wilf') {
+            console.log(`::error::the host heard ${JSON.stringify(message)}, not the join`)
+            process.exit(1)
+          }
+          console.log('the relay carried a join from a player socket to the host socket')
+          JS
+
+      # ── publish ────────────────────────────────────────────────────────────────────────────────
+      #
+      # ⚠️ Main only. A pull request from a fork gets a read-only GITHUB_TOKEN — `packages: write`
+      # cannot grant what the fork's token never had — so without this guard every fork PR would
+      # fail on a login it was never going to be allowed to do.
+      - name: Log in to ghcr.io
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          # Through the environment rather than interpolated into the command: `${{ }}` inside
+          # `run:` is substituted into the script text before bash sees it.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+      # `docker tag` + `docker push` of the image already in the runner's docker, rather than a
+      # second build with `push: true`: this pushes bytes that have demonstrably run.
+      #
+      # Two tags: `latest`, which the Deployment pulls with `imagePullPolicy: Always`, and the
+      # commit, which is the only one that can be pinned or rolled back to.
+      - name: Push it
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          docker tag make-believe:ci "$IMAGE:latest"
+          docker tag make-believe:ci "$IMAGE:$GITHUB_SHA"
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:$GITHUB_SHA"
+          echo "### Pushed \`$IMAGE:$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo '```shell' >> "$GITHUB_STEP_SUMMARY"
+          echo "kubectl -n make-believe rollout restart deploy/make-believe" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Container logs
+        if: always()
+        run: docker logs make-believe-ci 2>&1 | tail -50
+
+      - name: Stop it
+        if: always()
+        run: docker rm -f make-believe-ci >/dev/null 2>&1 || true

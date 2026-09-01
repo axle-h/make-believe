@@ -1,0 +1,83 @@
+# Typecheck, lint, unit tests and the Playwright suite, on every push and pull request.
+#
+# The end-to-end tests are here rather than left to a human because they are the only thing that
+# exercises the whole rig — a real server, a real relay, a real TV page and two real phones — and
+# they are what caught the two worst bugs this project has had so far. They cost about a minute.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      # pnpm comes from the `packageManager` field via corepack, so the version in CI is the
+      # version in the repo rather than whatever the runner happens to ship.
+      - name: Enable pnpm
+        run: corepack enable
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+
+      - name: Cache the pnpm store
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/share/pnpm/store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # ⚠️ Only chromium, and only for this job. Android and desktop Chrome are the targets
+      # (`CLAUDE.md`: iPhone is explicitly not one), so the other two engines would be a minute of
+      # runner time proving something nobody will ever run.
+      - name: Install the browser Playwright needs
+        run: pnpm exec playwright install --with-deps chromium
+
+      # ⚠️ `playwright.config.ts` builds again inside its `webServer` command. That is deliberate
+      # and not worth optimising away: the server serves `packages/web/dist` and sirv reads that
+      # directory once at startup, so the e2e suite insisting on its own fresh build is what stops
+      # it ever testing a stale one.
+      - name: End-to-end
+        run: pnpm test:e2e
+
+      - name: Keep the traces of anything that failed
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
