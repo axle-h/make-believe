@@ -3,11 +3,13 @@ import {
   BLOB_SIZE,
   dropSocket,
   hostSession,
+  objectiveNow,
   openTool,
   playerIdNow,
   playerNamed,
   pushJoystick,
   snapshot,
+  solveTheSpot,
   test,
   worn,
 } from './world.js'
@@ -294,6 +296,101 @@ test.describe('a party', () => {
     // ...and only once: the TV says it has the drawing, so nobody sends it again.
     await wilf.page.waitForTimeout(3_000)
     expect((await playerNamed(host, 'Sir Wilf')).skinKey).toBe(`skin-${reborn}-1`)
+  })
+})
+
+/**
+ * Something to actually do. The world asks for it on its own, both phones are
+ * told the same thing above joysticks that never stop working, the children
+ * solve it by driving, and the score goes up. Nobody presses start, nobody
+ * waits a turn, and nothing on any phone is taken away while it runs.
+ */
+test.describe('an objective', () => {
+  test('appears on its own, is told to every phone, and can be solved by driving', async ({
+    party,
+  }) => {
+    test.setTimeout(120_000)
+    const host = await party.openHost()
+    const wilf = await party.joinAs('Wilf')
+    const ida = await party.joinAs('Ida')
+
+    // One blob is not enough for anything; the second makes a task appear with
+    // nobody pressing anything at all.
+    await expect.poll(async () => (await objectiveNow(host))?.kind, { timeout: 15_000 }).toBe(
+      'onTheSpot',
+    )
+    const objective = await objectiveNow(host)
+    const spot = objective?.zones[0]
+    if (!objective || !spot) throw new Error('expected a spot on the floor')
+
+    // The same line on both phones, and the controller underneath it untouched.
+    await expect(wilf.page.locator('#brief-headline')).toHaveText(objective.headline)
+    await expect(ida.page.locator('#brief-headline')).toHaveText(objective.headline)
+    await expect(wilf.page.locator('#pad')).toBeVisible()
+    for (const tool of ['say', 'draw', 'name']) {
+      // oxlint-disable-next-line no-await-in-loop
+      await expect(wilf.page.locator(`#tool-${tool}`)).toBeEnabled()
+    }
+
+    // A phone arriving halfway through is told what is going on, unasked.
+    const ted = await party.joinAs('Ted')
+    await expect(ted.page.locator('#brief-headline')).toHaveText(objective.headline)
+
+    // ...and can still do everything else while the task runs.
+    await openTool(ted, 'say')
+    await ted.page.fill('#text-input', 'where is it')
+    await ted.page.click('#text-send')
+    await ted.page.click('#say-close')
+    await expect.poll(async () => (await playerNamed(host, 'Ted')).text).toBe('where is it')
+
+    // Start watching the phone before they solve it: the cheer is only up for
+    // a moment before the next task takes its place.
+    const cheered = expect(wilf.page.locator('#brief')).toHaveAttribute('data-tone', 'win', {
+      timeout: 90_000,
+    })
+
+    // Everybody drives onto it, which is the whole of solving it.
+    await solveTheSpot(host, [wilf, ida, ted])
+    expect((await snapshot(host)).objectives.score).toBeGreaterThan(0)
+    await cheered
+
+    // And a new one turns up behind it, without anybody touching anything.
+    await expect
+      .poll(async () => (await objectiveNow(host))?.id, { timeout: 30_000 })
+      .not.toBe(objective.id)
+    await expect.poll(async () => (await objectiveNow(host))?.outcome, { timeout: 30_000 }).toBe(
+      'running',
+    )
+
+    // The joystick drives exactly as it did before any of that.
+    const settled = await playerNamed(host, 'Wilf')
+    await pushJoystick(wilf, { dx: 0, dy: -1 }, 400)
+    expect((await playerNamed(host, 'Wilf')).y).toBeLessThan(settled.y - 20)
+  })
+
+  /**
+   * A room too empty for a task is not a failure state. Nothing is asked for,
+   * the phone says why, and the joystick still drives a blob about the floor.
+   */
+  test('waits quietly for another blob, without stopping the one that is here', async ({
+    party,
+  }) => {
+    const host = await party.openHost()
+    const wilf = await party.joinAs('Wilf')
+
+    await expect(wilf.page.locator('#brief-headline')).toHaveText('Waiting for another blob…')
+    expect(await objectiveNow(host)).toBeNull()
+
+    const before = await playerNamed(host, 'Wilf')
+    await pushJoystick(wilf, { dx: 0, dy: 1 }, 400)
+    expect((await playerNamed(host, 'Wilf')).y).toBeGreaterThan(before.y + 20)
+
+    // A second phone, and the world has something to ask for.
+    await party.joinAs('Ida')
+    await expect.poll(async () => (await objectiveNow(host))?.kind, { timeout: 15_000 }).toBe(
+      'onTheSpot',
+    )
+    await expect(wilf.page.locator('#brief-headline')).toHaveText('Everybody on the spot!')
   })
 })
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { MAX_NAME_LENGTH } from './blobName.js'
 import {
   AssignedMessageSchema,
+  BriefMessageSchema,
   DrawingMessageSchema,
   HostInboundMessageSchema,
   HostOutboundMessageSchema,
@@ -9,6 +10,8 @@ import {
   InputMessageSchema,
   JoinMessageSchema,
   LeftMessageSchema,
+  MAX_DETAIL_LENGTH,
+  MAX_HEADLINE_LENGTH,
   MAX_PNG_LENGTH,
   MAX_TEXT_LENGTH,
   PlayerToHostMessageSchema,
@@ -155,6 +158,65 @@ describe('assigned and waiting', () => {
   })
 })
 
+describe('brief', () => {
+  it('accepts what the world is asking for', () => {
+    expect(
+      BriefMessageSchema.safeParse({ type: 'brief', headline: 'Everybody on the spot!', tone: 'task' })
+        .success,
+    ).toBe(true)
+    expect(
+      BriefMessageSchema.safeParse({
+        type: 'brief',
+        headline: 'Everybody on the spot!',
+        detail: '1 of 2 on it',
+        colour: '#ffd23f',
+        tone: 'win',
+      }).success,
+    ).toBe(true)
+  })
+
+  /** An empty headline is how the strip is taken down, so it must be allowed. */
+  it('accepts an empty headline, which clears the strip', () => {
+    expect(BriefMessageSchema.safeParse({ type: 'brief', headline: '', tone: 'task' }).success).toBe(
+      true,
+    )
+  })
+
+  it('rejects an overlong line, an unknown tone and a missing one', () => {
+    const headline = 'x'.repeat(MAX_HEADLINE_LENGTH + 1)
+    expect(BriefMessageSchema.safeParse({ type: 'brief', headline, tone: 'task' }).success).toBe(false)
+    expect(
+      BriefMessageSchema.safeParse({
+        type: 'brief',
+        headline: 'ok',
+        detail: 'y'.repeat(MAX_DETAIL_LENGTH + 1),
+        tone: 'task',
+      }).success,
+    ).toBe(false)
+    expect(BriefMessageSchema.safeParse({ type: 'brief', headline: 'ok', tone: 'lose' }).success).toBe(
+      false,
+    )
+    expect(BriefMessageSchema.safeParse({ type: 'brief', headline: 'ok' }).success).toBe(false)
+  })
+
+  /**
+   * The strip is information. Nothing in it can move a phone off its
+   * controller, so there is no screen, mode or flag anywhere in the shape.
+   */
+  it('carries no instruction to change screens', () => {
+    const parsed = BriefMessageSchema.parse({ type: 'brief', headline: 'Hold it!', tone: 'task' })
+    // `Object.keys` is already a fresh array, so sorting it mutates nothing.
+    // oxlint-disable-next-line unicorn/no-array-sort
+    expect(Object.keys(parsed).sort()).toEqual(['headline', 'tone', 'type'])
+  })
+
+  it('is something a phone can be sent', () => {
+    expect(
+      HostToPlayerMessageSchema.safeParse({ type: 'brief', headline: 'Go!', tone: 'task' }).success,
+    ).toBe(true)
+  })
+})
+
 describe('session', () => {
   it('accepts a code the relay could have minted', () => {
     expect(SessionMessageSchema.safeParse({ type: 'session', session: 'AB23' }).success).toBe(true)
@@ -205,6 +267,29 @@ describe('unions', () => {
         to: 'p2',
       }).success,
     ).toBe(true)
+  })
+
+  it('accepts a brief to one phone and to everyone', () => {
+    expect(
+      HostOutboundMessageSchema.safeParse({
+        type: 'brief',
+        headline: 'Everybody on the spot!',
+        detail: '1 of 2 on it',
+        tone: 'task',
+        to: '*',
+      }).success,
+    ).toBe(true)
+    expect(
+      HostOutboundMessageSchema.safeParse({
+        type: 'brief',
+        headline: 'Yours is the green one',
+        tone: 'task',
+        to: 'p2',
+      }).success,
+    ).toBe(true)
+    expect(
+      HostOutboundMessageSchema.safeParse({ type: 'brief', headline: 'Go!', tone: 'task' }).success,
+    ).toBe(false)
   })
 
   it('rejects a host message without a recipient', () => {

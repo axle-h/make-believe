@@ -101,6 +101,11 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 //                                                              // also the phone's cue to show its controller.
 //                                                              // hasDrawing false = "I haven't got your picture";
 //                                                              // the phone keeps the last one it sent and re-sends it.
+{ type: 'brief', headline: string, detail?: string, colour?: string,
+  tone: 'task' | 'win' | 'miss' }                               // what the world is asking for, echoed above the
+//                                                              // joystick. Information, never an instruction: it
+//                                                              // changes no screen and takes no tool away.
+//                                                              // headline '' takes the strip down.
 
 // relay → both roles (never sent by the host)
 { type: 'waiting' }                                             // no TV for you: wait and try again
@@ -202,6 +207,11 @@ What is left:
     running at all times, procedurally parameterised and levelled up as the
     room gets good at them. Never rounds — no phone ever waits its turn.
     Planned in [`docs/objectives.md`](docs/objectives.md).
+    **11a is built**: the seeded RNG, zones, the director, "everybody on the
+    spot", the `brief` message, the banner and timer on the TV and the strip
+    above the joystick. 11b to 11e — more tasks and the ladder, pads and
+    private briefs, talking and drawing as tasks, carryables — are still to
+    do, in that order.
 
 ## Phaser notes (host)
 

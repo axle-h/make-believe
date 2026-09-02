@@ -1,5 +1,6 @@
 import { normaliseName, type ServerToHostMessage } from '@make-believe/shared'
 import { BUBBLE_MS } from './constants.js'
+import { observeMessage } from './objectives/director.js'
 import { colourForSlot, nextFreeSlot, spawnPosition, type GameState, type Player } from './state.js'
 
 /**
@@ -8,7 +9,10 @@ import { colourForSlot, nextFreeSlot, spawnPosition, type GameState, type Player
  * join and the renderer can react to a new blob.
  *
  * Nothing here asks what the world is doing first: the session is one
- * continuous game, so every message is welcome whenever it arrives.
+ * continuous game, so every message is welcome whenever it arrives. The
+ * running objective is *offered* each message afterwards — that is how "say
+ * the word" and "draw it" will watch — but it never gets a veto: what a phone
+ * sends always lands, whatever the world happens to be asking for.
  */
 
 /** A message about somebody the world has never heard of. */
@@ -20,6 +24,12 @@ export type ApplyResult =
   | { applied: false; reason: IgnoredReason }
 
 export function applyMessage(state: GameState, message: ServerToHostMessage): ApplyResult {
+  const result = route(state, message)
+  if (result.applied) observeMessage(state, message)
+  return result
+}
+
+function route(state: GameState, message: ServerToHostMessage): ApplyResult {
   switch (message.type) {
     case 'join':
       return join(state, message.playerId, message.name)

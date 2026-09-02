@@ -1,4 +1,6 @@
+import type { Outcome } from './objectives/types.js'
 import type { GameState, Player } from './state.js'
+import type { Zone } from './zones.js'
 
 /** Read-only views of the world, for the renderer and the e2e test hook. */
 
@@ -39,9 +41,59 @@ export interface PlayerSnapshot {
   skinKey: string | null
 }
 
+/** The running objective as plain data, for the renderer and the test hook. */
+export interface ObjectiveSnapshot {
+  id: string
+  kind: string
+  headline: string
+  remainingMs: number
+  totalMs: number
+  outcome: Outcome
+  /** What the TV says once it is over, or `null` while it is running. */
+  note: string | null
+  zones: Zone[]
+}
+
+export interface DirectorSnapshot {
+  level: number
+  score: number
+  streak: number
+  /** `null` while the world is waiting for enough blobs to ask for anything. */
+  objective: ObjectiveSnapshot | null
+}
+
 export interface GameSnapshot {
   world: { width: number; height: number }
   players: PlayerSnapshot[]
+  objectives: DirectorSnapshot
+}
+
+/**
+ * What the world is asking for, as plain data. Nothing here calls into a
+ * template: it is the fields on the objective and no more, so it is as cheap
+ * to read every frame as it is to send out of the page.
+ */
+export function objectives(state: GameState): DirectorSnapshot {
+  const director = state.objectives
+  const objective = director.current
+  return {
+    level: director.level,
+    score: director.score,
+    streak: director.streak,
+    objective:
+      objective === null
+        ? null
+        : {
+            id: objective.id,
+            kind: objective.kind,
+            headline: objective.headline,
+            remainingMs: objective.remainingMs,
+            totalMs: objective.totalMs,
+            outcome: objective.outcome,
+            note: objective.note,
+            zones: objective.zones,
+          },
+  }
 }
 
 /**
@@ -64,5 +116,19 @@ export function snapshot(state: GameState): GameSnapshot {
       text: player.bubble?.text ?? null,
       skinKey: player.skin?.key ?? null,
     })),
+    objectives: copyObjectives(objectives(state)),
+  }
+}
+
+/**
+ * `objectives` hands out the live zones, which is what the renderer wants; a
+ * snapshot has to survive the trip out of the page, so this copies them.
+ */
+function copyObjectives(director: DirectorSnapshot): DirectorSnapshot {
+  const objective = director.objective
+  return {
+    ...director,
+    objective:
+      objective === null ? null : { ...objective, zones: structuredClone(objective.zones) },
   }
 }

@@ -2,10 +2,14 @@ import Phaser from 'phaser'
 import {
   BLOB_SIZE,
   MAX_STEP_MS,
+  banner,
+  objectives,
   players,
   tick,
+  type Brief,
   type GameState,
   type Player,
+  type Zone,
 } from '../game/index.js'
 import { WORLD_SCENE_KEY } from './sceneKey.js'
 
@@ -28,10 +32,26 @@ const BUBBLE_WRAP = 360
 const BUBBLE_FADE_MS = 250
 const AWAY_ALPHA = 0.3
 
-/** Blobs at the bottom, names over them, bubbles over everything. */
+/** How far in from the top of the screen the banner sits. */
+const BANNER_TOP = 24
+/** The banner keeps clear of the QR code in the corner. */
+const BANNER_WIDTH = 800
+/** The timer bar: how wide it can get, and how thick it is. */
+const TIMER_WIDTH = 520
+const TIMER_HEIGHT = 8
+/** Gap between the banner's last line and the bar under it. */
+const TIMER_GAP = 12
+/** How see-through a zone's fill is. Enough to read, never enough to hide a blob. */
+const ZONE_FILL_ALPHA = 0.14
+const ZONE_EDGE_WIDTH = 6
+
+/** The floor is under everything; blobs, names and bubbles stack over it. */
+const DEPTH_ZONE = -10
 const DEPTH_BLOB = 0
 const DEPTH_NAME = 10
 const DEPTH_BUBBLE = 20
+/** What the world is asking for goes over the lot; it is the point of looking up. */
+const DEPTH_BANNER = 30
 
 const NAME_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'system-ui, sans-serif',
@@ -46,6 +66,34 @@ const WAITING_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'system-ui, sans-serif',
   fontSize: '32px',
   color: 'rgba(244, 241, 234, 0.45)',
+}
+
+const BANNER_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
+  fontFamily: 'system-ui, sans-serif',
+  fontSize: '44px',
+  fontStyle: 'bold',
+  color: '#f4f1ea',
+  align: 'center',
+  stroke: '#10121a',
+  strokeThickness: 8,
+  wordWrap: { width: BANNER_WIDTH },
+}
+
+const BANNER_DETAIL_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
+  fontFamily: 'system-ui, sans-serif',
+  fontSize: '28px',
+  color: 'rgba(244, 241, 234, 0.75)',
+  align: 'center',
+  stroke: '#10121a',
+  strokeThickness: 6,
+  wordWrap: { width: BANNER_WIDTH },
+}
+
+/** The banner is tinted by what has just happened, so a glance is enough. */
+const TONE_COLOURS: Record<Brief['tone'], string> = {
+  task: '#f4f1ea',
+  win: '#5ddf7f',
+  miss: '#ffd23f',
 }
 
 const BUBBLE_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
@@ -72,14 +120,33 @@ interface BlobView {
   skinKey: string | null
 }
 
+/** What the scene does with the model beyond drawing it. */
+export interface SceneOptions {
+  /**
+   * What the phones need to hear, handed over as `tick` produces it. The scene
+   * still knows nothing about the socket; `main.ts` owns that and does the
+   * sending.
+   */
+  onBriefs?: (briefs: Brief[]) => void
+}
+
 export class WorldScene extends Phaser.Scene {
   private readonly state: GameState
+  private readonly options: SceneOptions
   private readonly views = new Map<string, BlobView>()
   private waiting: Phaser.GameObjects.Text | null = null
+  /** The floor markings, redrawn only when the zones themselves change. */
+  private floor: Phaser.GameObjects.Graphics | null = null
+  /** What the floor was last drawn for, so it is not redrawn every frame. */
+  private floorFor = ''
+  private headline: Phaser.GameObjects.Text | null = null
+  private detail: Phaser.GameObjects.Text | null = null
+  private timer: Phaser.GameObjects.Graphics | null = null
 
-  constructor(state: GameState) {
+  constructor(state: GameState, options: SceneOptions = {}) {
     super(WORLD_SCENE_KEY)
     this.state = state
+    this.options = options
   }
 
   /**
@@ -103,12 +170,19 @@ export class WorldScene extends Phaser.Scene {
     this.waiting = this.add
       .text(this.state.world.width / 2, this.state.world.height / 2, 'Waiting for players…', WAITING_STYLE)
       .setOrigin(0.5, 0.5)
+
+    this.floor = this.add.graphics().setDepth(DEPTH_ZONE)
+    this.timer = this.add.graphics().setDepth(DEPTH_BANNER)
+    const middle = this.state.world.width / 2
+    this.headline = this.add.text(middle, BANNER_TOP, '', BANNER_STYLE).setOrigin(0.5, 0).setDepth(DEPTH_BANNER)
+    this.detail = this.add.text(middle, BANNER_TOP, '', BANNER_DETAIL_STYLE).setOrigin(0.5, 0).setDepth(DEPTH_BANNER)
   }
 
   override update(_time: number, delta: number): void {
     // A backgrounded tab hands back an enormous delta on its first frame;
     // capping it here is what stops everyone teleporting into a wall.
-    tick(this.state, Math.min(delta, MAX_STEP_MS))
+    const result = tick(this.state, Math.min(delta, MAX_STEP_MS))
+    if (result.briefs.length > 0) this.options.onBriefs?.(result.briefs)
     this.render()
   }
 
@@ -139,6 +213,85 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.waiting?.setVisible(list.length === 0)
+    this.renderFloor()
+    this.renderBanner()
+  }
+
+  /**
+   * The zones on the floor. They are the objective as far as a three-year-old
+   * is concerned — the banner explains, but the spot is the thing they look at
+   * — so they are drawn plainly and under everybody's feet.
+   */
+  private renderFloor(): void {
+    const zones = objectives(this.state).objective?.zones ?? []
+    const signature = zones.map(zoneSignature).join('|')
+    if (signature === this.floorFor) return
+    this.floorFor = signature
+
+    const floor = this.floor
+    if (!floor) return
+    floor.clear()
+    for (const zone of zones) this.drawZone(floor, zone)
+  }
+
+  private drawZone(floor: Phaser.GameObjects.Graphics, zone: Zone): void {
+    const colour = Phaser.Display.Color.HexStringToColor(zone.colour).color
+    floor.fillStyle(colour, ZONE_FILL_ALPHA)
+    floor.lineStyle(ZONE_EDGE_WIDTH, colour, 0.9)
+    if (zone.shape === 'circle') {
+      floor.fillCircle(zone.x, zone.y, zone.radius)
+      floor.strokeCircle(zone.x, zone.y, zone.radius)
+      return
+    }
+    const left = zone.x - zone.width / 2
+    const top = zone.y - zone.height / 2
+    floor.fillRoundedRect(left, top, zone.width, zone.height, 18)
+    floor.strokeRoundedRect(left, top, zone.width, zone.height, 18)
+  }
+
+  /**
+   * What the world is asking for, across the top. It is the same line the
+   * phones are told, so a child looking down and a child looking up are reading
+   * the same thing.
+   */
+  private renderBanner(): void {
+    const headline = this.headline
+    const detail = this.detail
+    if (!headline || !detail) return
+
+    const line = banner(this.state)
+    const text = line?.headline ?? ''
+    if (headline.text !== text) headline.setText(text)
+    headline.setVisible(text.length > 0).setColor(TONE_COLOURS[line?.tone ?? 'task'])
+
+    const under = line?.detail ?? ''
+    if (detail.text !== under) detail.setText(under)
+    detail.setVisible(text.length > 0 && under.length > 0).setY(headline.y + headline.height)
+
+    this.renderTimer(detail.visible ? detail.y + detail.height : headline.y + headline.height)
+  }
+
+  /** How much of the clock is left, as a bar rather than a number to read. */
+  private renderTimer(top: number): void {
+    const timer = this.timer
+    if (!timer) return
+    timer.clear()
+
+    const objective = objectives(this.state).objective
+    if (!objective || objective.outcome !== 'running' || objective.totalMs <= 0) return
+
+    const left = (this.state.world.width - TIMER_WIDTH) / 2
+    const y = top + TIMER_GAP
+    const share = Math.max(0, Math.min(1, objective.remainingMs / objective.totalMs))
+    const filled = TIMER_WIDTH * share
+    timer.fillStyle(0xf4f1ea, 0.18)
+    timer.fillRoundedRect(left, y, TIMER_WIDTH, TIMER_HEIGHT, TIMER_HEIGHT / 2)
+    // A rounded rectangle narrower than its own corners draws as a smudge; the
+    // last few pixels of the clock are not worth one.
+    if (filled >= TIMER_HEIGHT) {
+      timer.fillStyle(0xf4f1ea, 0.7)
+      timer.fillRoundedRect(left, y, filled, TIMER_HEIGHT, TIMER_HEIGHT / 2)
+    }
   }
 
   /** A blob arrives on screen: a tinted square with its name above it. */
@@ -240,4 +393,10 @@ export class WorldScene extends Phaser.Scene {
     view.bubble?.container.destroy()
     view.bubble = null
   }
+}
+
+/** Enough of a zone to tell whether the floor needs redrawing. */
+function zoneSignature(zone: Zone): string {
+  const size = zone.shape === 'circle' ? zone.radius : `${zone.width}x${zone.height}`
+  return `${zone.id}:${zone.shape}:${Math.round(zone.x)}:${Math.round(zone.y)}:${size}:${zone.colour}`
 }

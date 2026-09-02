@@ -282,9 +282,11 @@ carryables.
 
 ## Work
 
-Five increments, each runnable and each worth playing on its own.
+Five increments, each runnable and each worth playing on its own. 11a is
+built; what it looks like is in the code and the commit history, and the list
+below is left as it was written so the shape of the rest still reads.
 
-### 11a — the spine, and one task
+### 11a — the spine, and one task — **done**
 
 - `game/rng.ts`: mulberry32 plus `pick`, `range`, `pointInBounds`; unit tests
   for determinism and range.

@@ -2,6 +2,7 @@ import {
   HostToPlayerMessageSchema,
   MAX_TEXT_LENGTH,
   isValidSessionCode,
+  type BriefMessage,
   type HostToPlayerMessage,
   type PlayerToHostMessage,
 } from '@make-believe/shared'
@@ -71,6 +72,9 @@ const joinButton = requireElement<HTMLButtonElement>('#join-button')
 const joinError = requireElement<HTMLElement>('#join-error')
 const waitingName = requireElement<HTMLElement>('#waiting-name')
 const playName = requireElement<HTMLElement>('#play-name')
+const brief = requireElement<HTMLElement>('#brief')
+const briefHeadline = requireElement<HTMLElement>('#brief-headline')
+const briefDetail = requireElement<HTMLElement>('#brief-detail')
 const pad = requireElement<HTMLElement>('#pad')
 const thumb = requireElement<HTMLElement>('#thumb')
 const textForm = requireElement<HTMLFormElement>('#text-form')
@@ -250,6 +254,13 @@ function applyMessage(message: HostToPlayerMessage): void {
     enterSession(message.session)
     return
   }
+  // What the world is asking for. It is information and nothing else: no
+  // screen changes on it, no tool is taken away, and the joystick underneath
+  // it carries on exactly as it was. A child who ignores it is still playing.
+  if (message.type === 'brief') {
+    showBrief(message)
+    return
+  }
   if (message.type === 'assigned') {
     document.documentElement.style.setProperty('--blob', message.colour)
     blobColour = message.colour
@@ -267,7 +278,25 @@ function applyMessage(message: HostToPlayerMessage): void {
   // close handler is what decides whether to wait or ask for a new code.
   // Closing the socket here instead would throw that reason away.
   release()
+  showBrief(null)
   showScreen('waiting')
+}
+
+/**
+ * Put a line above the joystick, or take it down again. An empty headline is
+ * how the TV clears it, and `null` is this phone deciding there is nothing to
+ * show because there is no world to hear from.
+ */
+function showBrief(message: BriefMessage | null): void {
+  const headline = message?.headline ?? ''
+  const detail = message?.detail ?? ''
+  briefHeadline.textContent = headline
+  briefDetail.textContent = detail
+  briefDetail.hidden = detail.length === 0
+  brief.dataset.tone = message?.tone ?? 'task'
+  if (message?.colour) brief.style.setProperty('--brief', message.colour)
+  else brief.style.removeProperty('--brief')
+  brief.hidden = headline.length === 0
 }
 
 /** Sit on the waiting screen and try again shortly, until a TV answers. */

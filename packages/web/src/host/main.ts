@@ -4,7 +4,15 @@ import {
   type HostOutboundMessage,
 } from '@make-believe/shared'
 import { connect } from '../lib/ws.js'
-import { applyMessage, createGame, snapshot, type GameSnapshot, type GameState } from './game/index.js'
+import {
+  applyMessage,
+  briefFor,
+  createGame,
+  snapshot,
+  type Brief,
+  type GameSnapshot,
+  type GameState,
+} from './game/index.js'
 import { startPhaser, wornTextures } from './phaser/game.js'
 import { joinUrl, qrSvg } from './qr.js'
 import './host.css'
@@ -85,6 +93,15 @@ function send(message: HostOutboundMessage): void {
 }
 
 /**
+ * What the world is asking for, out to the phones. A brief is words and
+ * nothing else: it changes no screen, disables no tool and puts no phone into
+ * a mode. Every phone can still drive, talk, draw and rename while it is up.
+ */
+function sendBriefs(briefs: Brief[]): void {
+  for (const brief of briefs) send({ ...brief, type: 'brief' })
+}
+
+/**
  * A phone said something. The model decides what it means; the only thing the
  * TV has to answer is a hello, and the answer is which blob you are. That
  * message is also the phone's cue to put its controller up, so it goes out on
@@ -93,6 +110,9 @@ function send(message: HostOutboundMessage): void {
  * The answer carries whether this blob already has its drawing, because a
  * world that has just been created has forgotten every one of them and the
  * phones are the only place they still exist.
+ *
+ * A blob that has walked in halfway through a task is told what is going on
+ * right behind it, because the announcement it needed has already been made.
  */
 function handleMessage(message: HostInboundMessage): void {
   // Which world this is, not something that happened in it: the model never
@@ -112,9 +132,11 @@ function handleMessage(message: HostInboundMessage): void {
     hasDrawing: player.skin !== null,
     to: player.playerId,
   })
+  const brief = briefFor(state, player.playerId)
+  if (brief) send({ ...brief, type: 'brief', to: player.playerId })
 }
 
-const phaser = startPhaser(world, state)
+const phaser = startPhaser(world, state, { onBriefs: sendBriefs })
 window.__game = {
   state,
   snapshot: () => snapshot(state),

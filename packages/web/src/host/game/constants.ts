@@ -36,3 +36,25 @@ export const PALETTE = [
   '#3fe0d0',
   '#ff6fc1',
 ] as const
+
+/**
+ * The floor is dark, so a zone is drawn in something the blob palette does not
+ * use. Nobody should ever have to work out whether a spot is somebody's blob.
+ */
+export const ZONE_COLOURS = ['#f6f0e2', '#8de0ff', '#ffe08a', '#b9ffb0'] as const
+
+/** How many objectives the room has to finish before the next one gets harder. */
+export const LEVEL_UP_AFTER = 3
+
+/** What finishing one is worth. Score only ever goes up. */
+export const SCORE_PER_OBJECTIVE = 10
+
+/**
+ * How long a finished objective stays on screen, cheering or shrugging, before
+ * the next one appears. It is not a gap in play: every phone can still drive,
+ * talk, draw and rename right through it.
+ */
+export const INTERLUDE_MS = 4_000
+
+/** The hardest the ladder goes. Beyond this the parameters stop tightening. */
+export const MAX_LEVEL = 8

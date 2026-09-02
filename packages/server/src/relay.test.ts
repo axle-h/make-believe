@@ -33,6 +33,7 @@ const waiting = { type: 'waiting' }
 const session = (code: string) => ({ type: 'session', session: code })
 /** What the host says back to a hello, minus the recipient the relay strips. */
 const assigned = { type: 'assigned', colour: '#0f0', slot: 1, hasDrawing: false } as const
+const brief = { type: 'brief', headline: 'Everybody on the spot!', tone: 'task' } as const
 
 describe('relay', () => {
   let relay: Relay
@@ -157,6 +158,41 @@ describe('relay', () => {
 
     expect(one.sent).toEqual([assigned])
     expect(two.sent).toEqual([assigned])
+  })
+
+  /**
+   * The relay forwards by `to` and does not look at the rest, so a brief
+   * travels exactly as an assignment does. It is the whole of what objectives
+   * cost the server.
+   */
+  it('fans a brief out to every phone without knowing what one is', () => {
+    relay.attachHost(host)
+    const one = fakeConnection()
+    const two = fakeConnection()
+    relay.attachPlayer('p1', one)
+    relay.attachPlayer('p2', two)
+    one.clear()
+    two.clear()
+
+    expect(relay.routeFromHost({ ...brief, to: '*' })).toBe(true)
+
+    expect(one.sent).toEqual([brief])
+    expect(two.sent).toEqual([brief])
+  })
+
+  it('sends a private brief to the one phone it is for', () => {
+    relay.attachHost(host)
+    const one = fakeConnection()
+    const two = fakeConnection()
+    relay.attachPlayer('p1', one)
+    relay.attachPlayer('p2', two)
+    one.clear()
+    two.clear()
+
+    expect(relay.routeFromHost({ ...brief, detail: 'Yours is the green one', to: 'p2' })).toBe(true)
+
+    expect(one.sent).toEqual([])
+    expect(two.sent).toEqual([{ ...brief, detail: 'Yours is the green one' }])
   })
 
   it('drops a host message addressed to a player who is not here', () => {

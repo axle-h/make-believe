@@ -1,5 +1,7 @@
 import { resolveCollisions } from './collisions.js'
 import { AWAY_TIMEOUT_MS, SPEED } from './constants.js'
+import { stepObjectives } from './objectives/director.js'
+import type { Brief } from './objectives/types.js'
 import { clampToWorld, type GameState } from './state.js'
 
 /**
@@ -16,6 +18,11 @@ export const MAX_STEP_MS = 50
 export interface TickResult {
   /** Players forgotten this step because their phone never came back. */
   removed: string[]
+  /**
+   * What the phones need to hear about the objective, and only what has
+   * changed — the wording, not every frame of it.
+   */
+  briefs: Brief[]
 }
 
 export function tick(state: GameState, dtMs: number): TickResult {
@@ -48,5 +55,9 @@ export function tick(state: GameState, dtMs: number): TickResult {
   // Everybody has moved; now stop anyone standing inside anyone else.
   resolveCollisions(state)
 
-  return { removed }
+  // And last, with everybody where they have ended up, ask whether the world
+  // has got what it wanted.
+  const briefs = stepObjectives(state, step)
+
+  return { removed, briefs }
 }

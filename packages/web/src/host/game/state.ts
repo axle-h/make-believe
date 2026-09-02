@@ -1,4 +1,5 @@
 import { BLOB_SIZE, PALETTE, WORLD_HEIGHT, WORLD_WIDTH } from './constants.js'
+import { createDirector, type Director } from './objectives/director.js'
 
 /**
  * The world, as plain data. Nothing here knows about Phaser, the DOM or a
@@ -49,12 +50,24 @@ export interface Player {
 export interface GameState {
   world: World
   players: Map<string, Player>
+  /**
+   * What the world is currently asking everybody to do. It is a thing the
+   * world wants, never a mode a phone is in: every tool on every phone is live
+   * throughout, and a child who ignores it entirely is still playing.
+   */
+  objectives: Director
 }
 
-export function createGame(): GameState {
+/**
+ * A brand new world. The seed is injectable so that a test can say exactly
+ * which spot appears where; the TV leaves it out and gets a fresh one, because
+ * nothing survives a reload and every evening should be different.
+ */
+export function createGame(seed?: number): GameState {
   return {
     world: { width: WORLD_WIDTH, height: WORLD_HEIGHT },
     players: new Map(),
+    objectives: createDirector(seed),
   }
 }
 

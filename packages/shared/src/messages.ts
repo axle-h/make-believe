@@ -10,6 +10,10 @@ import { isValidSessionCode } from './sessionCode.js'
 
 /** Longest speech-bubble text a player may send. */
 export const MAX_TEXT_LENGTH = 60
+/** Longest objective headline the TV may put on a phone's strip. */
+export const MAX_HEADLINE_LENGTH = 80
+/** Longest second line under a headline. */
+export const MAX_DETAIL_LENGTH = 120
 /**
  * Longest `data:` URL accepted for a drawing. A 256x256 doodle is far below
  * 256 KiB; a photo-sized paste is not, and the server drops it.
@@ -82,6 +86,24 @@ export const AssignedMessageSchema = z.object({
 })
 
 /**
+ * What the world is asking for, echoed onto the phone under the blob's name.
+ *
+ * It is information and never an instruction: no screen changes on it, nothing
+ * is disabled by it, and every tool the phone has stays exactly where it was.
+ * A child who ignores it entirely is still playing. An empty `headline` takes
+ * the strip down again.
+ */
+export const BriefMessageSchema = z.object({
+  type: z.literal('brief'),
+  headline: z.string().max(MAX_HEADLINE_LENGTH),
+  /** The quieter second line: a count, a hint, or the half only you are told. */
+  detail: z.string().max(MAX_DETAIL_LENGTH).optional(),
+  /** Tints the strip when the task is about a particular colour. */
+  colour: z.string().min(1).max(32).optional(),
+  tone: z.enum(['task', 'win', 'miss']),
+})
+
+/**
  * There is no TV for you: show the waiting screen and try again shortly. Sent
  * by the *relay*, never by the host, when no host has the world.
  */
@@ -105,18 +127,23 @@ export const SessionMessageSchema = z.object({
 
 export const HostToPlayerMessageSchema = z.discriminatedUnion('type', [
   AssignedMessageSchema,
+  BriefMessageSchema,
   WaitingMessageSchema,
   SessionMessageSchema,
 ])
 
 /**
- * What the host actually puts on the wire: a player message plus a `to`. The
- * TV has one thing to say to a phone — which blob it is — because the game is
- * one continuous session with no rounds to announce.
+ * What the host actually puts on the wire: a message for a phone plus a `to`.
+ * Which blob you are, and what the world is currently asking for — the second
+ * is still not a round, and still nothing a phone has to obey.
+ *
+ * The relay forwards by `to` and never looks at the rest, so adding to this
+ * union costs it nothing.
  */
-export const HostOutboundMessageSchema = AssignedMessageSchema.extend({
-  to: RecipientSchema,
-})
+export const HostOutboundMessageSchema = z.discriminatedUnion('type', [
+  AssignedMessageSchema.extend({ to: RecipientSchema }),
+  BriefMessageSchema.extend({ to: RecipientSchema }),
+])
 
 // --- server → host -------------------------------------------------------
 
@@ -157,6 +184,8 @@ export type DrawingMessage = z.infer<typeof DrawingMessageSchema>
 export type TextMessage = z.infer<typeof TextMessageSchema>
 export type PlayerToHostMessage = z.infer<typeof PlayerToHostMessageSchema>
 export type AssignedMessage = z.infer<typeof AssignedMessageSchema>
+export type BriefMessage = z.infer<typeof BriefMessageSchema>
+export type BriefTone = BriefMessage['tone']
 export type WaitingMessage = z.infer<typeof WaitingMessageSchema>
 export type SessionMessage = z.infer<typeof SessionMessageSchema>
 export type HostToPlayerMessage = z.infer<typeof HostToPlayerMessageSchema>

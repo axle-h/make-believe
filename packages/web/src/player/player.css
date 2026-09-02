@@ -202,6 +202,60 @@ h1 {
   color: var(--blob);
 }
 
+/*
+ * What the world is asking for. The slot keeps its height whether or not
+ * there is anything to say, so the joystick never jumps under a thumb.
+ */
+.brief-slot {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 22rem;
+  min-height: 4.5rem;
+}
+
+.brief {
+  /* Overridden inline when a task is about a particular colour. */
+  --brief: var(--ink);
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--brief) 45%, transparent);
+  border-radius: 0.75rem;
+  background: #1b1f2e;
+  text-align: center;
+  /* Information, never a control: it can never take a tap from the joystick. */
+  pointer-events: none;
+}
+
+.brief[hidden] {
+  display: none;
+}
+
+.brief[data-tone='win'] {
+  --brief: #5ddf7f;
+}
+
+.brief[data-tone='miss'] {
+  --brief: #ffd23f;
+}
+
+.brief-headline {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--brief);
+}
+
+.brief-detail {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+.brief-detail[hidden] {
+  display: none;
+}
+
 /* The controller: name at the top, joystick in the middle, tools at the foot. */
 .screen-play {
   justify-content: space-between;
