@@ -1,4 +1,3 @@
-import type { PhaseValue } from '@make-believe/shared'
 import type { GameState, Player } from './state.js'
 
 /** Read-only views of the world, for the renderer and the e2e test hook. */
@@ -12,10 +11,6 @@ export function players(state: GameState): Player[] {
 
 export function playerById(state: GameState, playerId: string): Player | undefined {
   return state.players.get(playerId)
-}
-
-export function currentPhase(state: GameState): PhaseValue {
-  return state.phase
 }
 
 /** Blobs whose phone is still holding a socket. */
@@ -46,7 +41,6 @@ export interface PlayerSnapshot {
 
 export interface GameSnapshot {
   world: { width: number; height: number }
-  phase: PhaseValue
   players: PlayerSnapshot[]
 }
 
@@ -57,7 +51,6 @@ export interface GameSnapshot {
 export function snapshot(state: GameState): GameSnapshot {
   return {
     world: { ...state.world },
-    phase: state.phase,
     players: players(state).map((player) => ({
       playerId: player.playerId,
       name: player.name,

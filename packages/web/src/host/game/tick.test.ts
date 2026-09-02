@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from './apply.js'
 import { AWAY_TIMEOUT_MS, BLOB_SIZE, BUBBLE_MS, SPEED, WORLD_HEIGHT, WORLD_WIDTH } from './constants.js'
-import { setPhase } from './phases.js'
 import { nextFreeSlot, createGame, type GameState, type Player } from './state.js'
 import { tick } from './tick.js'
 
@@ -105,7 +104,6 @@ describe('forgetting a phone that never came back', () => {
 describe('speech bubbles', () => {
   function talking() {
     const { state, player } = withPlayer()
-    setPhase(state, 'play')
     applyMessage(state, { type: 'text', playerId: 'p1', value: 'hello mum' })
     return { state, player }
   }

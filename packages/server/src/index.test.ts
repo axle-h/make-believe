@@ -81,9 +81,9 @@ it('serves healthz and relays between a host and two players', async () => {
   expect(await one.next()).toEqual({ type: 'assigned', colour: '#ff0000', slot: 0 })
 
   // host → everyone
-  host.send({ type: 'phase', value: 'play', to: '*' })
-  expect(await one.next()).toEqual({ type: 'phase', value: 'play' })
-  expect(await two.next()).toEqual({ type: 'phase', value: 'play' })
+  host.send({ type: 'assigned', colour: '#4ea8ff', slot: 0, to: '*' })
+  expect(await one.next()).toEqual({ type: 'assigned', colour: '#4ea8ff', slot: 0 })
+  expect(await two.next()).toEqual({ type: 'assigned', colour: '#4ea8ff', slot: 0 })
 
   // rubbish is dropped, and the socket carries on working
   one.send({ type: 'input', playerId: 'p1', dx: 99, dy: 0 })
@@ -103,7 +103,7 @@ it('sends a player with the wrong room code back to the lobby and says why', asy
   const host = await connect('role=host&room=ABCD')
   const stale = await connect('role=player&room=WXYZ&playerId=p1')
 
-  expect(await stale.next()).toEqual({ type: 'phase', value: 'lobby' })
+  expect(await stale.next()).toEqual({ type: 'waiting' })
   // The phone tells "wrong code" from "no TV yet" by this reason alone.
   expect(await stale.closed).toEqual({ code: 4001, reason: 'wrong-room' })
 
@@ -113,7 +113,7 @@ it('sends a player with the wrong room code back to the lobby and says why', asy
 it('tells a player who arrives before the TV that there is no host', async () => {
   const early = await connect('role=player&room=ABCD&playerId=p1')
 
-  expect(await early.next()).toEqual({ type: 'phase', value: 'lobby' })
+  expect(await early.next()).toEqual({ type: 'waiting' })
   expect(await early.closed).toEqual({ code: 4001, reason: 'no-host' })
 })
 

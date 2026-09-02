@@ -1,4 +1,3 @@
-import type { PhaseValue } from '@make-believe/shared'
 import { BLOB_SIZE, PALETTE, WORLD_HEIGHT, WORLD_WIDTH } from './constants.js'
 
 /**
@@ -49,14 +48,12 @@ export interface Player {
 
 export interface GameState {
   world: World
-  phase: PhaseValue
   players: Map<string, Player>
 }
 
 export function createGame(): GameState {
   return {
     world: { width: WORLD_WIDTH, height: WORLD_HEIGHT },
-    phase: 'lobby',
     players: new Map(),
   }
 }

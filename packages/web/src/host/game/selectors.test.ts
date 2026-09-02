@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from './apply.js'
-import { setPhase } from './phases.js'
 import {
   activePlayers,
-  currentPhase,
   playerById,
   playerCount,
   players,
@@ -45,15 +43,6 @@ describe('players', () => {
   })
 })
 
-describe('currentPhase', () => {
-  it('follows the world', () => {
-    const state = createGame()
-    expect(currentPhase(state)).toBe('lobby')
-    setPhase(state, 'play')
-    expect(currentPhase(state)).toBe('play')
-  })
-})
-
 describe('snapshot', () => {
   it('is plain data that survives leaving the page', () => {
     const state = world()
@@ -64,7 +53,6 @@ describe('snapshot', () => {
 
     expect(JSON.parse(JSON.stringify(taken))).toEqual(taken)
     expect(taken.world).toEqual({ width: 1280, height: 720 })
-    expect(taken.phase).toBe('lobby')
     expect(taken.players.map((player) => player.name)).toEqual(['Wilf', 'Ida', 'Ted'])
     expect(taken.players[0]).toMatchObject({ dx: 1, dy: 0, away: false, text: null, skinKey: null })
     expect(taken.players[2]).toMatchObject({ away: true })

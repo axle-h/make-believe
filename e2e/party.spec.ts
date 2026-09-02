@@ -1,10 +1,20 @@
 import { expect } from '@playwright/test'
-import { BLOB_SIZE, playerNamed, pressPhaseKey, pushJoystick, snapshot, test, worn } from './world.js'
+import {
+  BLOB_SIZE,
+  hostRoomCode,
+  openTool,
+  playerNamed,
+  pushJoystick,
+  snapshot,
+  test,
+  worn,
+} from './world.js'
 
 /**
- * One evening in front of the TV: two phones join by code, drive their own
- * blobs, say something, and draw. Everything is asserted through the host's
- * model, which is the single source of truth for the whole game.
+ * One evening in front of the TV: two phones scan in, drive their own blobs,
+ * say something, and draw — all of it whenever they like, because the session
+ * is one continuous game with no rounds (docs D-026). Everything is asserted
+ * through the host's model, which is the single source of truth.
  */
 test.describe('a party', () => {
   test('two phones join, drive, talk and draw', async ({ party }) => {
@@ -41,11 +51,8 @@ test.describe('a party', () => {
     await host.page.waitForTimeout(300)
     expect((await playerNamed(host, 'Wilf')).y).toBeCloseTo(stopped, 0)
 
-    // --- the text round ---
-    await pressPhaseKey(host, 'T')
-    await expect(ida.page.locator('#screen-text')).toBeVisible()
-    await expect(wilf.page.locator('#screen-text')).toBeVisible()
-
+    // --- saying something, without anything having to change on the TV ---
+    await openTool(ida, 'say')
     await ida.page.fill('#text-input', 'hello mum')
     await ida.page.click('#text-send')
 
@@ -55,18 +62,20 @@ test.describe('a party', () => {
     expect((await playerNamed(host, 'Wilf')).text).toBeNull()
     await expect(ida.page.locator('#text-input')).toHaveValue('')
 
+    // Back to the joystick, and Ida can drive with the bubble still up.
+    await ida.page.click('#say-close')
+    await expect(ida.page.locator('#pad')).toBeVisible()
+    expect((await playerNamed(host, 'Ida')).text).toBe('hello mum')
+
     // The bubble takes itself down again.
     await expect.poll(async () => (await playerNamed(host, 'Ida')).text, { timeout: 12_000 }).toBeNull()
 
-    // --- the drawing round ---
-    await pressPhaseKey(host, 'P')
-    await expect(wilf.page.locator('#screen-play')).toBeVisible()
-    await pressPhaseKey(host, 'D')
-    await expect(wilf.page.locator('#screen-draw')).toBeVisible()
-
+    // --- drawing, from the same continuous session ---
+    await openTool(wilf, 'draw')
     await scribble(wilf.page)
     await wilf.page.click('#draw-done')
-    await expect(wilf.page.locator('#draw-status')).toHaveText('Sent to the TV')
+    // Sending puts the joystick back up; the TV is where the drawing shows.
+    await expect(wilf.page.locator('#sheet-draw')).toBeHidden()
 
     await expect
       .poll(async () => (await playerNamed(host, 'Wilf')).skinKey, { timeout: 8_000 })
@@ -76,6 +85,52 @@ test.describe('a party', () => {
     // ...and the drawing reached the sprite, not just the model.
     await expect.poll(async () => (await worn(host))[wilf.playerId], { timeout: 8_000 }).toBe(skinKey)
     expect((await playerNamed(host, 'Ida')).skinKey).toBeNull()
+  })
+
+  test('a blob can be renamed and redrawn without stopping the game', async ({ party }) => {
+    const host = await party.openHost()
+    const wilf = await party.joinAs(host.roomCode, 'Wilf')
+
+    // Drive first, so the rename lands in the middle of a game rather than at
+    // the start of one.
+    await pushJoystick(wilf, { dx: 0, dy: 1 }, 300)
+    const before = await playerNamed(host, 'Wilf')
+
+    await openTool(wilf, 'name')
+    await wilf.page.fill('#rename-input', 'Sir Wilf')
+    await wilf.page.click('#rename-save')
+    await expect(wilf.page.locator('#sheet-name')).toBeHidden()
+
+    await expect.poll(async () => (await snapshot(host)).players[0]?.name).toBe('Sir Wilf')
+    // The same blob, in the same place, wearing the same colour.
+    const renamed = await playerNamed(host, 'Sir Wilf')
+    expect(renamed.playerId).toBe(before.playerId)
+    expect(renamed.colour).toBe(before.colour)
+    expect(renamed.y).toBeCloseTo(before.y, 0)
+    expect((await snapshot(host)).players).toHaveLength(1)
+
+    // A second drawing replaces the first, at any time.
+    await openTool(wilf, 'draw')
+    await scribble(wilf.page)
+    await wilf.page.click('#draw-done')
+    await expect.poll(async () => (await playerNamed(host, 'Sir Wilf')).skinKey).toBe(
+      `skin-${wilf.playerId}-1`,
+    )
+
+    await openTool(wilf, 'draw')
+    await scribble(wilf.page)
+    await wilf.page.click('#draw-done')
+    await expect
+      .poll(async () => (await playerNamed(host, 'Sir Wilf')).skinKey, { timeout: 8_000 })
+      .toBe(`skin-${wilf.playerId}-2`)
+    await expect
+      .poll(async () => (await worn(host))[wilf.playerId], { timeout: 8_000 })
+      .toBe(`skin-${wilf.playerId}-2`)
+
+    // ...and the joystick still drives after all that.
+    const settled = await playerNamed(host, 'Sir Wilf')
+    await pushJoystick(wilf, { dx: 0, dy: 1 }, 400)
+    expect((await playerNamed(host, 'Sir Wilf')).y).toBeGreaterThan(settled.y + 20)
   })
 
   test('blobs are solid and shove each other about', async ({ party }) => {
@@ -94,6 +149,22 @@ test.describe('a party', () => {
     // ...and nobody ends up standing inside anybody.
     const wilfNow = await playerNamed(host, 'Wilf')
     expect(Math.abs(after.x - wilfNow.x)).toBeGreaterThanOrEqual(BLOB_SIZE - 1)
+  })
+
+  test('a phone opened at the bare URL is sent to the TV to scan', async ({ party }) => {
+    const host = await party.openHost()
+    const phone = await party.openPhone('/')
+
+    // Nothing to type: there is no code on this phone and nowhere to put one.
+    await expect(phone.locator('#screen-scan')).toBeVisible()
+    await expect(phone.locator('#screen-join')).toBeHidden()
+
+    // Following the QR code's link is all it takes to get past it.
+    await phone.goto(`/?room=${host.roomCode}`)
+    await expect(phone.locator('#screen-join')).toBeVisible()
+    await phone.fill('#name-input', 'Wilf')
+    await phone.click('#join-button')
+    await expect(phone.locator('#screen-play')).toBeVisible()
   })
 
   test('a phone that reloads keeps its blob', async ({ party }) => {
@@ -122,7 +193,8 @@ test.describe('a party', () => {
 
     await host.page.reload()
     // Same session, so the code on the phones still works.
-    await expect(host.page.locator('#room-code')).toHaveText(host.roomCode)
+    await expect(host.page.locator('#qr svg')).toBeVisible()
+    expect(await hostRoomCode(host.page)).toBe(host.roomCode)
 
     // The phone knocks again on its own; nobody touches it.
     await expect

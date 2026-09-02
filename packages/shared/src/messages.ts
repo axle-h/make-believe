@@ -20,8 +20,6 @@ export const PlayerIdSchema = z
   .max(64)
   .regex(/^[A-Za-z0-9_-]+$/, 'playerId must be url-safe')
 
-export const PhaseValueSchema = z.enum(['lobby', 'play', 'draw', 'text'])
-
 /** `'*'` fans a host message out to every player. */
 export const RecipientSchema = z.union([z.literal('*'), PlayerIdSchema])
 
@@ -72,21 +70,28 @@ export const AssignedMessageSchema = z.object({
   slot: z.number().int().nonnegative(),
 })
 
-export const PhaseMessageSchema = z.object({
-  type: z.literal('phase'),
-  value: PhaseValueSchema,
+/**
+ * There is no TV for you: show the waiting screen and keep knocking. Sent by
+ * the *relay*, never by the host — when no host has the world, when the code
+ * is stale, and when a TV that has reconnected no longer knows this phone.
+ */
+export const WaitingMessageSchema = z.object({
+  type: z.literal('waiting'),
 })
 
 export const HostToPlayerMessageSchema = z.discriminatedUnion('type', [
   AssignedMessageSchema,
-  PhaseMessageSchema,
+  WaitingMessageSchema,
 ])
 
-/** What the host actually puts on the wire: a player message plus a `to`. */
-export const HostOutboundMessageSchema = z.discriminatedUnion('type', [
-  AssignedMessageSchema.extend({ to: RecipientSchema }),
-  PhaseMessageSchema.extend({ to: RecipientSchema }),
-])
+/**
+ * What the host actually puts on the wire: a player message plus a `to`. The
+ * TV has one thing to say to a phone — which blob it is — because the game is
+ * one continuous session with no rounds to announce (docs D-026).
+ */
+export const HostOutboundMessageSchema = AssignedMessageSchema.extend({
+  to: RecipientSchema,
+})
 
 // --- server → host -------------------------------------------------------
 
@@ -106,7 +111,6 @@ export const ServerToHostMessageSchema = z.discriminatedUnion('type', [
 
 // --- types ---------------------------------------------------------------
 
-export type PhaseValue = z.infer<typeof PhaseValueSchema>
 export type Recipient = z.infer<typeof RecipientSchema>
 export type JoinMessage = z.infer<typeof JoinMessageSchema>
 export type InputMessage = z.infer<typeof InputMessageSchema>
@@ -114,7 +118,7 @@ export type DrawingMessage = z.infer<typeof DrawingMessageSchema>
 export type TextMessage = z.infer<typeof TextMessageSchema>
 export type PlayerToHostMessage = z.infer<typeof PlayerToHostMessageSchema>
 export type AssignedMessage = z.infer<typeof AssignedMessageSchema>
-export type PhaseMessage = z.infer<typeof PhaseMessageSchema>
+export type WaitingMessage = z.infer<typeof WaitingMessageSchema>
 export type HostToPlayerMessage = z.infer<typeof HostToPlayerMessageSchema>
 export type HostOutboundMessage = z.infer<typeof HostOutboundMessageSchema>
 export type LeftMessage = z.infer<typeof LeftMessageSchema>

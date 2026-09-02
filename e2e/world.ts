@@ -25,7 +25,6 @@ export interface PlayerSnapshot {
 
 export interface GameSnapshot {
   world: { width: number; height: number }
-  phase: 'lobby' | 'play' | 'draw' | 'text'
   players: PlayerSnapshot[]
 }
 
@@ -35,6 +34,8 @@ declare global {
       snapshot: () => GameSnapshot
       /** The texture each blob is actually wearing, keyed by playerId. */
       worn: () => Record<string, string>
+      /** Tonight's code, which the TV itself only ever shows inside the QR code. */
+      roomCode: string
     }
   }
 }
@@ -59,6 +60,8 @@ export interface Player {
 export interface Party {
   openHost(): Promise<Host>
   joinAs(roomCode: string, name: string): Promise<Player>
+  /** A phone opened at an arbitrary address, for the cases that never join. */
+  openPhone(path: string): Promise<Page>
 }
 
 export const test = base.extend<{ party: Party }>({
@@ -72,6 +75,11 @@ export const test = base.extend<{ party: Party }>({
     await use({
       openHost: () => openHost(open),
       joinAs: (roomCode, name) => joinAs(open, roomCode, name),
+      openPhone: async (path) => {
+        const page = await open()
+        await page.goto(path)
+        return page
+      },
     })
     await Promise.all(contexts.map((context) => context.close()))
   },
@@ -82,10 +90,21 @@ type OpenPage = () => Promise<Page>
 async function openHost(open: OpenPage): Promise<Host> {
   const page = await open()
   await page.goto('/host/')
-  await expect(page.locator('#room-code')).not.toHaveText('····')
-  const roomCode = (await page.locator('#room-code').textContent()) ?? ''
+  // Nothing on the TV spells the code out — it lives inside the QR code — so
+  // the test reads it from the same seam it reads the world from.
+  await expect(page.locator('#qr svg')).toBeVisible()
+  const roomCode = await hostRoomCode(page)
   expect(roomCode).toMatch(/^[A-Z2-9]{4}$/)
   return { page, roomCode }
+}
+
+/** Tonight's code, as the TV knows it. */
+export function hostRoomCode(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const game = window.__game
+    if (!game) throw new Error('the host page has no test seam')
+    return game.roomCode
+  })
 }
 
 async function joinAs(open: OpenPage, roomCode: string, name: string): Promise<Player> {
@@ -140,7 +159,11 @@ export async function pushJoystick(
   await player.page.mouse.up()
 }
 
-/** Change the phase from the TV, the way somebody at the keyboard would. */
-export async function pressPhaseKey(host: Host, key: 'P' | 'T' | 'D' | 'L'): Promise<void> {
-  await host.page.keyboard.press(`Key${key}`)
+/**
+ * Open one of the tools over the joystick. They are always there — the TV has
+ * no say in what a phone is doing (docs D-026).
+ */
+export async function openTool(player: Player, tool: 'say' | 'draw' | 'name'): Promise<void> {
+  await player.page.click(`#tool-${tool}`)
+  await expect(player.page.locator(`#sheet-${tool}`)).toBeVisible()
 }

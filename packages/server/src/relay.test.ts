@@ -24,7 +24,7 @@ function fakeConnection(): Fake {
   return fake
 }
 
-const lobby = { type: 'phase', value: 'lobby' }
+const waiting = { type: 'waiting' }
 
 describe('relay', () => {
   let relay: Relay
@@ -99,15 +99,15 @@ describe('relay', () => {
     relay.attachPlayer('ABCD', 'p1', one)
     relay.attachPlayer('ABCD', 'p2', two)
 
-    expect(relay.routeFromHost({ type: 'phase', value: 'play', to: '*' })).toBe(true)
+    expect(relay.routeFromHost({ type: 'assigned', colour: '#0f0', slot: 1, to: '*' })).toBe(true)
 
-    expect(one.sent).toEqual([{ type: 'phase', value: 'play' }])
-    expect(two.sent).toEqual([{ type: 'phase', value: 'play' }])
+    expect(one.sent).toEqual([{ type: 'assigned', colour: '#0f0', slot: 1 }])
+    expect(two.sent).toEqual([{ type: 'assigned', colour: '#0f0', slot: 1 }])
   })
 
   it('drops a host message addressed to a player who is not here', () => {
     relay.attachHost('ABCD', host)
-    expect(relay.routeFromHost({ type: 'phase', value: 'play', to: 'nobody' })).toBe(false)
+    expect(relay.routeFromHost({ type: 'assigned', colour: '#0f0', slot: 1, to: 'nobody' })).toBe(false)
   })
 
   it('rejects a player whose room code does not match', () => {
@@ -116,7 +116,7 @@ describe('relay', () => {
 
     expect(relay.attachPlayer('WXYZ', 'p1', stale)).toEqual({ ok: false, reason: 'wrong-room' })
 
-    expect(stale.sent).toEqual([lobby])
+    expect(stale.sent).toEqual([waiting])
     // Left open on purpose: the caller closes it with the reason in the frame.
     expect(stale.closed).toBe(false)
     expect(relay.playerIds()).toEqual([])
@@ -127,7 +127,7 @@ describe('relay', () => {
 
     expect(relay.attachPlayer('ABCD', 'p1', early)).toEqual({ ok: false, reason: 'no-host' })
 
-    expect(early.sent).toEqual([lobby])
+    expect(early.sent).toEqual([waiting])
     expect(early.closed).toBe(false)
   })
 
@@ -140,8 +140,8 @@ describe('relay', () => {
 
     expect(first.closed).toBe(true)
     expect(relay.playerIds()).toEqual(['p1'])
-    relay.routeFromHost({ type: 'phase', value: 'play', to: 'p1' })
-    expect(second.sent).toEqual([{ type: 'phase', value: 'play' }])
+    relay.routeFromHost({ type: 'assigned', colour: '#0f0', slot: 1, to: 'p1' })
+    expect(second.sent).toEqual([{ type: 'assigned', colour: '#0f0', slot: 1 }])
   })
 
   it('tells the host when a player disconnects', () => {
@@ -175,14 +175,14 @@ describe('relay', () => {
 
     relay.detachHost(host)
 
-    expect(one.sent).toEqual([lobby])
+    expect(one.sent).toEqual([waiting])
     expect(one.closed).toBe(true)
     expect(relay.hasHost).toBe(false)
     expect(relay.roomCode).toBeNull()
     expect(relay.playerIds()).toEqual([])
   })
 
-  it('replaces the host on a TV refresh and sends the old players back to the lobby', () => {
+  it('replaces the host on a TV refresh and sends the old players back to waiting', () => {
     relay.attachHost('ABCD', host)
     const one = fakeConnection()
     relay.attachPlayer('ABCD', 'p1', one)
@@ -191,7 +191,7 @@ describe('relay', () => {
     relay.attachHost('WXYZ', second)
 
     expect(host.closed).toBe(true)
-    expect(one.sent).toEqual([lobby])
+    expect(one.sent).toEqual([waiting])
     expect(one.closed).toBe(true)
     expect(relay.roomCode).toBe('WXYZ')
     expect(relay.playerIds()).toEqual([])
@@ -217,9 +217,9 @@ describe('relay', () => {
     expect(relay.playerIds()).toEqual(['p1', 'p2'])
     expect(one.closed).toBe(false)
     expect(two.closed).toBe(false)
-    // Told to show the lobby, which is a phone's cue to knock again.
-    expect(one.sent).toEqual([lobby])
-    expect(two.sent).toEqual([lobby])
+    // Told to wait, which is a phone's cue to knock again.
+    expect(one.sent).toEqual([waiting])
+    expect(two.sent).toEqual([waiting])
 
     // And their next knock reaches the new TV without reconnecting anything.
     relay.routeFromPlayer('p1', { type: 'join', playerId: 'p1', name: 'Wilf' })

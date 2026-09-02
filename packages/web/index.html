@@ -10,22 +10,24 @@
   <body>
     <p id="link-status" class="link-status" role="status" hidden>Reconnecting…</p>
     <main class="phone">
-      <section id="screen-join" class="screen">
+      <section id="screen-scan" class="screen">
         <h1>MAKE believe</h1>
-        <p class="hint">Type the code on the TV and name your blob.</p>
-        <form id="join-form" class="join-form">
-          <input
-            id="room-input"
-            class="room-input"
-            name="room"
-            inputmode="text"
-            autocomplete="off"
-            autocapitalize="characters"
-            spellcheck="false"
-            maxlength="4"
-            placeholder="CODE"
-            aria-label="Room code"
+        <svg class="scan-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <path
+            d="M6 22V10a4 4 0 0 1 4-4h12M42 6h12a4 4 0 0 1 4 4v12M58 42v12a4 4 0 0 1-4 4H42M22 58H10a4 4 0 0 1-4-4V42"
           />
+          <rect x="16" y="16" width="12" height="12" rx="2" />
+          <rect x="36" y="16" width="12" height="12" rx="2" />
+          <rect x="16" y="36" width="12" height="12" rx="2" />
+        </svg>
+        <p class="hint">Scan the QR code on the TV to join.</p>
+        <p id="scan-note" class="error" role="status"></p>
+      </section>
+
+      <section id="screen-join" class="screen" hidden>
+        <h1>MAKE believe</h1>
+        <p class="hint">Name your blob.</p>
+        <form id="join-form" class="join-form">
           <input
             id="name-input"
             class="name-input"
@@ -52,49 +54,89 @@
           <strong id="waiting-code" class="room-code">····</strong>
         </p>
         <button id="change-code-button" class="button button-quiet" type="button">
-          Use a different code
+          Scan the TV again
         </button>
       </section>
 
-      <section id="screen-text" class="screen" hidden>
-        <p class="hint">Say something to the TV.</p>
-        <form id="text-form" class="text-form">
-          <input
-            id="text-input"
-            class="text-input"
-            name="say"
-            type="text"
-            inputmode="text"
-            autocomplete="off"
-            autocapitalize="sentences"
-            enterkeyhint="send"
-            maxlength="60"
-            placeholder="Say something…"
-            aria-label="What your blob says"
-          />
-          <p id="text-count" class="counter" aria-hidden="true">0/60</p>
-          <button id="text-send" class="button" type="submit" disabled>Send</button>
-        </form>
-        <p id="text-sent" class="hint" role="status"></p>
-      </section>
-
-      <section id="screen-draw" class="screen" hidden>
-        <p class="hint">Draw your blob.</p>
-        <canvas id="draw-canvas" class="draw-canvas" width="256" height="256"></canvas>
-        <div id="draw-crayons" class="crayons" role="group" aria-label="Colours"></div>
-        <div class="draw-buttons">
-          <button id="draw-clear" class="button button-quiet" type="button">Start again</button>
-          <button id="draw-done" class="button" type="button">Done</button>
-        </div>
-        <p id="draw-status" class="hint" role="status"></p>
-      </section>
-
-      <section id="screen-play" class="screen" hidden>
-        <p id="play-status" class="hint">Connecting…</p>
+      <!--
+        The controller. The joystick is the whole point of it, so it gets the
+        middle of the screen; saying something, redrawing your blob and renaming
+        it are always one tap away along the bottom (docs D-026).
+      -->
+      <section id="screen-play" class="screen screen-play" hidden>
+        <p id="play-name" class="play-name">Blob</p>
         <div id="pad" class="pad" aria-label="Joystick">
           <div id="thumb" class="thumb"></div>
         </div>
+        <nav class="tools" aria-label="What else your blob can do">
+          <button id="tool-say" class="tool" type="button">Say</button>
+          <button id="tool-draw" class="tool" type="button">Draw</button>
+          <button id="tool-name" class="tool" type="button">Name</button>
+        </nav>
       </section>
     </main>
+
+    <div id="sheet-say" class="sheet" hidden>
+      <header class="sheet-head">
+        <h2>Say something</h2>
+        <button id="say-close" class="close" type="button" aria-label="Back to the joystick">✕</button>
+      </header>
+      <form id="text-form" class="text-form">
+        <input
+          id="text-input"
+          class="text-input"
+          name="say"
+          type="text"
+          inputmode="text"
+          autocomplete="off"
+          autocapitalize="sentences"
+          enterkeyhint="send"
+          maxlength="60"
+          placeholder="Say something…"
+          aria-label="What your blob says"
+        />
+        <p id="text-count" class="counter" aria-hidden="true">0/60</p>
+        <button id="text-send" class="button" type="submit" disabled>Send</button>
+      </form>
+      <p id="text-sent" class="hint" role="status"></p>
+    </div>
+
+    <div id="sheet-draw" class="sheet" hidden>
+      <header class="sheet-head">
+        <h2>Draw your blob</h2>
+        <button id="draw-close" class="close" type="button" aria-label="Back to the joystick">✕</button>
+      </header>
+      <canvas id="draw-canvas" class="draw-canvas" width="256" height="256"></canvas>
+      <div id="draw-crayons" class="crayons" role="group" aria-label="Colours"></div>
+      <div class="sheet-buttons">
+        <button id="draw-clear" class="button button-quiet" type="button">Start again</button>
+        <button id="draw-done" class="button" type="button">Send to the TV</button>
+      </div>
+      <p id="draw-status" class="hint" role="status"></p>
+    </div>
+
+    <div id="sheet-name" class="sheet" hidden>
+      <header class="sheet-head">
+        <h2>Name your blob</h2>
+        <button id="name-close" class="close" type="button" aria-label="Back to the joystick">✕</button>
+      </header>
+      <form id="rename-form" class="join-form">
+        <input
+          id="rename-input"
+          class="name-input"
+          name="rename"
+          type="text"
+          inputmode="text"
+          autocomplete="off"
+          autocapitalize="words"
+          spellcheck="false"
+          maxlength="16"
+          placeholder="Your name"
+          aria-label="Blob name"
+        />
+        <button id="rename-save" class="button" type="submit" disabled>Save</button>
+      </form>
+      <p id="rename-status" class="hint" role="status"></p>
+    </div>
   </body>
 </html>

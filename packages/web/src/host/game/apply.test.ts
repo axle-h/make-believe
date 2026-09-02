@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from './apply.js'
 import { BLOB_SIZE, BUBBLE_MS, PALETTE, WORLD_HEIGHT, WORLD_WIDTH } from './constants.js'
-import { setPhase } from './phases.js'
 import { playerById } from './selectors.js'
 import { createGame, nextFreeSlot, type GameState } from './state.js'
 import { tick } from './tick.js'
 
-/** The three messages a phone can send that phase 3 handles, as helpers. */
+/** Everything a phone can send, as helpers. */
 const join = (state: GameState, playerId: string, name: string) =>
   applyMessage(state, { type: 'join', playerId, name })
 const input = (state: GameState, playerId: string, dx: number, dy: number) =>
@@ -191,12 +190,11 @@ describe('a phone that comes back', () => {
 })
 
 describe('text', () => {
-  /** A world with one player, in a phase where talking is allowed. */
+  /** A world with two blobs in it. There is nothing else to be ready for. */
   function playing() {
     const state = createGame()
     join(state, 'p1', 'Wilf')
     join(state, 'p2', 'Ida')
-    setPhase(state, 'play')
     return state
   }
 
@@ -227,18 +225,15 @@ describe('text', () => {
     expect(playerById(state, 'p1')?.bubble).toBeNull()
   })
 
-  it('is allowed during a text round as well as during play', () => {
-    const state = playing()
-    setPhase(state, 'text')
-    expect(say(state, 'p1', 'in a round')).toMatchObject({ applied: true })
-  })
-
-  it('is ignored in the lobby, where there is nothing to talk over', () => {
+  it('is welcome the moment a blob exists, and again straight after driving', () => {
     const state = createGame()
     join(state, 'p1', 'Wilf')
+    expect(say(state, 'p1', 'hello')).toMatchObject({ applied: true })
 
-    expect(say(state, 'p1', 'anyone there')).toEqual({ applied: false, reason: 'wrong-phase' })
-    expect(playerById(state, 'p1')?.bubble).toBeNull()
+    input(state, 'p1', 1, 0)
+    tick(state, 16)
+    expect(say(state, 'p1', 'still here')).toMatchObject({ applied: true })
+    expect(playerById(state, 'p1')?.bubble?.text).toBe('still here')
   })
 
   it('is ignored from a phone the world has not met', () => {
@@ -248,16 +243,14 @@ describe('text', () => {
 })
 
 describe('drawing', () => {
-  function drawingRound() {
+  function playing() {
     const state = createGame()
     join(state, 'p1', 'Wilf')
-    setPhase(state, 'play')
-    setPhase(state, 'draw')
     return state
   }
 
   it('gives the blob a skin under a key of its own', () => {
-    const state = drawingRound()
+    const state = playing()
     const result = draw(state, 'p1', png('AAAA'))
 
     expect(result).toMatchObject({ applied: true, kind: 'drawing' })
@@ -265,7 +258,7 @@ describe('drawing', () => {
   })
 
   it('changes the key when a second drawing arrives', () => {
-    const state = drawingRound()
+    const state = playing()
     draw(state, 'p1', png('AAAA'))
     draw(state, 'p1', png('BBBB'))
 
@@ -273,7 +266,7 @@ describe('drawing', () => {
   })
 
   it('keeps the skin when the phone goes away and comes back', () => {
-    const state = drawingRound()
+    const state = playing()
     draw(state, 'p1', png('AAAA'))
     applyMessage(state, { type: 'left', playerId: 'p1' })
     join(state, 'p1', 'Wilf')
@@ -281,12 +274,18 @@ describe('drawing', () => {
     expect(playerById(state, 'p1')?.skin?.key).toBe('skin-p1-1')
   })
 
-  it('is ignored in the lobby and from a phone the world has not met', () => {
-    const lobby = createGame()
-    join(lobby, 'p1', 'Wilf')
-    expect(draw(lobby, 'p1', png('AAAA'))).toEqual({ applied: false, reason: 'wrong-phase' })
+  it('lets a blob be redrawn at any time, driving about or not', () => {
+    const state = playing()
+    draw(state, 'p1', png('AAAA'))
+    input(state, 'p1', 1, 0)
+    tick(state, 16)
 
-    const state = drawingRound()
+    expect(draw(state, 'p1', png('CCCC'))).toMatchObject({ applied: true })
+    expect(playerById(state, 'p1')?.skin?.key).toBe('skin-p1-2')
+  })
+
+  it('is ignored from a phone the world has not met', () => {
+    const state = playing()
     expect(draw(state, 'ghost', png('AAAA'))).toEqual({ applied: false, reason: 'unknown-player' })
   })
 })

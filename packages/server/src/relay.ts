@@ -37,7 +37,7 @@ export interface Relay {
   attachHost(code: string, connection: Connection): void
   /**
    * Register a player. On `{ ok: false }` the connection has been sent the
-   * lobby message but is left open: the caller closes it, so it can say why.
+   * waiting message but is left open: the caller closes it, so it can say why.
    */
   attachPlayer(code: string, playerId: string, connection: Connection): AttachPlayerResult
   detachHost(connection: Connection): void
@@ -46,17 +46,21 @@ export interface Relay {
   routeFromHost(message: HostOutboundMessage): boolean
 }
 
-const LOBBY: HostToPlayerMessage = { type: 'phase', value: 'lobby' }
+/**
+ * "There is no TV for you." The only thing the relay says to a phone on its own
+ * account: the phone shows its waiting screen and knocks until a TV answers.
+ */
+const WAITING: HostToPlayerMessage = { type: 'waiting' }
 
 export function createRelay(): Relay {
   let host: Connection | null = null
   let roomCode: string | null = null
   const players = new Map<string, Connection>()
 
-  /** Send every player back to the lobby and forget them. */
+  /** Send every player back to its waiting screen and forget them. */
   function evictAllPlayers(): void {
     for (const connection of players.values()) {
-      connection.send(LOBBY)
+      connection.send(WAITING)
       connection.close()
     }
     players.clear()
@@ -79,13 +83,13 @@ export function createRelay(): Relay {
       const previous = host
       // The same code from a new socket is the same TV coming back — a reload,
       // or a connection that dropped. The phones keep their sockets and are
-      // told to show the lobby, which is their cue to knock again; a TV that
-      // arrives with a different code is a new world and clears the room.
+      // told to wait, which is their cue to knock again; a TV that arrives with
+      // a different code is a new world and clears the room.
       const sameSession = previous !== null && roomCode === code
       host = connection
       roomCode = code
       if (sameSession) {
-        for (const player of players.values()) player.send(LOBBY)
+        for (const player of players.values()) player.send(WAITING)
       } else {
         evictAllPlayers()
       }
@@ -93,16 +97,16 @@ export function createRelay(): Relay {
     },
 
     attachPlayer(code, playerId, connection) {
-      // A rejected connection is told to show the lobby but is left open: the
-      // caller closes it, so that it can say *why* in the close frame. The
+      // A rejected connection is told to wait but is left open: the caller
+      // closes it, so that it can say *why* in the close frame. The
       // phone needs that reason to tell "the TV is not here yet" (wait and
       // knock again) from "the TV has a different code now" (give up, ask).
       if (host === null || roomCode === null) {
-        connection.send(LOBBY)
+        connection.send(WAITING)
         return { ok: false, reason: 'no-host' }
       }
       if (code !== roomCode) {
-        connection.send(LOBBY)
+        connection.send(WAITING)
         return { ok: false, reason: 'wrong-room' }
       }
       const previous = players.get(playerId)

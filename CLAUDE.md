@@ -12,6 +12,13 @@ Initial feature list:
 3. Draw something on the phone that appears as the blob's skin/overlay
 4. Type text on the phone that appears on the TV (speech bubble above the blob)
 
+**One continuous session, no rounds.** Everything above is available to every
+phone the whole time: drive, say something, redraw your blob, take a new name,
+in any order, whenever. **The TV takes no input at all** — no keyboard, no
+remote, nothing to click. It is a window onto the world; the phones run it.
+Rounds may arrive one day with an actual game idea (milestone 11); until then
+nothing may put a phone into a mode or make it wait its turn (docs D-026).
+
 Android + desktop browsers only. iPhone is explicitly not a target.
 
 ## Architecture — one deployment, path-routed
@@ -88,8 +95,10 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 { type: 'text',    playerId: string, value: string }            // cap ~60 chars
 
 // host → player
-{ type: 'assigned', colour: string, slot: number }
-{ type: 'phase',    value: 'lobby' | 'play' | 'draw' | 'text' } // tells the phone which UI to show
+{ type: 'assigned', colour: string, slot: number }              // also the phone's cue to show its controller
+
+// relay → player (never sent by the host)
+{ type: 'waiting' }                                             // no TV for you: wait and keep knocking
 
 // connection setup (query string on /ws)
 /ws?role=host&room=ABCD
@@ -99,7 +108,7 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 Relay semantics:
 - One host socket, full stop. A new host connection replaces the current one and sets the current room code (handles TV refresh). Players connecting with a code that does not match the current one are rejected.
 - Player messages are forwarded to the host, tagged with `playerId`. Host messages carry a `to: playerId` (or `to: '*'`) and are forwarded accordingly.
-- If the host disconnects, the world is torn down and players get a `{ type: 'phase', value: 'lobby' }` so they show "waiting for TV".
+- If the host disconnects, the world is torn down and players get a `{ type: 'waiting' }` so they show "waiting for TV".
 - If a player disconnects, the host gets `{ type: 'left', playerId }`.
 
 ## Server (packages/server)
@@ -133,7 +142,7 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 
 **`web` — host game model** (`src/host/game/`). This is the important one.
 - The game model is **pure TypeScript with no Phaser imports**: `createGame()`, `applyMessage(state, msg)`, `tick(state, dtMs)`, plus selectors. Phaser scenes only read from it and push messages into it.
-- Vitest (node environment, no jsdom needed): join spawns a player at a sane position; input then `tick` moves them by `velocity * dt`; world bounds clamp; `text` creates a bubble that expires after N ms of ticks; `drawing` sets a skin key; `left` removes the player; phase transitions are legal/illegal as specified.
+- Vitest (node environment, no jsdom needed): join spawns a player at a sane position; input then `tick` moves them by `velocity * dt`; world bounds clamp; `text` creates a bubble that expires after N ms of ticks; `drawing` sets a skin key and a fresh key on every redraw; a second `join` from a known `playerId` renames the blob and keeps everything else; `left` removes the player.
 - **Phaser itself is not unit-tested.** It needs a canvas/WebGL and jsdom can't provide one. Keep the Phaser layer thin enough that it doesn't need to be.
 
 **`web` — player**
@@ -143,8 +152,8 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 
 **e2e (`/e2e`, Playwright)** — runs against `pnpm build && pnpm start`.
 - One browser context opens `/host/` and reads the room code from the DOM.
-- Two more contexts open `/`, enter the code and a name, and join.
-- Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round round-trips a PNG.
+- Two more contexts open `/?room=<code>` (the link the QR code carries), enter a name, and join.
+- Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round-trips a PNG; a blob is renamed and redrawn mid-game without losing its place.
 - Uses Playwright's `webServer` option to start the built app. `pnpm test:e2e`. Not run on every `pnpm test` — it's slower and needs browsers installed.
 
 Conventions: `*.test.ts` next to the code. No mocking of `shared` — it's tiny and pure. No snapshot tests.
@@ -167,8 +176,8 @@ Conventions: `*.test.ts` next to the code. No mocking of `shared` — it's tiny 
 1. **Skeleton (do this first, nothing else):** pnpm workspace, `shared` schemas, `server` relay + tests, `web` with both pages. Host page shows the room code and one coloured square per connected player on a plain `<canvas>` (no Phaser yet). Player page has a joystick that moves your square. `pnpm dev` works; `pnpm build && pnpm start` works; Dockerfile builds and runs.
 2. Join screen with name entry → name label above square. Host page titled "MAKE believe".
 3. Introduce the pure game model + its tests. Swap the plain canvas for Phaser (arcade physics, world bounds, `Scale.FIT`).
-4. Text phase → speech bubbles.
-5. Draw phase → canvas on phone → `textures.addBase64` → sprite skin.
+4. Text → speech bubbles.
+5. Drawing → canvas on phone → `textures.addBase64` → sprite skin.
 6. QR code on host screen; reconnect handling; Playwright e2e.
 7. k8s manifests, deploy to k3s.
 8. HTTPS at the edge: ingress, hostname, Let's Encrypt. Needed before the PWA; also turns on Wake Lock and clipboard on phones.
@@ -190,7 +199,7 @@ Conventions: `*.test.ts` next to the code. No mocking of `shared` — it's tiny 
 - Touch joystick: `nipplejs` or ~50 lines of pointer-event code. Send normalised `{dx, dy}`, throttled.
 - Drawing: fixed-size canvas (256×256) with a faint outline of the blob as a guide. "Done" → `toDataURL('image/png')` → send.
 - Wake Lock API to stop phones sleeping (may be unavailable without HTTPS — degrade gracefully).
-- Mobile keyboards shift layout — test the text phase on a real phone early.
+- Mobile keyboards shift layout — test the Say sheet on a real phone early.
 
 ## How I want to work
 

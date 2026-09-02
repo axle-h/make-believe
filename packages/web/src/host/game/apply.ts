@@ -4,18 +4,15 @@ import { colourForSlot, nextFreeSlot, spawnPosition, type GameState, type Player
 
 /**
  * Everything the world hears from a phone, applied to the state. The state is
- * mutated in place and the result says what happened, so the host can send the
- * one or two messages a join needs and the renderer can react to a new blob
- * (see docs/DECISIONS.md, D-012).
+ * mutated in place and the result says what happened, so the host can answer a
+ * join and the renderer can react to a new blob (see docs/DECISIONS.md, D-012).
+ *
+ * Nothing here asks what the world is doing first: the session is one
+ * continuous game, so every message is welcome whenever it arrives (D-026).
  */
 
-export type IgnoredReason =
-  /** A message about somebody the world has never heard of. */
-  | 'unknown-player'
-  /** A message that makes no sense in the phase the world is in. */
-  | 'wrong-phase'
-  /** A message this phase of the build does not handle yet. */
-  | 'unsupported'
+/** A message about somebody the world has never heard of. */
+export type IgnoredReason = 'unknown-player'
 
 export type ApplyResult =
   | { applied: true; kind: 'joined' | 'rejoined'; player: Player }
@@ -41,6 +38,9 @@ export function applyMessage(state: GameState, message: ServerToHostMessage): Ap
  * A phone said hello. A `playerId` the world already knows keeps its blob,
  * colour, slot and position — which is what makes a refresh on the phone a
  * non-event — and only takes the new name. Anyone else gets a fresh blob.
+ *
+ * This is also how a blob is renamed: a phone that wants a new name says hello
+ * again with it, and the blob it already has takes it (docs D-026).
  */
 function join(state: GameState, playerId: string, rawName: string): ApplyResult {
   // The schema has already refused a blank name; tidy it for the label.
@@ -78,15 +78,12 @@ function join(state: GameState, playerId: string, rawName: string): ApplyResult 
  * it down again; a second message replaces the first rather than queueing.
  * Sending nothing at all takes the bubble down early.
  *
- * Text is welcome during `play` as well as during a `text` round: half the fun
- * is shouting something while everyone is running about (docs D-016).
+ * There is no round to be in and no wrong moment for it: half the fun is
+ * shouting something while everyone is running about (docs D-016, D-026).
  */
 function text(state: GameState, playerId: string, value: string): ApplyResult {
   const player = state.players.get(playerId)
   if (!player) return { applied: false, reason: 'unknown-player' }
-  if (state.phase !== 'play' && state.phase !== 'text') {
-    return { applied: false, reason: 'wrong-phase' }
-  }
   const said = value.trim()
   player.bubble = said.length === 0 ? null : { text: said, remainingMs: BUBBLE_MS }
   return { applied: true, kind: 'text', player }
@@ -95,17 +92,12 @@ function text(state: GameState, playerId: string, value: string): ApplyResult {
 /**
  * Somebody drew something. The drawing becomes the blob's skin, under a key
  * the renderer turns into a texture. Each one gets its own key so the renderer
- * can tell a new drawing from the one already on screen.
- *
- * Like `text`, a drawing is welcome during `play` as well as during its own
- * round (docs D-016).
+ * can tell a new drawing from the one already on screen — which is what lets a
+ * blob be redrawn as often as its owner likes (docs D-026).
  */
 function drawing(state: GameState, playerId: string, png: string): ApplyResult {
   const player = state.players.get(playerId)
   if (!player) return { applied: false, reason: 'unknown-player' }
-  if (state.phase !== 'play' && state.phase !== 'draw') {
-    return { applied: false, reason: 'wrong-phase' }
-  }
   player.skinCount += 1
   player.skin = { key: `skin-${playerId}-${player.skinCount}`, png }
   return { applied: true, kind: 'drawing', player }

@@ -22,6 +22,10 @@ import './player.css'
 /**
  * The phone. It is a dumb controller: it sends inputs and does what the TV
  * tells it. No game state lives here.
+ *
+ * Everything a blob can do is available the whole time — drive, say something,
+ * redraw itself, take a new name. There are no rounds and the TV never tells a
+ * phone to switch to anything (docs D-026).
  */
 
 const PLAYER_ID_KEY = 'make-believe.playerId'
@@ -43,24 +47,33 @@ const KNOCK_MS = 2_000
 /** How long "Sent" stays under the box before it clears itself. */
 const SENT_MS = 1_500
 
-type Screen = 'join' | 'waiting' | 'play' | 'text' | 'draw'
+/** The four things the phone can be doing. Only one is ever on screen. */
+type Screen = 'scan' | 'join' | 'waiting' | 'play'
+
+/** What is open over the joystick, if anything. */
+type Sheet = 'say' | 'draw' | 'name'
 
 const screens: Record<Screen, HTMLElement> = {
+  scan: requireElement<HTMLElement>('#screen-scan'),
   join: requireElement<HTMLElement>('#screen-join'),
   waiting: requireElement<HTMLElement>('#screen-waiting'),
   play: requireElement<HTMLElement>('#screen-play'),
-  text: requireElement<HTMLElement>('#screen-text'),
-  draw: requireElement<HTMLElement>('#screen-draw'),
+}
+
+const sheets: Record<Sheet, HTMLElement> = {
+  say: requireElement<HTMLElement>('#sheet-say'),
+  draw: requireElement<HTMLElement>('#sheet-draw'),
+  name: requireElement<HTMLElement>('#sheet-name'),
 }
 const joinForm = requireElement<HTMLFormElement>('#join-form')
-const roomInput = requireElement<HTMLInputElement>('#room-input')
 const nameInput = requireElement<HTMLInputElement>('#name-input')
 const joinButton = requireElement<HTMLButtonElement>('#join-button')
 const joinError = requireElement<HTMLElement>('#join-error')
+const scanNote = requireElement<HTMLElement>('#scan-note')
 const waitingCode = requireElement<HTMLElement>('#waiting-code')
 const waitingName = requireElement<HTMLElement>('#waiting-name')
 const changeCodeButton = requireElement<HTMLButtonElement>('#change-code-button')
-const playStatus = requireElement<HTMLElement>('#play-status')
+const playName = requireElement<HTMLElement>('#play-name')
 const pad = requireElement<HTMLElement>('#pad')
 const thumb = requireElement<HTMLElement>('#thumb')
 const textForm = requireElement<HTMLFormElement>('#text-form')
@@ -73,6 +86,10 @@ const drawCrayons = requireElement<HTMLElement>('#draw-crayons')
 const drawClear = requireElement<HTMLButtonElement>('#draw-clear')
 const drawDone = requireElement<HTMLButtonElement>('#draw-done')
 const drawStatus = requireElement<HTMLElement>('#draw-status')
+const renameForm = requireElement<HTMLFormElement>('#rename-form')
+const renameInput = requireElement<HTMLInputElement>('#rename-input')
+const renameSave = requireElement<HTMLButtonElement>('#rename-save')
+const renameStatus = requireElement<HTMLElement>('#rename-status')
 const linkStatus = requireElement<HTMLElement>('#link-status')
 
 function requireElement<T extends Element>(selector: string): T {
@@ -89,35 +106,37 @@ let client: WsClient | null = null
 let session: { room: string; name: string } | null = null
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 let retryMs = FIRST_WAIT_RETRY_MS
-let screen: Screen = 'join'
+let screen: Screen = 'scan'
+/** What is open over the joystick, or `null` for the joystick itself. */
+let sheet: Sheet | null = null
 /** The pointer holding the pad down, if any. */
 let activePointer: number | null = null
 /** Where the thumb is right now; the send loop drains it. */
 let latest: Vector = ZERO
 
-// --- the join screen -----------------------------------------------------
+// --- getting in ----------------------------------------------------------
 
 nameInput.value = loadStored(NAME_KEY) ?? ''
 
-// Scanning the QR code (phase 6) or following the link on the TV fills the code
-// in; failing that, the code from last time, so a refresh asks for nothing.
-const roomFromUrl = normaliseRoomCode(new URLSearchParams(window.location.search).get('room') ?? '')
-const roomFromStorage = normaliseRoomCode(loadStored(ROOM_KEY) ?? '')
-if (isValidRoomCode(roomFromUrl)) {
-  roomInput.value = roomFromUrl
-  // Scanned the TV: the only thing left to do is say who you are.
-  nameInput.focus()
-} else if (isValidRoomCode(roomFromStorage)) {
-  roomInput.value = roomFromStorage
+/**
+ * Tonight's code, or '' when we have not got one. There is nowhere to type it:
+ * the TV shows only a QR code, with the code inside it, so the code arrives in
+ * the link a scan opens or not at all (see docs/DECISIONS.md, D-025).
+ */
+let roomCode = ''
+
+/** The code a scan has just brought in, or the one from last time on a refresh. */
+function initialRoomCode(): string {
+  const fromUrl = normaliseRoomCode(new URLSearchParams(window.location.search).get('room') ?? '')
+  if (isValidRoomCode(fromUrl)) return fromUrl
+  const fromStorage = normaliseRoomCode(loadStored(ROOM_KEY) ?? '')
+  return isValidRoomCode(fromStorage) ? fromStorage : ''
 }
 
-refreshJoinButton()
-for (const input of [roomInput, nameInput]) {
-  input.addEventListener('input', () => {
-    joinError.textContent = ''
-    refreshJoinButton()
-  })
-}
+nameInput.addEventListener('input', () => {
+  joinError.textContent = ''
+  refreshJoinButton()
+})
 
 joinForm.addEventListener('submit', (event) => {
   event.preventDefault()
@@ -126,17 +145,38 @@ joinForm.addEventListener('submit', (event) => {
 
 changeCodeButton.addEventListener('click', () => {
   stop()
-  showScreen('join')
-  joinError.textContent = ''
+  askForScan()
 })
 
 function refreshJoinButton(): void {
-  joinButton.disabled = !evaluateJoinForm(roomInput.value, nameInput.value).canJoin
+  joinButton.disabled = !evaluateJoinForm(roomCode, nameInput.value).canJoin
+}
+
+/** Ask who is holding the phone; the code is already in hand. */
+function askForName(): void {
+  joinError.textContent = ''
+  refreshJoinButton()
+  showScreen('join')
+  nameInput.focus()
+}
+
+/**
+ * Send them back to the TV. The code we had (if any) is dropped along with it,
+ * so a stale one cannot quietly come back on the next refresh.
+ */
+function askForScan(note = ''): void {
+  roomCode = ''
+  forget(ROOM_KEY)
+  scanNote.textContent = note
+  showScreen('scan')
 }
 
 function submitJoin(): void {
-  const state = evaluateJoinForm(roomInput.value, nameInput.value)
-  roomInput.value = state.room
+  const state = evaluateJoinForm(roomCode, nameInput.value)
+  if (!state.roomValid) {
+    askForScan('That link had no code in it.')
+    return
+  }
   if (!state.canJoin) {
     joinError.textContent = joinFormError(state)
     return
@@ -177,43 +217,31 @@ function openSocket(): void {
         return
       }
       stop()
-      showScreen('join')
-      joinError.textContent =
-        reason === 'wrong-room' ? 'The TV has a new code now.' : 'The TV would not let that in.'
+      askForScan(
+        reason === 'wrong-room' ? 'The TV has a new code now.' : 'The TV would not let that in.',
+      )
     },
   })
 }
 
+/**
+ * The TV has two things it can say. `assigned` means "you are the blue one",
+ * and it doubles as the way in: it only ever arrives in answer to a hello, so
+ * it is proof the TV knows this phone and the controller can go up.
+ */
 function applyMessage(message: HostToPlayerMessage): void {
   if (message.type === 'assigned') {
     document.documentElement.style.setProperty('--blob', message.colour)
     blobColour = message.colour
-    playStatus.textContent = session?.name ?? ''
+    playName.textContent = session?.name ?? ''
+    if (screen !== 'play') showScreen('play')
     return
   }
-  if (message.value === 'lobby') {
-    // The TV has gone. The relay hangs up right behind this message, so the
-    // close handler is what decides whether to wait or ask for a new code.
-    // Closing the socket here instead would throw that reason away.
-    release()
-    showScreen('waiting')
-    return
-  }
-  if (message.value === 'play') {
-    showScreen('play')
-    playStatus.textContent = session?.name ?? ''
-    return
-  }
-  if (message.value === 'text') {
-    // Whatever the thumb was doing, the blob stops when the round changes.
-    release()
-    showScreen('text')
-    return
-  }
-  if (message.value === 'draw') {
-    release()
-    showScreen('draw')
-  }
+  // The TV has gone. The relay hangs up right behind this message, so the
+  // close handler is what decides whether to wait or ask for a new code.
+  // Closing the socket here instead would throw that reason away.
+  release()
+  showScreen('waiting')
 }
 
 /** Sit on the waiting screen and knock again shortly, until the TV answers. */
@@ -289,8 +317,41 @@ function sendMessage(message: PlayerToHostMessage): void {
 function showScreen(which: Screen): void {
   screen = which
   for (const [name, element] of Object.entries(screens)) element.hidden = name !== which
-  if (which === 'text') openKeyboard()
+  // Nothing but the joystick has a sheet over it, so leaving the controller
+  // takes any sheet with it.
+  if (which !== 'play') closeSheet()
+}
+
+// --- the tools over the joystick -----------------------------------------
+
+for (const [name, button] of [
+  ['say', requireElement<HTMLButtonElement>('#tool-say')],
+  ['draw', requireElement<HTMLButtonElement>('#tool-draw')],
+  ['name', requireElement<HTMLButtonElement>('#tool-name')],
+] as const) {
+  button.addEventListener('click', () => openSheet(name))
+}
+
+for (const selector of ['#say-close', '#draw-close', '#name-close']) {
+  requireElement<HTMLButtonElement>(selector).addEventListener('click', closeSheet)
+}
+
+/**
+ * Put a tool over the joystick. The blob stops first: a thumb that leaves the
+ * pad to press "Say" would otherwise leave it running across the room.
+ */
+function openSheet(which: Sheet): void {
+  release()
+  sheet = which
+  for (const [name, element] of Object.entries(sheets)) element.hidden = name !== which
+  if (which === 'say') openKeyboard()
   if (which === 'draw') openSketch()
+  if (which === 'name') openRename()
+}
+
+function closeSheet(): void {
+  sheet = null
+  for (const element of Object.values(sheets)) element.hidden = true
 }
 
 // --- saying something ----------------------------------------------------
@@ -340,10 +401,44 @@ function openKeyboard(): void {
 }
 
 window.visualViewport?.addEventListener('resize', () => {
-  if (screen !== 'text') return
+  if (sheet !== 'say') return
   if (document.activeElement !== textInput) return
   textInput.scrollIntoView({ block: 'center' })
 })
+
+// --- taking a new name ---------------------------------------------------
+
+/**
+ * A blob can be renamed whenever its owner fancies it. There is no message for
+ * it: saying hello again with a new name is exactly what a rename is, and the
+ * world already gives a `playerId` it knows its own blob back (docs D-026).
+ */
+renameForm.addEventListener('submit', (event) => {
+  event.preventDefault()
+  const state = evaluateJoinForm(roomCode, renameInput.value)
+  if (!state.nameValid || !session) return
+  session = { ...session, name: state.name }
+  store(NAME_KEY, state.name)
+  sendMessage({ type: 'join', playerId, name: state.name })
+  nameInput.value = state.name
+  playName.textContent = state.name
+  renameStatus.textContent = 'Sent to the TV'
+  closeSheet()
+})
+
+renameInput.addEventListener('input', () => {
+  renameSave.disabled = !evaluateJoinForm(roomCode, renameInput.value).nameValid
+})
+
+function openRename(): void {
+  renameStatus.textContent = ''
+  renameInput.value = session?.name ?? ''
+  renameSave.disabled = !evaluateJoinForm(roomCode, renameInput.value).nameValid
+  setTimeout(() => {
+    renameInput.focus()
+    renameInput.select()
+  }, 50)
+}
 
 // --- identity ------------------------------------------------------------
 
@@ -375,6 +470,14 @@ function store(key: string, value: string): void {
     window.localStorage.setItem(key, value)
   } catch {
     // Nothing to do; the blob just will not survive a refresh.
+  }
+}
+
+function forget(key: string): void {
+  try {
+    window.localStorage.removeItem(key)
+  } catch {
+    // As above.
   }
 }
 
@@ -484,7 +587,9 @@ function sendDrawing(): void {
     return
   }
   sendMessage({ type: 'drawing', playerId, png: sendable })
-  drawStatus.textContent = 'Sent to the TV'
+  // Straight back to the joystick: the drawing appearing on the blob is much
+  // better proof it arrived than a line of text on the phone would be.
+  closeSheet()
 }
 
 /** Redraw at half size and hope that fits. Returns null if it still does not. */
@@ -568,4 +673,7 @@ function moveThumb(vector: Vector): void {
 
 // A remembered name and a code, from the QR link or from last time, means there
 // is nothing to ask. Last, so every handler above is wired before it can fire.
-if (evaluateJoinForm(roomInput.value, nameInput.value).canJoin) submitJoin()
+roomCode = initialRoomCode()
+if (!isValidRoomCode(roomCode)) askForScan()
+else if (evaluateJoinForm(roomCode, nameInput.value).canJoin) submitJoin()
+else askForName()

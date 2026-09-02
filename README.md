@@ -41,7 +41,7 @@ It is deployed at **<https://believe.ax-h.com>** — open `/host/` on the TV and
 
 ```
 TV:      https://believe.ax-h.com/host/
-phones:  scan the QR, or https://believe.ax-h.com and type the code
+phones:  scan the QR — it carries the code, so there is nothing to type
 ```
 
 One namespace in k3s, one pod, one world. See [`k8s/README.md`](./k8s/README.md).

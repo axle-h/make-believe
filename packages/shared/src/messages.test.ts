@@ -10,10 +10,10 @@ import {
   LeftMessageSchema,
   MAX_PNG_LENGTH,
   MAX_TEXT_LENGTH,
-  PhaseMessageSchema,
   PlayerToHostMessageSchema,
   ServerToHostMessageSchema,
   TextMessageSchema,
+  WaitingMessageSchema,
   parseMessage,
 } from './messages.js'
 
@@ -116,12 +116,12 @@ describe('text', () => {
   })
 })
 
-describe('assigned and phase', () => {
+describe('assigned and waiting', () => {
   it('accepts valid host messages', () => {
     expect(AssignedMessageSchema.safeParse({ type: 'assigned', colour: '#ff0000', slot: 0 }).success).toBe(
       true,
     )
-    expect(PhaseMessageSchema.safeParse({ type: 'phase', value: 'lobby' }).success).toBe(true)
+    expect(WaitingMessageSchema.safeParse({ type: 'waiting' }).success).toBe(true)
   })
 
   it('rejects malformed host messages', () => {
@@ -129,7 +129,7 @@ describe('assigned and phase', () => {
       false,
     )
     expect(AssignedMessageSchema.safeParse({ type: 'assigned', colour: '', slot: 0 }).success).toBe(false)
-    expect(PhaseMessageSchema.safeParse({ type: 'phase', value: 'dancing' }).success).toBe(false)
+    expect(WaitingMessageSchema.safeParse({ type: 'nearly-waiting' }).success).toBe(false)
   })
 })
 
@@ -148,13 +148,13 @@ describe('unions', () => {
     expect(PlayerToHostMessageSchema.safeParse({ type: 'join', playerId: 'p1', name: 'a' }).success).toBe(
       true,
     )
-    expect(PlayerToHostMessageSchema.safeParse({ type: 'phase', value: 'play' }).success).toBe(false)
+    expect(PlayerToHostMessageSchema.safeParse({ type: 'waiting' }).success).toBe(false)
     expect(PlayerToHostMessageSchema.safeParse({ type: 'nope', playerId: 'p1' }).success).toBe(false)
   })
 
   it('accepts host messages to a player and to everyone', () => {
     expect(
-      HostOutboundMessageSchema.safeParse({ type: 'phase', value: 'play', to: '*' }).success,
+      HostOutboundMessageSchema.safeParse({ type: 'assigned', colour: '#0f0', slot: 1, to: '*' }).success,
     ).toBe(true)
     expect(
       HostOutboundMessageSchema.safeParse({ type: 'assigned', colour: '#0f0', slot: 1, to: 'p2' }).success,
@@ -162,11 +162,17 @@ describe('unions', () => {
   })
 
   it('rejects a host message without a recipient', () => {
-    expect(HostOutboundMessageSchema.safeParse({ type: 'phase', value: 'play' }).success).toBe(false)
+    expect(HostOutboundMessageSchema.safeParse({ type: 'assigned', colour: '#0f0', slot: 1 }).success).toBe(
+      false,
+    )
+  })
+
+  it('will not let the host send a phone off to wait — only the relay does that', () => {
+    expect(HostOutboundMessageSchema.safeParse({ type: 'waiting', to: '*' }).success).toBe(false)
   })
 
   it('lets the player parse what the host sends it', () => {
-    expect(HostToPlayerMessageSchema.safeParse({ type: 'phase', value: 'lobby' }).success).toBe(true)
+    expect(HostToPlayerMessageSchema.safeParse({ type: 'waiting' }).success).toBe(true)
     expect(HostToPlayerMessageSchema.safeParse({ type: 'left', playerId: 'p1' }).success).toBe(false)
   })
 
