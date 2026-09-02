@@ -186,7 +186,10 @@ history and `k8s/README.md` — don't go looking for a plan document for any of 
 What is left:
 
 10. Android TV app: minimal native Kotlin WebView wrapper in `/androidtv`, leanback launcher entry, loads the host page remotely so it updates itself. Not Capacitor, not a browser. Target device is a Fire TV Stick 4K Max (Fire OS 7, Android 9, API 28); nothing Fire-specific. Planned in [`docs/android-tv.md`](docs/android-tv.md).
-11. Then actual game ideas — and the place rounds would come back, if they ever do.
+11. Objectives: something to actually do. Zones, then carryables; one task
+    running at all times, procedurally parameterised and levelled up as the
+    room gets good at them. Never rounds — no phone ever waits its turn.
+    Planned in [`docs/objectives.md`](docs/objectives.md).
 
 ## Phaser notes (host)
 

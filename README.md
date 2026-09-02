@@ -92,5 +92,5 @@ e2e/              Playwright tests
 androidtv/        Android TV app: a Kotlin WebView wrapper around the host page
 .github/          CI: tests on every push, and the image build that publishes to ghcr.io
 k8s/              deployment, service, ingress and TLS manifests
-docs/             the plan for the one thing not built yet: the Android TV app
+docs/             the plans for what is not built yet: the Android TV app, and objectives
 ```
