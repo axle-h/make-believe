@@ -8,10 +8,16 @@
 # is the first property to check, and the symptom of getting it wrong is phones that connect, work
 # for a minute and then silently stop moving anything.
 #
-# ⚠️ **This is public.** Anyone on the internet can open both pages; the 4-letter room code is the
-# only thing gating a join, and it is only ever shown on the TV. That is an accepted trade for an
-# app with no accounts and no persistence — but it is why the relay must go on rejecting a code that
-# is not the current one, and why the host page must not put the code anywhere but the screen.
+# ⚠️ **This is public, and nothing gates a join.** Anyone on the internet who knows this address can
+# open the player page, type a name and drive a blob on the TV. There is no code to know: the
+# session is negotiated on the socket precisely so that a phone never has to be told one, which
+# means it cannot double as a doorkeeper either. The 4-letter code it replaced was barely one —
+# thirty-two characters to the fourth power, tried against a relay that would answer as often as it
+# was asked — but this is the honest version of that trade, taken for a house game with no accounts
+# and no persistence, where the cost of getting in wrongly is a stray blob on a television.
+#
+# If that ever stops being acceptable, the fix is at this layer — basic auth or an IP allowlist on
+# the ingress — and not a code in the app, which would put the QR step back on every phone.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

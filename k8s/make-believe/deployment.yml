@@ -6,7 +6,7 @@ metadata:
     app: make-believe
 spec:
   # ⚠️ One replica, and it is not a scaling decision — it is the only correct number. The whole
-  # world lives in this process's memory: the host socket, its players and tonight's room code. Two
+  # world lives in this process's memory: the host socket, its players and the session code. Two
   # pods would be two worlds behind one URL, and the TV and the phones would land in whichever one
   # the service happened to pick. There is no session affinity that fixes this and no persistence to
   # add; the design is one deployment, one world. **Never scale this.**

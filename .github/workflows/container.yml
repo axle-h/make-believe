@@ -103,29 +103,46 @@ jobs:
           # nothing installed.
           node --input-type=module <<'JS'
           const base = 'ws://localhost:3000/ws'
-          const room = 'ABCD'
           const open = (url) => new Promise((resolve, reject) => {
             const socket = new WebSocket(url)
             socket.addEventListener('open', () => resolve(socket))
             socket.addEventListener('error', () => reject(new Error(`could not open ${url}`)))
           })
-
-          const host = await open(`${base}?role=host&room=${room}`)
-          const heard = new Promise((resolve, reject) => {
-            host.addEventListener('message', (event) => resolve(JSON.parse(event.data)))
-            setTimeout(() => reject(new Error('the host never heard the join')), 5000)
+          // The next message of a given type, ignoring anything before it.
+          const awaitType = (socket, type, what) => new Promise((resolve, reject) => {
+            socket.addEventListener('message', (event) => {
+              const message = JSON.parse(event.data)
+              if (message.type === type) resolve(message)
+            })
+            setTimeout(() => reject(new Error(`never heard ${what}`)), 5000)
           })
 
-          const player = await open(`${base}?role=player&room=${room}&playerId=ci-1`)
+          // No code in either query: the relay says which world this is on the
+          // way in, and that is the whole of how a client learns it.
+          const host = await open(`${base}?role=host`)
+          const hostSession = await awaitType(host, 'session', 'the session on the TV socket')
+          const heard = awaitType(host, 'join', 'the join')
+
+          const player = await open(`${base}?role=player&playerId=ci-1`)
+          const playerSession = await awaitType(player, 'session', 'the session on the phone socket')
           player.send(JSON.stringify({ type: 'join', playerId: 'ci-1', name: 'Wilf' }))
 
           const message = await heard
           host.close()
           player.close()
+          if (!/^[A-Z2-9]{4}$/.test(hostSession.session)) {
+            console.log(`::error::the relay minted '${hostSession.session}', which is not a session code`)
+            process.exit(1)
+          }
+          if (playerSession.session !== hostSession.session) {
+            console.log(`::error::the phone was told '${playerSession.session}' and the TV '${hostSession.session}'`)
+            process.exit(1)
+          }
           if (message.type !== 'join' || message.playerId !== 'ci-1' || message.name !== 'Wilf') {
             console.log(`::error::the host heard ${JSON.stringify(message)}, not the join`)
             process.exit(1)
           }
+          console.log(`both sockets were told they are in ${hostSession.session}`)
           console.log('the relay carried a join from a player socket to the host socket')
           // ⚠️ Explicitly: an open (or even a closing) WebSocket keeps node's event loop alive, so
           // a script that merely runs off the end here hangs the step until the job times out.
