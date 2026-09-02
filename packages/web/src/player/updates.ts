@@ -4,15 +4,15 @@
  * be tested without a service worker anywhere near them.
  */
 
-/** The four things the phone can be doing. Only one is ever on screen. */
-export type Screen = 'scan' | 'join' | 'waiting' | 'play'
+/** The three things the phone can be doing. Only one is ever on screen. */
+export type Screen = 'join' | 'waiting' | 'play'
 
 /**
  * The screens where a reload costs nothing. Reloading mid-joystick would leave
  * a blob running across the TV; mid-join it would throw away a half-typed
- * name. Waiting and scanning are the moments where nobody is holding anything.
+ * name. Waiting for the TV is the one moment where nobody is holding anything.
  */
-const SAFE: ReadonlySet<Screen> = new Set(['scan', 'waiting'])
+const SAFE: ReadonlySet<Screen> = new Set(['waiting'])
 
 export function isSafeToReload(screen: Screen): boolean {
   return SAFE.has(screen)

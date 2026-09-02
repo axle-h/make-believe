@@ -2,7 +2,7 @@
 
 A party game for the living room, played on the TV with phones as controllers. The TV runs the game (the **host**), and each player joins from an Android phone or a laptop browser (a **player**) by scanning a QR code. In-game characters are called **blobs**: move your blob around the screen, give it a name, draw its skin on your phone, and make it talk with speech bubbles.
 
-Everything ships as one Node process: it serves the host page at `/host/`, the player page at `/`, and relays WebSocket messages between them at `/ws`. The host owns all game state; phones are dumb controllers. There is only ever one world per deployment; the 4-letter code shown on the TV just stops stale phones joining tonight's session.
+Everything ships as one Node process: it serves the host page at `/host/`, the player page at `/`, and relays WebSocket messages between them at `/ws`. The host owns all game state; phones are dumb controllers. There is only ever one world per deployment. A 4-letter session code names the world the TV is currently running, but it appears in no URL and nobody ever reads it: the relay hands it out on connect, and a phone holding an older one comes back in as a new player.
 
 The full design brief lives in [`CLAUDE.md`](./CLAUDE.md). Everything already built is described by the code and its comments; the two pieces still to come are planned in [`docs/`](./docs).
 
@@ -37,18 +37,20 @@ Only one TV at a time: opening the host page a second time takes the world over,
 
 ## Playing it
 
-It is deployed at **<https://believe.ax-h.com>** — open `/host/` on the TV and scan the QR code with each phone.
+It is deployed at **<https://believe.ax-h.com>** — open `/host/` on the TV and scan
+the QR code with each phone the first time.
 
 ```
 TV:      https://believe.ax-h.com/host/
-phones:  scan the QR — it carries the code, so there is nothing to type
+phones:  https://believe.ax-h.com/ — the QR code on the TV is just this address
 ```
 
-A phone that has been added to the home screen opens fullscreen, with no address
-bar and no way out to the camera app, so its scan screen carries a camera of its
-own: **Point me at the TV** reads the QR code from inside the app. It appears
-only where the browser can actually read one — Chrome on Android, over HTTPS —
-and everywhere else the phone's camera app is the way in, as before.
+The QR code carries the address and nothing else, so it is only ever needed
+once. A phone that has been added to the home screen opens fullscreen straight
+onto its joystick: it remembers the name it played under, and which world it has
+reached is settled on the connection. If the TV has been restarted since, the
+blob is a new one under the same name, with the same picture put back up — the
+phone sorts that out on its own and there is nothing to scan, type or press.
 
 One namespace in k3s, one pod, one world. See [`k8s/README.md`](./k8s/README.md).
 
@@ -85,7 +87,7 @@ Kubernetes manifests for a single-replica deployment are in `k8s/`. One deployme
 ## Repo layout
 
 ```
-packages/shared   message schemas (zod) and room-code helpers, shared by web and server
+packages/shared   message schemas (zod) and session-code helpers, shared by web and server
 packages/web      one Vite project with two pages: player (/) and host (/host/)
 packages/server   Node http + ws relay, serves the built web app
 e2e/              Playwright tests

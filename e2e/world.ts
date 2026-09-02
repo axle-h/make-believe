@@ -40,15 +40,16 @@ declare global {
       snapshot: () => GameSnapshot
       /** The texture each blob is actually wearing, keyed by playerId. */
       worn: () => Record<string, string>
-      /** Tonight's code, which the TV itself only ever shows inside the QR code. */
-      roomCode: string
+      /** The world the relay gave this TV. Nothing on screen ever shows it. */
+      session: () => string
     }
   }
 }
 
 export interface Host {
   page: Page
-  roomCode: string
+  /** The session the relay minted when this TV attached. */
+  session: string
 }
 
 export interface Player {
@@ -71,7 +72,12 @@ export interface Player {
  */
 export interface Party {
   openHost(): Promise<Host>
-  joinAs(roomCode: string, name: string): Promise<Player>
+  /**
+   * A phone joins. There is no code to carry across from the TV: the page it
+   * is served is the only world there is, and which session of it this is gets
+   * settled on the socket.
+   */
+  joinAs(name: string): Promise<Player>
   /** A phone opened at an arbitrary address, for the cases that never join. */
   openPhone(path: string): Promise<Page>
 }
@@ -86,7 +92,7 @@ export const test = base.extend<{ party: Party }>({
     }
     await use({
       openHost: () => openHost(open),
-      joinAs: (roomCode, name) => joinAs(open, roomCode, name),
+      joinAs: (name) => joinAs(open, name),
       openPhone: async (path) => {
         const page = await open()
         await page.goto(path)
@@ -102,24 +108,31 @@ type OpenPage = () => Promise<Page>
 async function openHost(open: OpenPage): Promise<Host> {
   const page = await open()
   await page.goto('/host/')
-  // Nothing on the TV spells the code out — it lives inside the QR code — so
-  // the test reads it from the same seam it reads the world from.
   await expect(page.locator('#qr svg')).toBeVisible()
-  const roomCode = await hostRoomCode(page)
-  expect(roomCode).toMatch(/^[A-Z2-9]{4}$/)
-  return { page, roomCode }
+  // The session is nowhere on the TV — nothing shows it and nothing needs to —
+  // so the test reads it from the same seam it reads the world from.
+  await expect.poll(() => hostSession(page)).toMatch(/^[A-Z2-9]{4}$/)
+  return { page, session: await hostSession(page) }
 }
 
-/** Tonight's code, as the TV knows it. */
-export function hostRoomCode(page: Page): Promise<string> {
+/** The world this TV is running, as the relay named it on connect. */
+export function hostSession(page: Page): Promise<string> {
   return page.evaluate(() => {
     const game = window.__game
     if (!game) throw new Error('the host page has no test seam')
-    return game.roomCode
+    return game.session()
   })
 }
 
-async function joinAs(open: OpenPage, roomCode: string, name: string): Promise<Player> {
+/**
+ * Who this phone is right now. It is read rather than remembered because a
+ * phone that meets a new world throws its identity away and mints another.
+ */
+export function playerIdNow(page: Page): Promise<string | null> {
+  return page.evaluate(() => window.localStorage.getItem('make-believe.playerId'))
+}
+
+async function joinAs(open: OpenPage, name: string): Promise<Player> {
   const page = await open()
   // Watch the phone's sockets without standing in their way: everything is
   // forwarded to the real relay, so the phone cannot tell the difference.
@@ -128,12 +141,13 @@ async function joinAs(open: OpenPage, roomCode: string, name: string): Promise<P
     ws.connectToServer()
     sockets.push(ws)
   })
-  // The link a QR scan would open.
-  await page.goto(`/?room=${roomCode}`)
+  // Nothing but the address. A phone that has scanned the QR code once, or
+  // installed the page, opens exactly this.
+  await page.goto('/')
   await page.fill('#name-input', name)
   await page.click('#join-button')
   await expect(page.locator('#screen-play')).toBeVisible()
-  const playerId = await page.evaluate(() => window.localStorage.getItem('make-believe.playerId'))
+  const playerId = await playerIdNow(page)
   expect(playerId).toBeTruthy()
   return { page, playerId: playerId as string, name, sockets }
 }

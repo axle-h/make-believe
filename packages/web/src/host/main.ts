@@ -1,9 +1,7 @@
 import {
-  ServerToHostMessageSchema,
-  generateRoomCode,
-  isValidRoomCode,
+  HostInboundMessageSchema,
+  type HostInboundMessage,
   type HostOutboundMessage,
-  type ServerToHostMessage,
 } from '@make-believe/shared'
 import { connect } from '../lib/ws.js'
 import { applyMessage, createGame, snapshot, type GameSnapshot, type GameState } from './game/index.js'
@@ -30,8 +28,8 @@ declare global {
       snapshot: () => GameSnapshot
       /** The texture each blob is wearing on screen, keyed by `playerId`. */
       worn: () => Record<string, string>
-      /** Tonight's code. It is only ever shown inside the QR code on screen. */
-      roomCode: string
+      /** The world the relay gave us, or '' before it has said. Never shown. */
+      session: () => string
     }
   }
 }
@@ -47,43 +45,23 @@ function requireElement<T extends Element>(selector: string): T {
 }
 
 /**
- * The code identifies tonight's session of the one world this deployment runs.
- * It is kept for the life of the tab so that reloading the TV — which happens
- * by accident more than anyone would like — reuses the code on the phones
- * rather than sending everyone back to the join screen.
+ * Which world we are running. The relay mints it when this socket attaches and
+ * says so straight away; the TV keeps it only for the test seam and for
+ * anybody reading a log. It is never drawn and there is nowhere to type it.
  */
-const ROOM_KEY = 'make-believe.room'
+let session = ''
 
-function currentRoomCode(): string {
-  try {
-    const kept = window.sessionStorage.getItem(ROOM_KEY)
-    if (isValidRoomCode(kept)) return kept
-  } catch {
-    // Storage turned off: a reload simply mints a new code.
-  }
-  const fresh = generateRoomCode()
-  try {
-    window.sessionStorage.setItem(ROOM_KEY, fresh)
-  } catch {
-    // As above.
-  }
-  return fresh
-}
-
-const roomCode = currentRoomCode()
-const url = joinUrl(window.location.origin, roomCode)
+const url = joinUrl(window.location.origin)
 if (qrEl) {
   // Parsed rather than assigned as HTML: the page never sets innerHTML.
   const svg = new DOMParser().parseFromString(qrSvg(url), 'image/svg+xml').documentElement
   qrEl.replaceChildren(svg)
-  // The code is not written anywhere on the TV, so say it here for anything
-  // that cannot see a QR code.
-  qrEl.setAttribute('aria-label', `Scan to join with code ${roomCode}`)
+  qrEl.setAttribute('aria-label', `Scan to open ${url}`)
 }
 
 const client = connect({
-  query: { role: 'host', room: roomCode },
-  schema: ServerToHostMessageSchema,
+  query: { role: 'host' },
+  schema: HostInboundMessageSchema,
   onMessage: handleMessage,
   onStatus: (status) => {
     if (!statusEl) return
@@ -116,7 +94,13 @@ function send(message: HostOutboundMessage): void {
  * world that has just been created has forgotten every one of them and the
  * phones are the only place they still exist.
  */
-function handleMessage(message: ServerToHostMessage): void {
+function handleMessage(message: HostInboundMessage): void {
+  // Which world this is, not something that happened in it: the model never
+  // sees it.
+  if (message.type === 'session') {
+    session = message.session
+    return
+  }
   const result = applyMessage(state, message)
   if (!result.applied) return
   if (result.kind !== 'joined' && result.kind !== 'rejoined') return
@@ -135,5 +119,5 @@ window.__game = {
   state,
   snapshot: () => snapshot(state),
   worn: () => wornTextures(phaser),
-  roomCode,
+  session: () => session,
 }

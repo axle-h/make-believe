@@ -7,8 +7,6 @@ import {
   HostOutboundMessageSchema,
   PlayerIdSchema,
   PlayerToHostMessageSchema,
-  isValidRoomCode,
-  normaliseRoomCode,
   parseMessage,
 } from '@make-believe/shared'
 import { createRelay, type Connection, type Relay } from './relay.js'
@@ -132,31 +130,30 @@ function toConnection(ws: WebSocket): Connection {
   }
 }
 
+/**
+ * A socket says only what it is and, for a phone, who it is. There is no code
+ * in the query: the relay answers with the session on the way in, which is the
+ * whole of the negotiation.
+ */
 function handleConnection(relay: Relay, ws: WebSocket, params: URLSearchParams): void {
   const role = params.get('role')
-  const room = normaliseRoomCode(params.get('room') ?? '')
-
-  if (!isValidRoomCode(room)) {
-    ws.close(CLOSE_BAD_REQUEST, 'bad room code')
-    return
-  }
 
   if (role === 'host') {
-    attachHostSocket(relay, ws, room)
+    attachHostSocket(relay, ws)
     return
   }
 
   if (role === 'player') {
-    attachPlayerSocket(relay, ws, room, params.get('playerId'))
+    attachPlayerSocket(relay, ws, params.get('playerId'))
     return
   }
 
   ws.close(CLOSE_BAD_REQUEST, 'bad role')
 }
 
-function attachHostSocket(relay: Relay, ws: WebSocket, room: string): void {
+function attachHostSocket(relay: Relay, ws: WebSocket): void {
   const connection = toConnection(ws)
-  relay.attachHost(room, connection)
+  relay.attachHost(connection)
 
   ws.on('message', (data) => {
     const message = parseMessage(HostOutboundMessageSchema, data.toString())
@@ -168,12 +165,7 @@ function attachHostSocket(relay: Relay, ws: WebSocket, room: string): void {
   })
 }
 
-function attachPlayerSocket(
-  relay: Relay,
-  ws: WebSocket,
-  room: string,
-  rawPlayerId: string | null,
-): void {
+function attachPlayerSocket(relay: Relay, ws: WebSocket, rawPlayerId: string | null): void {
   const parsedId = PlayerIdSchema.safeParse(rawPlayerId)
   if (!parsedId.success) {
     ws.close(CLOSE_BAD_REQUEST, 'bad playerId')
@@ -182,9 +174,9 @@ function attachPlayerSocket(
   const playerId = parsedId.data
   const connection = toConnection(ws)
 
-  const attached = relay.attachPlayer(room, playerId, connection)
+  const attached = relay.attachPlayer(playerId, connection)
   if (!attached.ok) {
-    // The relay has already told the phone to show the lobby.
+    // The relay has already told the phone to show its waiting screen.
     ws.close(CLOSE_REJECTED, attached.reason)
     return
   }

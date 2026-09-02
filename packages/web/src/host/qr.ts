@@ -1,8 +1,10 @@
 import qrcode from 'qrcode-generator'
 
 /**
- * The QR code on the TV. Scanning it opens the player page with tonight's code
- * already filled in, so a phone joins without anybody typing anything.
+ * The QR code on the TV. It carries nothing but the player page's own address:
+ * a phone scans it once to find the game, installs it if it likes, and never
+ * needs the TV's help again. Which world it has reached is settled on the
+ * socket, not in this link.
  */
 
 /** How much of the code can be lost and still scan; `M` survives a TV's glare. */
@@ -15,8 +17,8 @@ const AUTO_TYPE = 0
  * reach, so it comes from the page's own origin: open the TV by LAN IP or
  * hostname, never `localhost`, or the QR code will point every phone at itself.
  */
-export function joinUrl(origin: string, roomCode: string): string {
-  return `${origin}/?room=${encodeURIComponent(roomCode)}`
+export function joinUrl(origin: string): string {
+  return `${origin}/`
 }
 
 /** An `<svg>` string for a URL, sized by CSS rather than by pixels. */

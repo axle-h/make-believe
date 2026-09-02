@@ -53,9 +53,10 @@ self.addEventListener('fetch', (event) => {
 })
 
 /**
- * The QR link carries tonight's code in the query, so every scan is a new URL
- * for the same page. Navigations are cached under the bare path instead, or
- * the cache would fill with a copy per code and match none of them next time.
+ * Every navigation is the same page whatever is hanging off the URL, so they
+ * are all cached under the bare path. Nothing puts a query on the player link
+ * any more, but a shared link with one on it would otherwise fill the cache
+ * with copies that match nothing next time.
  */
 function cacheKey(request) {
   return request.mode === 'navigate' ? new Request('/') : request

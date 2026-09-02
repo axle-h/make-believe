@@ -19,14 +19,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        // A camera that is always there and always says yes, for the tests
-        // that ask for one. Nothing else opens it.
-        launchOptions: {
-          args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
-        },
-      },
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
   webServer: {

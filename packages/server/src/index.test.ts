@@ -71,9 +71,16 @@ it('serves healthz and relays between a host and two players', async () => {
   expect(health.status).toBe(200)
   expect(await health.text()).toBe('ok')
 
-  const host = await connect('role=host&room=ABCD')
-  const one = await connect('role=player&room=ABCD&playerId=p1')
-  const two = await connect('role=player&room=ABCD&playerId=p2')
+  const host = await connect('role=host')
+  const one = await connect('role=player&playerId=p1')
+  const two = await connect('role=player&playerId=p2')
+
+  // everyone is told which world they have reached, first thing
+  const session = (await host.next()) as { type: string; session: string }
+  expect(session.type).toBe('session')
+  expect(session.session).toMatch(/^[A-Z2-9]{4}$/)
+  expect(await one.next()).toEqual(session)
+  expect(await two.next()).toEqual(session)
 
   // player → host, tagged with the playerId the socket connected with
   one.send({ type: 'join', playerId: 'p1', name: 'Wilf' })
@@ -102,32 +109,41 @@ it('serves healthz and relays between a host and two players', async () => {
   one.ws.close()
 })
 
-it('sends a player with the wrong room code back to the lobby and says why', async () => {
-  const host = await connect('role=host&room=ABCD')
-  const stale = await connect('role=player&room=WXYZ&playerId=p1')
+/**
+ * A TV taking the world over gives it a new session, and every phone already
+ * on a socket is told so where it stands. That message is the phone's cue to
+ * come back as a new player; nothing is closed and nobody has to knock.
+ */
+it('tells the phones on it when a new TV takes the world', async () => {
+  const first = await connect('role=host')
+  const phone = await connect('role=player&playerId=p1')
+  const before = (await phone.next()) as { session: string }
+  expect(await first.next()).toEqual(before)
 
-  expect(await stale.next()).toEqual({ type: 'waiting' })
-  // The phone tells "wrong code" from "no TV yet" by this reason alone.
-  expect(await stale.closed).toEqual({ code: 4001, reason: 'wrong-room' })
+  const second = await connect('role=host')
+  const after = (await second.next()) as { session: string }
 
-  host.ws.close()
+  expect(after.session).not.toBe(before.session)
+  expect(await phone.next()).toEqual(after)
+  expect(await first.closed).toEqual({ code: 4002, reason: 'replaced' })
+
+  second.ws.close()
+  phone.ws.close()
 })
 
 it('tells a player who arrives before the TV that there is no host', async () => {
-  const early = await connect('role=player&room=ABCD&playerId=p1')
+  const early = await connect('role=player&playerId=p1')
 
   expect(await early.next()).toEqual({ type: 'waiting' })
   expect(await early.closed).toEqual({ code: 4001, reason: 'no-host' })
 })
 
-it('hangs up on a bad room code, a bad role and a bad playerId', async () => {
+it('hangs up on a bad role and a bad playerId', async () => {
   await Promise.all(
-    ['role=host&room=nope', 'role=nonsense&room=ABCD', 'role=player&room=ABCD&playerId=a%20b'].map(
-      async (query) => {
-        const client = await connect(query)
-        await client.closed
-      },
-    ),
+    ['role=nonsense', 'role=player&playerId=a%20b'].map(async (query) => {
+      const client = await connect(query)
+      await client.closed
+    }),
   )
 })
 

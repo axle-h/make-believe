@@ -3,7 +3,6 @@ import { isDifferentBuild, isSafeToReload, shouldReload } from './updates.js'
 
 describe('when a new build may take over', () => {
   it('reloads where nobody is holding anything', () => {
-    expect(shouldReload('scan', true)).toBe(true)
     expect(shouldReload('waiting', true)).toBe(true)
   })
 
@@ -13,7 +12,7 @@ describe('when a new build may take over', () => {
   })
 
   it('does nothing at all with no update to take', () => {
-    expect(shouldReload('scan', false)).toBe(false)
+    expect(shouldReload('waiting', false)).toBe(false)
     expect(shouldReload('play', false)).toBe(false)
   })
 

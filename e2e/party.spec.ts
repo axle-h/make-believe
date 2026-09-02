@@ -2,8 +2,9 @@ import { expect } from '@playwright/test'
 import {
   BLOB_SIZE,
   dropSocket,
-  hostRoomCode,
+  hostSession,
   openTool,
+  playerIdNow,
   playerNamed,
   pushJoystick,
   snapshot,
@@ -12,9 +13,9 @@ import {
 } from './world.js'
 
 /**
- * One evening in front of the TV: two phones scan in, drive their own blobs,
- * say something, and draw — all of it whenever they like, because the session
- * is one continuous game with no rounds. Everything is asserted
+ * One evening in front of the TV: two phones open the page, drive their own
+ * blobs, say something, and draw — all of it whenever they like, because the
+ * session is one continuous game with no rounds. Everything is asserted
  * through the host's model, which is the single source of truth.
  */
 test.describe('a party', () => {
@@ -22,8 +23,8 @@ test.describe('a party', () => {
     const host = await party.openHost()
     await expect(host.page.locator('#qr svg')).toBeVisible()
 
-    const wilf = await party.joinAs(host.roomCode, 'Wilf')
-    const ida = await party.joinAs(host.roomCode, 'Ida')
+    const wilf = await party.joinAs('Wilf')
+    const ida = await party.joinAs('Ida')
 
     // --- both blobs are on the TV, with their names ---
     await expect
@@ -90,7 +91,7 @@ test.describe('a party', () => {
 
   test('a blob can be renamed and redrawn without stopping the game', async ({ party }) => {
     const host = await party.openHost()
-    const wilf = await party.joinAs(host.roomCode, 'Wilf')
+    const wilf = await party.joinAs('Wilf')
 
     // Drive first, so the rename lands in the middle of a game rather than at
     // the start of one.
@@ -136,8 +137,8 @@ test.describe('a party', () => {
 
   test('blobs are solid and shove each other about', async ({ party }) => {
     const host = await party.openHost()
-    const wilf = await party.joinAs(host.roomCode, 'Wilf')
-    await party.joinAs(host.roomCode, 'Ida')
+    const wilf = await party.joinAs('Wilf')
+    await party.joinAs('Ida')
 
     const before = await playerNamed(host, 'Ida')
     // Wilf spawns to Ida's left; drive straight into her.
@@ -152,25 +153,29 @@ test.describe('a party', () => {
     expect(Math.abs(after.x - wilfNow.x)).toBeGreaterThanOrEqual(BLOB_SIZE - 1)
   })
 
-  test('a phone opened at the bare URL is sent to the TV to scan', async ({ party }) => {
-    const host = await party.openHost()
+  /**
+   * The whole of getting in. A phone that has never been here opens the
+   * address and is asked one thing; there is no code to carry over from the
+   * TV, and therefore nothing for an installed phone to have to scan for.
+   */
+  test('a phone opened at the bare URL is asked for a name and nothing else', async ({ party }) => {
+    await party.openHost()
     const phone = await party.openPhone('/')
 
-    // Nothing to type: there is no code on this phone and nowhere to put one.
-    await expect(phone.locator('#screen-scan')).toBeVisible()
-    await expect(phone.locator('#screen-join')).toBeHidden()
-
-    // Following the QR code's link is all it takes to get past it.
-    await phone.goto(`/?room=${host.roomCode}`)
     await expect(phone.locator('#screen-join')).toBeVisible()
     await phone.fill('#name-input', 'Wilf')
     await phone.click('#join-button')
+    await expect(phone.locator('#screen-play')).toBeVisible()
+
+    // And next time there is not even that: the name is remembered, so opening
+    // the page is the whole of it.
+    await phone.goto('/')
     await expect(phone.locator('#screen-play')).toBeVisible()
   })
 
   test('a phone that reloads keeps its blob', async ({ party }) => {
     const host = await party.openHost()
-    const wilf = await party.joinAs(host.roomCode, 'Wilf')
+    const wilf = await party.joinAs('Wilf')
 
     await pushJoystick(wilf, { dx: 0, dy: 1 }, 400)
     const before = await playerNamed(host, 'Wilf')
@@ -187,28 +192,39 @@ test.describe('a party', () => {
     expect((await snapshot(host)).players).toHaveLength(1)
   })
 
-  test('the TV can be reloaded and the phones carry on', async ({ party }) => {
+  /**
+   * A reloaded TV is a new world with a new session, and every phone on it is
+   * told so. Each one throws away the identity it had — it belonged to a world
+   * that no longer exists — and comes straight back as a new player under the
+   * same name, with nobody touching it.
+   */
+  test('a TV that reloads brings its phones back as new players', async ({ party }) => {
     const host = await party.openHost()
-    const wilf = await party.joinAs(host.roomCode, 'Wilf')
+    const wilf = await party.joinAs('Wilf')
     await expect.poll(async () => (await snapshot(host)).players.length).toBe(1)
 
     await host.page.reload()
-    // Same session, so the code on the phones still works.
     await expect(host.page.locator('#qr svg')).toBeVisible()
-    expect(await hostRoomCode(host.page)).toBe(host.roomCode)
+    await expect.poll(() => hostSession(host.page)).not.toBe(host.session)
 
-    // The phone knocks again on its own; nobody touches it.
     await expect
       .poll(async () => (await snapshot(host)).players.map((player) => player.name), {
         timeout: 15_000,
       })
       .toEqual(['Wilf'])
     await expect(wilf.page.locator('#screen-play')).toBeVisible()
+
+    // Somebody new, on the same phone, under the same name — and driveable.
+    const back = await playerNamed(host, 'Wilf')
+    expect(back.playerId).not.toBe(wilf.playerId)
+    expect(await playerIdNow(wilf.page)).toBe(back.playerId)
+    await pushJoystick(wilf, { dx: 0, dy: 1 }, 400)
+    expect((await playerNamed(host, 'Wilf')).y).toBeGreaterThan(back.y + 20)
   })
 
   test('a phone that drops off comes back as who it is now, not who it was', async ({ party }) => {
     const host = await party.openHost()
-    const wilf = await party.joinAs(host.roomCode, 'Wilf')
+    const wilf = await party.joinAs('Wilf')
 
     await openTool(wilf, 'name')
     await wilf.page.fill('#rename-input', 'Sir Wilf')
@@ -237,7 +253,7 @@ test.describe('a party', () => {
 
   test('a TV that forgets everything gets the drawings back from the phones', async ({ party }) => {
     const host = await party.openHost()
-    const wilf = await party.joinAs(host.roomCode, 'Wilf')
+    const wilf = await party.joinAs('Wilf')
 
     await openTool(wilf, 'name')
     await wilf.page.fill('#rename-input', 'Sir Wilf')
@@ -254,26 +270,30 @@ test.describe('a party', () => {
     await wilf.page.reload()
     await expect(wilf.page.locator('#screen-play')).toBeVisible()
 
-    // A reloaded TV is a brand new world: it has never heard of this blob.
+    // A reloaded TV is a brand new world: a new session, and it has never
+    // heard of this blob. The phone comes back as somebody new, still holding
+    // the only copy of its own picture.
     await host.page.reload()
     await expect(host.page.locator('#qr svg')).toBeVisible()
 
-    // The phone knocks, says who it is, and puts its picture back up.
+    // It says who it is and puts its picture back up, with nobody touching it.
     await expect
       .poll(async () => (await snapshot(host)).players.map((player) => player.name), {
         timeout: 20_000,
       })
       .toEqual(['Sir Wilf'])
+    const reborn = await playerIdNow(wilf.page)
+    expect(reborn).not.toBe(wilf.playerId)
     await expect
       .poll(async () => (await playerNamed(host, 'Sir Wilf')).skinKey, { timeout: 20_000 })
-      .toBe(`skin-${wilf.playerId}-1`)
+      .toBe(`skin-${reborn}-1`)
     await expect
-      .poll(async () => (await worn(host))[wilf.playerId], { timeout: 10_000 })
-      .toBe(`skin-${wilf.playerId}-1`)
+      .poll(async () => (await worn(host))[reborn as string], { timeout: 10_000 })
+      .toBe(`skin-${reborn}-1`)
 
     // ...and only once: the TV says it has the drawing, so nobody sends it again.
     await wilf.page.waitForTimeout(3_000)
-    expect((await playerNamed(host, 'Sir Wilf')).skinKey).toBe(`skin-${wilf.playerId}-1`)
+    expect((await playerNamed(host, 'Sir Wilf')).skinKey).toBe(`skin-${reborn}-1`)
   })
 })
 

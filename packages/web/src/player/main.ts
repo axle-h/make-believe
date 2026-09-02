@@ -1,8 +1,7 @@
 import {
   HostToPlayerMessageSchema,
   MAX_TEXT_LENGTH,
-  isValidRoomCode,
-  normaliseRoomCode,
+  isValidSessionCode,
   type HostToPlayerMessage,
   type PlayerToHostMessage,
 } from '@make-believe/shared'
@@ -17,7 +16,6 @@ import {
 } from './drawing.js'
 import { evaluateJoinForm, joinFormError } from './joinForm.js'
 import { ZERO, createInputThrottle, vectorFromPointer, type Vector } from './joystick.js'
-import { canScan, startScan, type Scan } from './scanner.js'
 import { isDifferentBuild, shouldReload, type Screen } from './updates.js'
 import './player.css'
 
@@ -32,7 +30,12 @@ import './player.css'
 
 const PLAYER_ID_KEY = 'make-believe.playerId'
 const NAME_KEY = 'make-believe.name'
-const ROOM_KEY = 'make-believe.room'
+/**
+ * The world this phone last belonged to. Nobody reads it and there is nowhere
+ * to type it: it is kept only so that the next connect can tell "the same TV I
+ * was just talking to" from "a world that has been replaced since".
+ */
+const SESSION_KEY = 'make-believe.session'
 /**
  * The last drawing this phone sent. The world keeps no state across a restart,
  * so the phone is the only place a picture survives one — and it is kept in
@@ -45,14 +48,6 @@ const DRAWING_KEY = 'make-believe.drawing'
 const FIRST_WAIT_RETRY_MS = 800
 const MAX_WAIT_RETRY_MS = 4_000
 
-/**
- * How often a phone that is waiting knocks on the TV's door. A TV that has
- * just reloaded keeps the phones' sockets (the relay does not drop them when
- * the code is unchanged) but knows nothing about them, so the phone has to say
- * hello again of its own accord.
- */
-const KNOCK_MS = 2_000
-
 /** How long "Sent" stays under the box before it clears itself. */
 const SENT_MS = 1_500
 
@@ -60,7 +55,6 @@ const SENT_MS = 1_500
 type Sheet = 'say' | 'draw' | 'name'
 
 const screens: Record<Screen, HTMLElement> = {
-  scan: requireElement<HTMLElement>('#screen-scan'),
   join: requireElement<HTMLElement>('#screen-join'),
   waiting: requireElement<HTMLElement>('#screen-waiting'),
   play: requireElement<HTMLElement>('#screen-play'),
@@ -75,14 +69,7 @@ const joinForm = requireElement<HTMLFormElement>('#join-form')
 const nameInput = requireElement<HTMLInputElement>('#name-input')
 const joinButton = requireElement<HTMLButtonElement>('#join-button')
 const joinError = requireElement<HTMLElement>('#join-error')
-const scanNote = requireElement<HTMLElement>('#scan-note')
-const scanCamera = requireElement<HTMLButtonElement>('#scan-camera')
-const viewfinder = requireElement<HTMLElement>('#viewfinder')
-const viewfinderVideo = requireElement<HTMLVideoElement>('#viewfinder-video')
-const viewfinderNote = requireElement<HTMLElement>('#viewfinder-note')
-const viewfinderClose = requireElement<HTMLButtonElement>('#viewfinder-close')
 const waitingName = requireElement<HTMLElement>('#waiting-name')
-const changeCodeButton = requireElement<HTMLButtonElement>('#change-code-button')
 const playName = requireElement<HTMLElement>('#play-name')
 const pad = requireElement<HTMLElement>('#pad')
 const thumb = requireElement<HTMLElement>('#thumb')
@@ -108,15 +95,21 @@ function requireElement<T extends Element>(selector: string): T {
   return element
 }
 
-const playerId = loadPlayerId()
+/**
+ * Who this phone is. It survives a refresh, which is what walks a reload back
+ * into the same blob — and it is thrown away and minted again the moment the
+ * TV turns out to be running a different world, because an identity from a
+ * world that is gone is not an identity at all.
+ */
+let playerId = loadPlayerId()
 const throttle = createInputThrottle()
 
 let client: WsClient | null = null
-/** What we joined with, so a retry can use the same thing. */
-let session: { room: string; name: string } | null = null
+/** The name we joined with, so a retry can use the same one. */
+let joined: { name: string } | null = null
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 let retryMs = FIRST_WAIT_RETRY_MS
-let screen: Screen = 'scan'
+let screen: Screen = 'join'
 /** What is open over the joystick, or `null` for the joystick itself. */
 let sheet: Sheet | null = null
 /** The pointer holding the pad down, if any. */
@@ -129,18 +122,14 @@ let latest: Vector = ZERO
 nameInput.value = loadStored(NAME_KEY) ?? ''
 
 /**
- * Tonight's code, or '' when we have not got one. There is nowhere to type it:
- * the TV shows only a QR code, with the code inside it, so the code arrives in
- * the link a scan opens or not at all.
+ * The world this phone last belonged to, or '' if it has never been in one.
+ * It is only ever compared, never shown.
  */
-let roomCode = ''
+let lastSession = loadSession()
 
-/** The code a scan has just brought in, or the one from last time on a refresh. */
-function initialRoomCode(): string {
-  const fromUrl = normaliseRoomCode(new URLSearchParams(window.location.search).get('room') ?? '')
-  if (isValidRoomCode(fromUrl)) return fromUrl
-  const fromStorage = normaliseRoomCode(loadStored(ROOM_KEY) ?? '')
-  return isValidRoomCode(fromStorage) ? fromStorage : ''
+function loadSession(): string {
+  const kept = loadStored(SESSION_KEY) ?? ''
+  return isValidSessionCode(kept) ? kept : ''
 }
 
 nameInput.addEventListener('input', () => {
@@ -153,145 +142,90 @@ joinForm.addEventListener('submit', (event) => {
   submitJoin()
 })
 
-changeCodeButton.addEventListener('click', () => {
-  stop()
-  askForScan()
-})
-
 function refreshJoinButton(): void {
-  joinButton.disabled = !evaluateJoinForm(roomCode, nameInput.value).canJoin
+  joinButton.disabled = !evaluateJoinForm(nameInput.value).canJoin
 }
 
-/** Ask who is holding the phone; the code is already in hand. */
-function askForName(): void {
-  joinError.textContent = ''
+/** Ask who is holding the phone. */
+function askForName(note = ''): void {
+  joinError.textContent = note
   refreshJoinButton()
   showScreen('join')
   nameInput.focus()
 }
 
-/**
- * Send them back to the TV. The code we had (if any) is dropped along with it,
- * so a stale one cannot quietly come back on the next refresh.
- */
-function askForScan(note = ''): void {
-  roomCode = ''
-  forget(ROOM_KEY)
-  scanNote.textContent = note
-  showScreen('scan')
-}
-
 function submitJoin(): void {
-  const state = evaluateJoinForm(roomCode, nameInput.value)
-  if (!state.roomValid) {
-    askForScan('That link had no code in it.')
-    return
-  }
+  const state = evaluateJoinForm(nameInput.value)
   if (!state.canJoin) {
     joinError.textContent = joinFormError(state)
     return
   }
   joinError.textContent = ''
   store(NAME_KEY, state.name)
-  store(ROOM_KEY, state.room)
-  session = { room: state.room, name: state.name }
+  joined = { name: state.name }
   waitingName.textContent = state.name
   showScreen('waiting')
   openSocket()
 }
 
-/**
- * We have a code: from the link a scan opened, from the camera below, or from
- * last time. Ask who is holding the phone, or go straight in if we know them.
- *
- * The code is kept before anyone has joined because one the camera found is
- * nowhere else — there is no link in the address bar to read it back off — and
- * a refresh at the name prompt would otherwise throw it away.
- */
-function enterRoom(code: string): void {
-  roomCode = code
-  store(ROOM_KEY, code)
-  scanNote.textContent = ''
-  if (evaluateJoinForm(roomCode, nameInput.value).canJoin) submitJoin()
-  else askForName()
-}
-
-// --- the camera ----------------------------------------------------------
-
-/**
- * A phone open at its icon has no address bar and no way out to the camera app
- * and back, so the scan screen carries a camera of its own wherever the
- * browser can read a QR code. Reading one is `scanner.ts`; this is the button
- * in front of it.
- */
-
-/** The camera, while the viewfinder is open. */
-let scan: Scan | null = null
-
-scanCamera.hidden = !canScan()
-
-scanCamera.addEventListener('click', () => void openViewfinder())
-viewfinderClose.addEventListener('click', closeViewfinder)
-
-async function openViewfinder(): Promise<void> {
-  if (scan) return
-  viewfinderNote.textContent = 'Point the camera at the TV.'
-  viewfinder.hidden = false
-  try {
-    const running = await startScan(viewfinderVideo, window.location.origin, foundRoom)
-    // Shut again while the phone was still asking for the camera: the answer
-    // arrived for nobody, so put it straight back.
-    if (viewfinder.hidden) running.stop()
-    else scan = running
-  } catch {
-    viewfinderNote.textContent = 'No camera here, or no permission for it.'
-  }
-}
-
-function closeViewfinder(): void {
-  scan?.stop()
-  scan = null
-  viewfinder.hidden = true
-}
-
-/** The TV, seen. From here on this is exactly a scan that opened the page. */
-function foundRoom(room: string): void {
-  closeViewfinder()
-  enterRoom(room)
-}
-
 // --- the connection ------------------------------------------------------
 
-/** Open a socket for the current session. The TV decides what happens next. */
+/**
+ * Open a socket. Nothing but the role and who we are goes in the query — which
+ * world this is comes back from the relay a moment later, and until it does
+ * there is nothing to say.
+ */
 function openSocket(): void {
-  if (!session) return
-  const { room } = session
+  if (!joined) return
   client?.close()
   client = connect({
-    query: { role: 'player', room, playerId },
+    query: { role: 'player', playerId },
     schema: HostToPlayerMessageSchema,
     onMessage: applyMessage,
     onStatus: (status) => {
       linkStatus.hidden = status === 'open'
       if (status !== 'open') return
       retryMs = FIRST_WAIT_RETRY_MS
-      sayHello()
       keepAwake()
       void checkForNewBuild()
     },
     onFatal: ({ reason }) => {
       // The relay hung up for good. A TV that is not there yet is worth
-      // waiting for; anything else means this code will never work.
+      // waiting for; anything else is this phone being malformed, and the only
+      // cure for that is somebody starting again.
       if (reason === 'no-host') {
         retryLater()
         return
       }
       stop()
-      askForScan(
-        reason === 'wrong-room' ? 'The TV has a new code now.' : 'The TV would not let that in.',
-      )
+      askForName('The TV would not let that in.')
     },
   })
+}
+
+/**
+ * The relay has said which world this is. If it is the one we were in, we are
+ * the blob we were; if it is not, the world we belonged to is gone and this
+ * phone comes back as somebody new — a fresh identity, under the same name,
+ * still holding its own drawing.
+ *
+ * Reconnecting is what makes the new identity real: the relay tags everything
+ * this phone says with the id its *socket* arrived under, so a new one has to
+ * arrive on a new socket.
+ */
+function enterSession(code: string): void {
+  const previous = lastSession
+  lastSession = code
+  store(SESSION_KEY, code)
+  // A phone that has never been anywhere is already somebody new, so only a
+  // code we held and no longer match is worth a fresh identity for.
+  if (previous !== '' && previous !== code) {
+    playerId = createPlayerId()
+    store(PLAYER_ID_KEY, playerId)
+    openSocket()
+    return
+  }
+  sayHello()
 }
 
 /**
@@ -301,20 +235,25 @@ function openSocket(): void {
  * under its old name and quietly renamed back.
  */
 function sayHello(): void {
-  if (!session) return
-  sendMessage({ type: 'join', playerId, name: session.name })
+  if (!joined) return
+  sendMessage({ type: 'join', playerId, name: joined.name })
 }
 
 /**
- * The TV has two things it can say. `assigned` means "you are the blue one",
- * and it doubles as the way in: it only ever arrives in answer to a hello, so
- * it is proof the TV knows this phone and the controller can go up.
+ * What comes down the socket. `session` says which world this is and is the
+ * cue to say hello; `assigned` means "you are the blue one", and it doubles as
+ * the way in, since it only ever arrives in answer to a hello and is therefore
+ * proof the TV knows this phone; `waiting` means the TV has gone.
  */
 function applyMessage(message: HostToPlayerMessage): void {
+  if (message.type === 'session') {
+    enterSession(message.session)
+    return
+  }
   if (message.type === 'assigned') {
     document.documentElement.style.setProperty('--blob', message.colour)
     blobColour = message.colour
-    playName.textContent = session?.name ?? ''
+    playName.textContent = joined?.name ?? ''
     if (screen !== 'play') showScreen('play')
     // A world that has never seen this blob's drawing gets it now: a TV that
     // has reloaded has forgotten every picture on it, and this phone is
@@ -331,9 +270,9 @@ function applyMessage(message: HostToPlayerMessage): void {
   showScreen('waiting')
 }
 
-/** Sit on the waiting screen and knock again shortly, until the TV answers. */
+/** Sit on the waiting screen and try again shortly, until a TV answers. */
 function retryLater(): void {
-  if (!session) return
+  if (!joined) return
   client?.close()
   client = null
   release()
@@ -342,15 +281,6 @@ function retryLater(): void {
   retryTimer = setTimeout(openSocket, retryMs)
   retryMs = Math.min(retryMs * 2, MAX_WAIT_RETRY_MS)
 }
-
-/**
- * Knock on the TV's door while waiting for it. Costs one small message every
- * couple of seconds and nothing at all when there is no session or no socket.
- */
-setInterval(() => {
-  if (screen !== 'waiting') return
-  sayHello()
-}, KNOCK_MS)
 
 // --- keeping the screen on -----------------------------------------------
 
@@ -383,9 +313,7 @@ function letSleep(): void {
 
 // A lock is dropped whenever the phone is backgrounded; take it again on return.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && session) keepAwake()
-  // Nobody is looking through a backgrounded phone's camera; give it back.
-  if (document.visibilityState === 'hidden') closeViewfinder()
+  if (document.visibilityState === 'visible' && joined) keepAwake()
 })
 
 /** Give up on the current session entirely. */
@@ -395,7 +323,7 @@ function stop(): void {
   retryMs = FIRST_WAIT_RETRY_MS
   client?.close()
   client = null
-  session = null
+  joined = null
   letSleep()
 }
 
@@ -409,8 +337,6 @@ function showScreen(which: Screen): void {
   // Nothing but the joystick has a sheet over it, so leaving the controller
   // takes any sheet with it.
   if (which !== 'play') closeSheet()
-  // The camera belongs to the scan screen in the same way.
-  if (which !== 'scan') closeViewfinder()
   // A build that arrived while someone was driving gets taken now, if this is
   // one of the screens where a reload goes unnoticed.
   reloadIfSafe()
@@ -509,9 +435,9 @@ window.visualViewport?.addEventListener('resize', () => {
  */
 renameForm.addEventListener('submit', (event) => {
   event.preventDefault()
-  const state = evaluateJoinForm(roomCode, renameInput.value)
-  if (!state.nameValid || !session) return
-  session = { ...session, name: state.name }
+  const state = evaluateJoinForm(renameInput.value)
+  if (!state.nameValid || !joined) return
+  joined = { name: state.name }
   store(NAME_KEY, state.name)
   sayHello()
   nameInput.value = state.name
@@ -521,13 +447,13 @@ renameForm.addEventListener('submit', (event) => {
 })
 
 renameInput.addEventListener('input', () => {
-  renameSave.disabled = !evaluateJoinForm(roomCode, renameInput.value).nameValid
+  renameSave.disabled = !evaluateJoinForm(renameInput.value).nameValid
 })
 
 function openRename(): void {
   renameStatus.textContent = ''
-  renameInput.value = session?.name ?? ''
-  renameSave.disabled = !evaluateJoinForm(roomCode, renameInput.value).nameValid
+  renameInput.value = joined?.name ?? ''
+  renameSave.disabled = !evaluateJoinForm(renameInput.value).nameValid
   setTimeout(() => {
     renameInput.focus()
     renameInput.select()
@@ -564,14 +490,6 @@ function store(key: string, value: string): void {
     window.localStorage.setItem(key, value)
   } catch {
     // Nothing to do; the blob just will not survive a refresh.
-  }
-}
-
-function forget(key: string): void {
-  try {
-    window.localStorage.removeItem(key)
-  } catch {
-    // As above.
   }
 }
 
@@ -837,8 +755,10 @@ async function checkForNewBuild(): Promise<void> {
   }
 }
 
-// A remembered name and a code, from the QR link or from last time, means there
-// is nothing to ask. Last, so every handler above is wired before it can fire.
-const startingRoom = initialRoomCode()
-if (isValidRoomCode(startingRoom)) enterRoom(startingRoom)
-else askForScan()
+// A remembered name is the whole of what it takes to get in: there is one
+// world, this page is served by it, and the socket settles the rest. A phone
+// that has played before therefore goes straight to waiting for the TV, which
+// is what makes the installed app a single tap. Last, so every handler above
+// is wired before it can fire.
+if (evaluateJoinForm(nameInput.value).canJoin) submitJoin()
+else askForName()

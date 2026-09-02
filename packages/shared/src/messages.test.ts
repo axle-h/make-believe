@@ -3,6 +3,7 @@ import { MAX_NAME_LENGTH } from './blobName.js'
 import {
   AssignedMessageSchema,
   DrawingMessageSchema,
+  HostInboundMessageSchema,
   HostOutboundMessageSchema,
   HostToPlayerMessageSchema,
   InputMessageSchema,
@@ -12,6 +13,7 @@ import {
   MAX_TEXT_LENGTH,
   PlayerToHostMessageSchema,
   ServerToHostMessageSchema,
+  SessionMessageSchema,
   TextMessageSchema,
   WaitingMessageSchema,
   parseMessage,
@@ -153,6 +155,18 @@ describe('assigned and waiting', () => {
   })
 })
 
+describe('session', () => {
+  it('accepts a code the relay could have minted', () => {
+    expect(SessionMessageSchema.safeParse({ type: 'session', session: 'AB23' }).success).toBe(true)
+  })
+
+  it('rejects anything that is not one', () => {
+    expect(SessionMessageSchema.safeParse({ type: 'session', session: 'ab23' }).success).toBe(false)
+    expect(SessionMessageSchema.safeParse({ type: 'session', session: 'AB230' }).success).toBe(false)
+    expect(SessionMessageSchema.safeParse({ type: 'session' }).success).toBe(false)
+  })
+})
+
 describe('left', () => {
   it('accepts a valid message', () => {
     expect(LeftMessageSchema.safeParse({ type: 'left', playerId: 'p1' }).success).toBe(true)
@@ -204,9 +218,33 @@ describe('unions', () => {
     expect(HostOutboundMessageSchema.safeParse({ type: 'waiting', to: '*' }).success).toBe(false)
   })
 
-  it('lets the player parse what the host sends it', () => {
+  it('lets the player parse what the host and the relay send it', () => {
     expect(HostToPlayerMessageSchema.safeParse({ type: 'waiting' }).success).toBe(true)
+    expect(HostToPlayerMessageSchema.safeParse({ type: 'session', session: 'AB23' }).success).toBe(
+      true,
+    )
     expect(HostToPlayerMessageSchema.safeParse({ type: 'left', playerId: 'p1' }).success).toBe(false)
+  })
+
+  /**
+   * `session` is about the connection, not the world, so the host socket takes
+   * it and the game model never sees it. Keeping the two unions apart is what
+   * stops the model growing a case for it.
+   */
+  it('keeps session off the union the game model is fed', () => {
+    expect(HostInboundMessageSchema.safeParse({ type: 'session', session: 'AB23' }).success).toBe(
+      true,
+    )
+    expect(ServerToHostMessageSchema.safeParse({ type: 'session', session: 'AB23' }).success).toBe(
+      false,
+    )
+    expect(HostInboundMessageSchema.safeParse({ type: 'left', playerId: 'p1' }).success).toBe(true)
+  })
+
+  it('will not let the host send a session — the relay is the only one that says', () => {
+    expect(HostOutboundMessageSchema.safeParse({ type: 'session', session: 'AB23', to: '*' }).success).toBe(
+      false,
+    )
   })
 
   it('lets the host parse forwarded player messages and left', () => {

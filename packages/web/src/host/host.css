@@ -48,9 +48,9 @@ body {
 }
 
 /*
- * The only way in. The code is inside the QR itself, so a phone that scans it
- * lands on the player page already knowing tonight's session — nobody types
- * anything, and the TV needs no join instructions.
+ * The way in for a phone that has never been here. It holds this deployment's
+ * address and nothing else — which world the phone reaches is settled on the
+ * socket — so a phone that has played before never needs to look at it again.
  */
 .qr {
   position: absolute;

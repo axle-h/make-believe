@@ -35,20 +35,21 @@ Everything ships as **one container running one Node process**. The two "modes" 
 
 **Non-negotiable rule: the host owns ALL game state. Players are dumb.** They send inputs and receive small instructions ("you are blue", "show the drawing UI"). Never sync game state to phones; never run game logic on phones. A phone that drops off just reconnects and carries on.
 
-**One world, ever.** A deployment serves exactly one host and one world; there is no concept of multiple rooms and there never will be. The relay holds the current host socket, its players, and the current room code in plain server memory.
+**One world, ever.** A deployment serves exactly one host and one world; there is no concept of multiple rooms and there never will be. The relay holds the current host socket, its players, and the current session code in plain server memory.
 
 **No persistence.** If the pod restarts, everyone rejoins. This means **exactly one replica** — never scale the Deployment.
 
 ## Decisions already made (don't relitigate)
 
 - **pnpm workspaces**, not npm/yarn. `pnpm-workspace.yaml` at the root.
-- **Web, not native Android apps.** QR code on TV → phones scan → in. Native wrappers are a packaging concern for later.
+- **Web, not native Android apps.** QR code on TV → phones scan it once to find the address → in. Native wrappers are a packaging concern for later.
 - **WebSockets via a relay, not WebRTC.**
 - **Phaser 4**, the open-source npm library. NOT Phaser Editor (paid), NOT Phaser Game Agent (cloud credits). Phaser is just a dependency.
 - **Single Vite build, multi-page mode.** Two HTML entries (`index.html` for players, `host/index.html` for the host) → one `dist/`. Vite code-splits per entry, so Phaser never ships to phones.
 - **Plain Node server (`node:http` + `ws` + `sirv`), NOT TanStack Start.** Rationale: Start's WebSocket story is unreliable (h3 v2 / srvx don't do the upgrade cleanly as of mid-2026), we have no SSR or server-function needs, and the server is ~150 lines of relay. Don't introduce Express/Fastify/Hono either unless there's a concrete need.
 - **Plain TypeScript + DOM for the player UI** by default. React (via Vite, *not* Start) is acceptable later if the player screens get fiddly. The host is Phaser and needs no UI framework.
-- **A 4-letter room code**, even at home — it identifies *tonight's* session of the single world and stops a stale phone session attaching to it. It is a session key, not a room selector. **Multiple rooms are strictly out of scope.**
+- **A 4-letter session code, negotiated on the socket.** It names the world the current TV is running so that a phone can tell one world from the next — nothing more. It appears in **no URL**, nobody reads it, nobody types it and no QR code carries it: the relay mints one every time a TV attaches and tells whoever connects. A phone holding a different one held an identity from a world that is gone, so it drops that identity and comes back as a new player, keeping its name and its picture. **Multiple rooms are strictly out of scope**, and so is any way of choosing a world.
+- **The QR code carries the deployment's address and nothing else.** It is how a phone that has never been here finds the page; once it has, or once it is installed, opening the app is the whole of joining. There is no scan step to get in.
 - **Players get a persistent `playerId` in localStorage** so a refresh reattaches to the same blob.
 - **Server is bundled to a single file with esbuild** so the runtime image has no `node_modules` at all.
 
@@ -64,7 +65,7 @@ Everything ships as **one container running one Node process**. The two "modes" 
   e2e/                      # Playwright tests (root-level, exercise the built app)
   androidtv/                # Android TV (Kotlin) WebView wrapper for the host. Gradle project, not a pnpm package. Not built yet — docs/android-tv.md.
   packages/
-    shared/                 # message types + zod schemas, room-code helpers. Zero runtime deps except zod.
+    shared/                 # message types + zod schemas, session-code helpers. Zero runtime deps except zod.
     web/                    # ONE Vite project
       index.html            # → served at /        (player)
       host/index.html       # → served at /host/   (TV)
@@ -101,16 +102,26 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 //                                                              // hasDrawing false = "I haven't got your picture";
 //                                                              // the phone keeps the last one it sent and re-sends it.
 
-// relay → player (never sent by the host)
-{ type: 'waiting' }                                             // no TV for you: wait and keep knocking
+// relay → both roles (never sent by the host)
+{ type: 'waiting' }                                             // no TV for you: wait and try again
+{ type: 'session', session: 'ABCD' }                            // which world you have reached.
+//                                                              // sent the moment a socket attaches, and
+//                                                              // again to every phone when a TV takes
+//                                                              // the world over. A phone that gets one
+//                                                              // it does not match mints a new playerId
+//                                                              // and reconnects as a new player; one it
+//                                                              // does match is its cue to say hello.
 
 // connection setup (query string on /ws)
-/ws?role=host&room=ABCD
-/ws?role=player&room=ABCD&playerId=...
+/ws?role=host
+/ws?role=player&playerId=...
 ```
 
+No code in either query: which world a client has reached comes back from the relay, which is the whole of the negotiation.
+
 Relay semantics:
-- One host socket, full stop. A new host connection replaces the current one and sets the current room code (handles TV refresh). Players connecting with a code that does not match the current one are rejected.
+- One host socket, full stop. A new host connection replaces the current one and **mints a fresh session code** (a TV that has reloaded has forgotten every blob, so there is no such thing as the same world coming back). Every phone still on a socket is told the new code where it stands, and comes back as a new player.
+- A phone is never turned away for the code it is holding — it is told which world this is and works the rest out itself. The one refusal is that there is no TV yet.
 - Player messages are forwarded to the host, tagged with `playerId`. Host messages carry a `to: playerId` (or `to: '*'`) and are forwarded accordingly.
 - If the host disconnects, the world is torn down and players get a `{ type: 'waiting' }` so they show "waiting for TV".
 - If a player disconnects, the host gets `{ type: 'left', playerId }`.
@@ -119,7 +130,7 @@ Relay semantics:
 
 - Node 22, `node:http`. Routes: `GET /healthz` → 200; `GET /version` → the build string the web build wrote to `web/dist/version.txt`, `no-store`; `Upgrade` on `/ws` → `ws` server; everything else → `sirv('../web/dist', { single: false })` so `/host/` resolves to `host/index.html`.
 - Static cache headers: hashed `/assets/*` are `immutable`, everything else (both pages, the worker, the manifest) is `no-cache`. A phone holding a stale page across a deploy is the one thing the service worker exists to prevent, so nothing but a hashed filename may be kept without asking.
-- `relay.ts` exports a `createRelay()` that takes no I/O — it's a pure single-world registry (one host slot, a `Map` of players, the current room code) with `attachHost`, `attachPlayer`, `route(msg)` etc. No `Map` of rooms. `index.ts` wires sockets to it. This split is what makes it testable without real sockets.
+- `relay.ts` exports a `createRelay(mint?)` that takes no I/O — it's a pure single-world registry (one host slot, a `Map` of players, the current session code) with `attachHost`, `attachPlayer`, `route(msg)` etc. No `Map` of rooms. The session-code generator is injected so tests get codes they can predict. `server.ts` wires sockets to it. This split is what makes it testable without real sockets.
 - Port from `PORT` env, default 3000. Listen on `0.0.0.0`.
 - Dev: `tsx watch src/index.ts`. Prod: `esbuild src/index.ts --bundle --platform=node --target=node22 --outfile=dist/index.js`.
 
@@ -139,10 +150,10 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 
 **`shared`** — pure unit tests.
 - Every zod schema: valid message parses, malformed message rejects, oversize `png`/`text` rejects.
-- Room-code generator: length, charset, no ambiguous chars (0/O, 1/I).
+- Session-code generator: length, charset, no ambiguous chars (0/O, 1/I).
 
 **`server`** — unit tests on `relay.ts` (no sockets) + one integration test with real sockets.
-- Unit: attach host, attach two players, route a player `input` → host receives it with `playerId`; host `to: '*'` fans out; host disconnect tears down the world; second host replaces first; player with a stale/wrong room code rejected; player connecting before any host rejected.
+- Unit: attach host mints a session and announces it; attach two players, route a player `input` → host receives it with `playerId`; host `to: '*'` fans out; host disconnect tears down the world; a second host replaces the first, mints a new session and tells every phone still on a socket; a phone is let in whatever code it was holding; player connecting before any host rejected.
 - Integration (`index.test.ts`): start the real server on port 0, connect real `ws` clients as host + 2 players, assert end-to-end forwarding and that `/healthz` is 200. One test, kept fast.
 
 **`web` — host game model** (`src/host/game/`). This is the important one.
@@ -156,8 +167,9 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 - DOM wiring is covered by e2e, not unit tests.
 
 **e2e (`/e2e`, Playwright)** — runs against `pnpm build && pnpm start`.
-- One browser context opens `/host/` and reads the room code off the `window.__game` test hook. Nothing on the TV spells the code out — it lives only inside the QR code's URL.
-- Two more contexts open `/?room=<code>` (the link the QR code carries), enter a name, and join.
+- One browser context opens `/host/`. The session is read off the `window.__game` test hook when a test needs it; nothing on the TV shows it and no URL carries it.
+- Two more contexts open `/`, enter a name, and join. That is the whole of getting in.
+- A TV reload gives every phone a new identity under the same name, with nobody touching them.
 - Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round-trips a PNG; a blob is renamed and redrawn mid-game without losing its place.
 - Uses Playwright's `webServer` option to start the built app. `pnpm test:e2e`. Not run on every `pnpm test` — it's slower and needs browsers installed.
 
@@ -211,8 +223,9 @@ What is left:
 - Wake Lock API to stop phones sleeping (may be unavailable without HTTPS — degrade gracefully).
 - Mobile keyboards shift layout — test the Say sheet on a real phone early.
 - The player page is an installable PWA: `public/manifest.webmanifest`, `public/sw.js` (hand-written, ~60 lines, network-first, no Workbox and no build plugin), icons generated from `public/icons/blob.svg` by `scripts/icons.mjs` and committed. **Only the player page** — the host page links no manifest and the worker never touches `/host/`.
-- The scan screen reads the TV's QR code itself where it can (`src/player/scanner.ts`): `BarcodeDetector` over a `getUserMedia` stream, offered only where both exist — Chrome on Android, in a secure context — and hidden silently everywhere else. It is what a phone installed to the home screen has instead of an address bar. Only a same-origin link carrying a valid `room` counts; anything else the camera sees is ignored without complaint and it keeps looking.
-- Staleness is decided by one thing: `/version` against the page's own `__BUILD_VERSION__`, checked on every connect and whenever a new worker takes over. A mismatch reloads the phone — but only on the scan or waiting screen, never mid-joystick (`src/player/updates.ts`, which is where that rule is unit-tested).
+- There are three screens: `join` (a name and nothing else), `waiting` (no TV yet) and `play`. A phone that has played before has its name in storage and goes straight to waiting, so opening the installed app is a single tap with nothing to read, type or scan. There is no scan screen and no QR reader on the phone — the code in the URL was the only thing one was ever for.
+- Which world it is in comes back on the socket, not from the page it was opened at. On a `session` that does not match the one in storage, the phone mints a fresh `playerId` and reconnects — the relay tags what a phone says with the id its *socket* arrived under, so a new identity has to arrive on a new socket. Its name and its last drawing are kept: only the identity was stale.
+- Staleness of the *build* is decided by one thing: `/version` against the page's own `__BUILD_VERSION__`, checked on every connect and whenever a new worker takes over. A mismatch reloads the phone — but only on the waiting screen, never mid-joystick (`src/player/updates.ts`, which is where that rule is unit-tested).
 
 ## How I want to work
 

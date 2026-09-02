@@ -80,17 +80,6 @@ h1 {
   color: #ff8f8f;
 }
 
-/* The only way in is the TV, so the scan screen says so and nothing else. */
-.scan-mark {
-  width: min(50vw, 11rem);
-  height: auto;
-  fill: none;
-  stroke: var(--blob);
-  stroke-width: 4;
-  stroke-linecap: round;
-  opacity: 0.9;
-}
-
 .join-form {
   display: flex;
   flex-direction: column;
@@ -323,29 +312,3 @@ h1 {
   transition: transform 60ms linear;
 }
 
-/* The camera. Over the sheets as well as the screens: it is the whole phone. */
-.viewfinder {
-  position: fixed;
-  inset: 0;
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.25rem;
-  padding: calc(env(safe-area-inset-top) + 1rem) 1.5rem calc(env(safe-area-inset-bottom) + 1.5rem);
-  background: var(--ground);
-}
-
-.viewfinder[hidden] {
-  display: none;
-}
-
-.viewfinder-video {
-  width: min(80vw, 55dvh);
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: 14%;
-  background: #1b1f2e;
-  box-shadow: 0 0 0 3px var(--blob);
-}

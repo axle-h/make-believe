@@ -13,30 +13,13 @@
   <body>
     <p id="link-status" class="link-status" role="status" hidden>Reconnecting…</p>
     <main class="phone">
-      <section id="screen-scan" class="screen">
+      <!-- The screen the page opens on, before any script has run. -->
+      <section id="screen-join" class="screen">
         <h1>MAKE believe</h1>
-        <svg class="scan-mark" viewBox="0 0 64 64" aria-hidden="true">
-          <path
-            d="M6 22V10a4 4 0 0 1 4-4h12M42 6h12a4 4 0 0 1 4 4v12M58 42v12a4 4 0 0 1-4 4H42M22 58H10a4 4 0 0 1-4-4V42"
-          />
-          <rect x="16" y="16" width="12" height="12" rx="2" />
-          <rect x="36" y="16" width="12" height="12" rx="2" />
-          <rect x="16" y="36" width="12" height="12" rx="2" />
-        </svg>
-        <p class="hint">Scan the QR code on the TV to join.</p>
-        <p id="scan-note" class="error" role="status"></p>
         <!--
-          Only shown where the browser can actually read a QR code; see
-          scanner.ts. A phone open at its icon has no way out to the camera
-          app, so the camera has to be reachable from in here.
+          The whole of getting in. There is one world, this page came from it,
+          and which session of it this is gets settled on the socket.
         -->
-        <button id="scan-camera" class="button" type="button" hidden>
-          Point me at the TV
-        </button>
-      </section>
-
-      <section id="screen-join" class="screen" hidden>
-        <h1>MAKE believe</h1>
         <p class="hint">Name your blob.</p>
         <form id="join-form" class="join-form">
           <input
@@ -61,15 +44,12 @@
         <h1>MAKE believe</h1>
         <p class="hint">Waiting for the TV…</p>
         <!--
-          No code here. It only ever travels inside the QR code's link, and a
-          phone has nowhere to type one anyway, so showing it says nothing.
+          Nothing to do and nothing to press. The phone keeps trying on its
+          own, and the moment a TV answers this becomes the joystick.
         -->
         <p class="waiting-detail">
           <span id="waiting-name" class="waiting-name">Blob</span> is ready.
         </p>
-        <button id="change-code-button" class="button button-quiet" type="button">
-          Scan the TV again
-        </button>
       </section>
 
       <!--
@@ -153,11 +133,5 @@
       <p id="rename-status" class="hint" role="status"></p>
     </div>
 
-    <!-- The camera, over everything, for as long as it takes to see the TV. -->
-    <div id="viewfinder" class="viewfinder" hidden>
-      <video id="viewfinder-video" class="viewfinder-video" playsinline muted></video>
-      <p id="viewfinder-note" class="hint" role="status">Point the camera at the TV.</p>
-      <button id="viewfinder-close" class="button button-quiet" type="button">Stop</button>
-    </div>
   </body>
 </html>

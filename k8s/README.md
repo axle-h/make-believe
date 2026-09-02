@@ -3,7 +3,7 @@
 k3s, one namespace per app, one pod, reached at <https://believe.ax-h.com> through traefik with a
 cert-manager certificate.
 
-⚠️ **One replica, always.** The world — the host socket, its players, tonight's room code — is held
+⚠️ **One replica, always.** The world — the host socket, its players, the current session code — is held
 in the pod's memory and nothing is persisted. Two pods would be two worlds behind one address, and
 the TV and the phones would land in whichever one the Service happened to pick. `replicas: 1` and
 `strategy: Recreate` in `make-believe/deployment.yml` are both about that, and neither is a tuning
@@ -61,11 +61,14 @@ The WebSocket is the part worth proving separately, because a page load will not
 only after the JavaScript runs, and a broken upgrade looks like a TV that never gets a player.
 
 ```shell
-pnpm dlx wscat -c 'wss://believe.ax-h.com/ws?role=host&room=ZZZZ'
+pnpm dlx wscat -c 'wss://believe.ax-h.com/ws?role=host'
 ```
 
-TV: <https://believe.ax-h.com/host/>. Phones scan the QR code on it, which now carries the public
-name because the page builds it from its own origin.
+⚠️ That connection **takes the world** from whatever TV is running it. It should answer with a
+`session` message; hang up as soon as it does.
+
+TV: <https://believe.ax-h.com/host/>. Phones open <https://believe.ax-h.com/> — which is all the QR
+code on the TV holds, built from the page's own origin, so it carries the public name here.
 
 ## The image
 
@@ -119,6 +122,8 @@ kubectl -n make-believe rollout restart deploy/make-believe   # ⚠️ ends the 
 kubectl -n make-believe describe pod -l app=make-believe
 ```
 
-⚠️ **Any restart is the end of that evening's world.** The room code changes, every blob is gone and
-everyone rejoins from the TV's new QR code. That is a design decision (no persistence, ever), not
-something to work around — but it does mean rolling out a new build mid-game is rude.
+⚠️ **Any restart is the end of that evening's world.** The session code changes and every blob is
+gone. The phones sort themselves out — each is told the new session, comes back as a new player under
+the name it already had, and puts its drawing back up — but positions, colours and anything else the
+world was holding are lost. That is a design decision (no persistence, ever), not something to work
+around; it does mean rolling out a new build mid-game is rude.

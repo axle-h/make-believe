@@ -23,7 +23,7 @@ export interface WsClientOptions<Schema extends z.ZodType> {
   onStatus?: (status: ConnectionStatus) => void
   /**
    * The server hung up for good and there will be no reconnect. `reason` is
-   * whatever it put in the close frame, such as `no-host` or `wrong-room`.
+   * whatever it put in the close frame, such as `no-host` or `replaced`.
    */
   onFatal?: (info: { code: number; reason: string }) => void
 }
