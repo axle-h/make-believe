@@ -1,7 +1,7 @@
 import { normaliseName, type ServerToHostMessage } from '@make-believe/shared'
 import { BUBBLE_MS } from './constants.js'
 import { observeMessage } from './objectives/director.js'
-import { colourForSlot, nextFreeSlot, spawnPosition, type GameState, type Player } from './state.js'
+import { nextFreeSlot, spawnPosition, takeColour, type GameState, type Player } from './state.js'
 
 /**
  * Everything the world hears from a phone, applied to the state. The state is
@@ -21,6 +21,7 @@ export type IgnoredReason = 'unknown-player'
 export type ApplyResult =
   | { applied: true; kind: 'joined' | 'rejoined'; player: Player }
   | { applied: true; kind: 'input' | 'away' | 'text' | 'drawing'; player: Player }
+  | { applied: true; kind: 'finished'; player: Player }
   | { applied: false; reason: IgnoredReason }
 
 export function applyMessage(state: GameState, message: ServerToHostMessage): ApplyResult {
@@ -35,6 +36,8 @@ function route(state: GameState, message: ServerToHostMessage): ApplyResult {
       return join(state, message.playerId, message.name)
     case 'input':
       return input(state, message.playerId, message.dx, message.dy)
+    case 'finish':
+      return finish(state, message.playerId)
     case 'left':
       return left(state, message.playerId)
     case 'text':
@@ -46,11 +49,12 @@ function route(state: GameState, message: ServerToHostMessage): ApplyResult {
 
 /**
  * A phone said hello. A `playerId` the world already knows keeps its blob,
- * colour, slot and position — which is what makes a refresh on the phone a
- * non-event — and only takes the new name. Anyone else gets a fresh blob.
+ * colour, slot, name and position — which is what makes a refresh on the phone
+ * a non-event. Anyone else gets a fresh blob in the next colour going.
  *
- * This is also how a blob is renamed: a phone that wants a new name says hello
- * again with it, and the blob it already has takes it.
+ * The name comes off the hello every time rather than only the first: the
+ * hello is what a phone says on every reconnect, and it is the only thing that
+ * knows what its child is called.
  */
 function join(state: GameState, playerId: string, rawName: string): ApplyResult {
   // The schema has already refused a blank name; tidy it for the label.
@@ -68,7 +72,7 @@ function join(state: GameState, playerId: string, rawName: string): ApplyResult 
     playerId,
     name,
     slot,
-    colour: colourForSlot(slot),
+    colour: takeColour(state),
     x,
     y,
     dx: 0,
@@ -123,6 +127,23 @@ function input(state: GameState, playerId: string, dx: number, dy: number): Appl
   player.dx = dx
   player.dy = dy
   return { applied: true, kind: 'input', player }
+}
+
+/**
+ * Somebody has finished. This is the one thing a phone can ask the world to
+ * undo, and it undoes the lot: the blob goes, and its name, its picture and
+ * its place on the floor go with it. Nothing is answered, because the phone
+ * has already forgotten it too and is asking its child for a name again.
+ *
+ * It is deliberately not `left`. A phone that has merely gone quiet leaves a
+ * blob standing there waiting for it; a child who has finished does not want
+ * to come back to the one they had.
+ */
+function finish(state: GameState, playerId: string): ApplyResult {
+  const player = state.players.get(playerId)
+  if (!player) return { applied: false, reason: 'unknown-player' }
+  state.players.delete(playerId)
+  return { applied: true, kind: 'finished', player }
 }
 
 /**

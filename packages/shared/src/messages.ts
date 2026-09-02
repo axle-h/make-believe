@@ -63,11 +63,26 @@ export const TextMessageSchema = z.object({
   value: z.string().max(MAX_TEXT_LENGTH),
 })
 
+/**
+ * "I am done — forget me." The one thing a phone can ask the world to undo:
+ * the blob goes, and its name, its picture and its place on the floor go with
+ * it. Nothing is sent back, because the phone is not waiting for an answer —
+ * it has already forgotten everything too and is asking for a name again.
+ *
+ * This is not `left`. A phone that has merely gone quiet leaves its blob
+ * standing there waiting for it; a phone that has finished does not.
+ */
+export const FinishMessageSchema = z.object({
+  type: z.literal('finish'),
+  playerId: PlayerIdSchema,
+})
+
 export const PlayerToHostMessageSchema = z.discriminatedUnion('type', [
   JoinMessageSchema,
   InputMessageSchema,
   DrawingMessageSchema,
   TextMessageSchema,
+  FinishMessageSchema,
 ])
 
 // --- host → player -------------------------------------------------------
@@ -158,6 +173,7 @@ export const ServerToHostMessageSchema = z.discriminatedUnion('type', [
   InputMessageSchema,
   DrawingMessageSchema,
   TextMessageSchema,
+  FinishMessageSchema,
   LeftMessageSchema,
 ])
 
@@ -171,6 +187,7 @@ export const HostInboundMessageSchema = z.discriminatedUnion('type', [
   InputMessageSchema,
   DrawingMessageSchema,
   TextMessageSchema,
+  FinishMessageSchema,
   LeftMessageSchema,
   SessionMessageSchema,
 ])
@@ -182,6 +199,7 @@ export type JoinMessage = z.infer<typeof JoinMessageSchema>
 export type InputMessage = z.infer<typeof InputMessageSchema>
 export type DrawingMessage = z.infer<typeof DrawingMessageSchema>
 export type TextMessage = z.infer<typeof TextMessageSchema>
+export type FinishMessage = z.infer<typeof FinishMessageSchema>
 export type PlayerToHostMessage = z.infer<typeof PlayerToHostMessageSchema>
 export type AssignedMessage = z.infer<typeof AssignedMessageSchema>
 export type BriefMessage = z.infer<typeof BriefMessageSchema>

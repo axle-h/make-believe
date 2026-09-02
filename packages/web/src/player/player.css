@@ -294,7 +294,7 @@ h1 {
 }
 
 /*
- * Saying something, drawing and renaming are overlays rather than screens: the
+ * Saying something, drawing and finishing are overlays rather than screens: the
  * joystick is never more than one tap away, because nothing takes turns.
  */
 .sheet {
@@ -342,6 +342,13 @@ h1 {
 .sheet-buttons {
   display: flex;
   gap: 0.75rem;
+}
+
+/* A sheet that explains itself rather than handing over a tool. */
+.sheet-hint {
+  max-width: 22rem;
+  text-align: center;
+  line-height: 1.5;
 }
 
 .pad {

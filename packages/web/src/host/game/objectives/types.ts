@@ -9,8 +9,9 @@ import type { OnTheSpotObjective } from './onTheSpot.js'
  * it is always for everybody, and finishing it makes the next one immediately:
  * an objective is a thing the *world* wants, never a mode a phone is put into.
  *
- * Nothing here can change what a phone offers. Drive, say something, redraw,
- * rename — all four are live in every task, for every player, the whole time.
+ * Nothing here can change what a phone offers. Drive, say something, redraw —
+ * all three are live in every task, for every player, the whole time, and so is
+ * finishing and starting again.
  */
 
 /** How an objective ended, or that it has not. */

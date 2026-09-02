@@ -95,7 +95,7 @@ function send(message: HostOutboundMessage): void {
 /**
  * What the world is asking for, out to the phones. A brief is words and
  * nothing else: it changes no screen, disables no tool and puts no phone into
- * a mode. Every phone can still drive, talk, draw and rename while it is up.
+ * a mode. Every phone can still drive, talk and draw while it is up.
  */
 function sendBriefs(briefs: Brief[]): void {
   for (const brief of briefs) send({ ...brief, type: 'brief' })

@@ -15,6 +15,8 @@ const say = (state: GameState, playerId: string, value: string) =>
   applyMessage(state, { type: 'text', playerId, value })
 const draw = (state: GameState, playerId: string, png: string) =>
   applyMessage(state, { type: 'drawing', playerId, png })
+const finish = (state: GameState, playerId: string) =>
+  applyMessage(state, { type: 'finish', playerId })
 const png = (body: string) => `data:image/png;base64,${body}`
 
 /** The player a successful apply is about, or a failure if it did not apply. */
@@ -73,21 +75,90 @@ describe('join', () => {
     expect({ x: after.x, y: after.y }).toEqual(moved)
   })
 
-  it('takes a new name on a rejoin', () => {
+  it('takes the name off the hello, so a reconnect cannot rename anybody back', () => {
     const state = createGame()
     join(state, 'p1', 'Wilf')
-    expect(playerOf(join(state, 'p1', 'Big Ted')).name).toBe('Big Ted')
+    expect(playerOf(join(state, 'p1', 'Wilf')).name).toBe('Wilf')
     expect(state.players.size).toBe(1)
   })
 
-  it('reuses the slot a leaver gave up', () => {
+  /**
+   * The floor is reused so the room does not spread out forever, but the
+   * colour is not: a blob standing where the last one stood, in the same
+   * colour, is the old blob as far as anybody watching is concerned.
+   */
+  it('reuses the place a leaver gave up, but never their colour', () => {
     const state = createGame()
     join(state, 'p1', 'Wilf')
     join(state, 'p2', 'Ida')
     state.players.delete('p1')
 
     expect(nextFreeSlot(state)).toBe(0)
-    expect(playerOf(join(state, 'p3', 'Ted')).colour).toBe(PALETTE[0])
+    const next = playerOf(join(state, 'p3', 'Ted'))
+    expect(next.slot).toBe(0)
+    expect(next.colour).toBe(PALETTE[2])
+  })
+
+  it('goes round the palette rather than running out of colours', () => {
+    const state = createGame()
+    for (let i = 0; i < PALETTE.length; i++) join(state, `p${i}`, `Blob ${i}`)
+    const worn = [...state.players.values()].map((player) => player.colour)
+
+    expect(new Set(worn).size).toBe(PALETTE.length)
+    // One more than there are colours: somebody shares rather than getting none.
+    expect(playerOf(join(state, 'extra', 'Ted')).colour).toBe(PALETTE[0])
+  })
+})
+
+/**
+ * Finishing is the one thing a phone can undo, and it undoes everything: the
+ * blob, its name, its picture and its place. What comes back afterwards is
+ * somebody new, which is the whole point of pressing it.
+ */
+describe('finish', () => {
+  it('forgets the blob entirely, drawing and all', () => {
+    const state = createGame()
+    join(state, 'p1', 'Wilf')
+    join(state, 'p2', 'Ida')
+    draw(state, 'p1', png('AAAA'))
+    say(state, 'p1', 'bye')
+
+    const result = finish(state, 'p1')
+
+    expect(result).toMatchObject({ applied: true, kind: 'finished' })
+    expect(playerOf(result).name).toBe('Wilf')
+    expect(playerById(state, 'p1')).toBeUndefined()
+    expect(state.players.size).toBe(1)
+  })
+
+  it('leaves nothing behind for a later blob to inherit', () => {
+    const state = createGame()
+    const before = playerOf(join(state, 'p1', 'Wilf'))
+    join(state, 'p2', 'Ida')
+    draw(state, 'p1', png('AAAA'))
+    finish(state, 'p1')
+
+    // The same phone, back with a new identity, as the player page mints one.
+    const after = playerOf(join(state, 'p1-again', 'Ted'))
+    expect(after.colour).not.toBe(before.colour)
+    expect(after.skin).toBeNull()
+    expect(after.bubble).toBeNull()
+    expect(after.name).toBe('Ted')
+  })
+
+  it('does not go on ticking, unlike a blob whose phone merely went quiet', () => {
+    const state = createGame()
+    join(state, 'p1', 'Wilf')
+    join(state, 'p2', 'Ida')
+    finish(state, 'p1')
+
+    expect(tick(state, 100).removed).toEqual([])
+    expect(state.players.size).toBe(1)
+  })
+
+  it('ignores somebody the world has never heard of', () => {
+    const state = createGame()
+    expect(finish(state, 'nobody')).toMatchObject({ applied: false, reason: 'unknown-player' })
   })
 })
 

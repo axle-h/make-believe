@@ -120,6 +120,27 @@ describe('relay', () => {
     expect(host.sent).toEqual([{ type: 'input', playerId: 'p1', dx: 0, dy: 1 }])
   })
 
+  /**
+   * A phone that has finished is still an ordinary phone as far as the relay is
+   * concerned: it forwards the message and takes no view. Whether the world
+   * forgets that blob is the TV's business, and the socket closing behind it is
+   * an ordinary `left`.
+   */
+  it('forwards a phone finishing like anything else it says', () => {
+    relay.attachHost(host)
+    const connection = fakeConnection()
+    relay.attachPlayer('p1', connection)
+    host.clear()
+
+    relay.routeFromPlayer('p1', { type: 'finish', playerId: 'p1' })
+    relay.detachPlayer('p1', connection)
+
+    expect(host.sent).toEqual([
+      { type: 'finish', playerId: 'p1' },
+      { type: 'left', playerId: 'p1' },
+    ])
+  })
+
   it('drops player messages from an unregistered player and when there is no host', () => {
     expect(relay.routeFromPlayer('p1', { type: 'input', playerId: 'p1', dx: 0, dy: 0 })).toBe(false)
     relay.attachHost(host)

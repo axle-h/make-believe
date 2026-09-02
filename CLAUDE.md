@@ -13,8 +13,9 @@ Initial feature list:
 4. Type text on the phone that appears on the TV (speech bubble above the blob)
 
 **One continuous session, no rounds.** Everything above is available to every
-phone the whole time: drive, say something, redraw your blob, take a new name,
-in any order, whenever. **The TV takes no input at all** — no keyboard, no
+phone the whole time: drive, say something, redraw your blob, in any order,
+whenever — plus finishing with a blob, which is the one thing that undoes
+anything and hands the phone back to the name screen. **The TV takes no input at all** — no keyboard, no
 remote, nothing to click. It is a window onto the world; the phones run it.
 Rounds may arrive one day with an actual game idea (milestone 11); until then
 nothing may put a phone into a mode or make it wait its turn.
@@ -95,6 +96,14 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 { type: 'input',   playerId: string, dx: number, dy: number }   // normalised -1..1, ~30/sec while touching, only on change
 { type: 'drawing', playerId: string, png: string }              // data:image/png;base64,... from canvas.toDataURL()
 { type: 'text',    playerId: string, value: string }            // cap ~60 chars
+{ type: 'finish',  playerId: string }                           // "I'm done — forget me." The host deletes the
+//                                                              // blob outright, drawing and all; nothing is sent
+//                                                              // back. NOT `left`: a phone that has merely gone
+//                                                              // quiet leaves its blob standing there waiting.
+//                                                              // A blob can never be renamed — the phone throws
+//                                                              // its own identity away at the same moment and
+//                                                              // comes back, if it comes back, as somebody new
+//                                                              // in a new colour.
 
 // host → player
 { type: 'assigned', colour: string, slot: number, hasDrawing: boolean }
@@ -163,7 +172,7 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 
 **`web` — host game model** (`src/host/game/`). This is the important one.
 - The game model is **pure TypeScript with no Phaser imports**: `createGame()`, `applyMessage(state, msg)`, `tick(state, dtMs)`, plus selectors. Phaser scenes only read from it and push messages into it.
-- Vitest (node environment, no jsdom needed): join spawns a player at a sane position; input then `tick` moves them by `velocity * dt`; world bounds clamp; `text` creates a bubble that expires after N ms of ticks; `drawing` sets a skin key and a fresh key on every redraw; a second `join` from a known `playerId` renames the blob and keeps everything else; `left` removes the player.
+- Vitest (node environment, no jsdom needed): join spawns a player at a sane position; input then `tick` moves them by `velocity * dt`; world bounds clamp; `text` creates a bubble that expires after N ms of ticks; `drawing` sets a skin key and a fresh key on every redraw; a second `join` from a known `playerId` keeps everything it had; `finish` deletes the player, its drawing and its colour outright, and the next blob gets a colour nobody just gave up; `left` marks the player away.
 - **Phaser itself is not unit-tested.** It needs a canvas/WebGL and jsdom can't provide one. Keep the Phaser layer thin enough that it doesn't need to be.
 
 **`web` — player**
@@ -175,7 +184,7 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 - One browser context opens `/host/`. The session is read off the `window.__game` test hook when a test needs it; nothing on the TV shows it and no URL carries it.
 - Two more contexts open `/`, enter a name, and join. That is the whole of getting in.
 - A TV reload gives every phone a new identity under the same name, with nobody touching them.
-- Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round-trips a PNG; a blob is renamed and redrawn mid-game without losing its place.
+- Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round-trips a PNG; a blob is redrawn mid-game without losing its place; a blob that finishes is forgotten by the TV and its phone comes back as somebody new in a new colour.
 - Uses Playwright's `webServer` option to start the built app. `pnpm test:e2e`. Not run on every `pnpm test` — it's slower and needs browsers installed.
 
 Conventions: `*.test.ts` next to the code. No mocking of `shared` — it's tiny and pure. No snapshot tests.
@@ -234,6 +243,7 @@ What is left:
 - Mobile keyboards shift layout — test the Say sheet on a real phone early.
 - The player page is an installable PWA: `public/manifest.webmanifest`, `public/sw.js` (hand-written, ~60 lines, network-first, no Workbox and no build plugin), icons generated from `public/icons/blob.svg` by `scripts/icons.mjs` and committed. **Only the player page** — the host page links no manifest and the worker never touches `/host/`.
 - There are three screens: `join` (a name and nothing else), `waiting` (no TV yet) and `play`. A phone that has played before has its name in storage and goes straight to waiting, so opening the installed app is a single tap with nothing to read, type or scan. There is no scan screen and no QR reader on the phone — the code in the URL was the only thing one was ever for.
+- **A blob cannot be renamed.** The three tools over the joystick are Say, Draw and **Finish**: finishing sends `finish`, and the phone then clears its name, its drawing and its `playerId` and goes back to the join screen, so starting again is a new blob in a new colour rather than a new label on the old one. Nothing else on the phone ever throws anything away, and it asks before it does.
 - Which world it is in comes back on the socket, not from the page it was opened at. On a `session` that does not match the one in storage, the phone mints a fresh `playerId` and reconnects — the relay tags what a phone says with the id its *socket* arrived under, so a new identity has to arrive on a new socket. Its name and its last drawing are kept: only the identity was stale.
 - Staleness of the *build* is decided by one thing: `/version` against the page's own `__BUILD_VERSION__`, checked on every connect and whenever a new worker takes over. A mismatch reloads the phone — but only on the waiting screen, never mid-joystick (`src/player/updates.ts`, which is where that rule is unit-tested).
 

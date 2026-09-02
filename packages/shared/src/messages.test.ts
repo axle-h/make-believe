@@ -4,6 +4,7 @@ import {
   AssignedMessageSchema,
   BriefMessageSchema,
   DrawingMessageSchema,
+  FinishMessageSchema,
   HostInboundMessageSchema,
   HostOutboundMessageSchema,
   HostToPlayerMessageSchema,
@@ -229,6 +230,17 @@ describe('session', () => {
   })
 })
 
+describe('finish', () => {
+  it('accepts a valid message', () => {
+    expect(FinishMessageSchema.safeParse({ type: 'finish', playerId: 'p1' }).success).toBe(true)
+  })
+
+  it('rejects a malformed message', () => {
+    expect(FinishMessageSchema.safeParse({ type: 'finish' }).success).toBe(false)
+    expect(FinishMessageSchema.safeParse({ type: 'finish', playerId: 'a b' }).success).toBe(false)
+  })
+})
+
 describe('left', () => {
   it('accepts a valid message', () => {
     expect(LeftMessageSchema.safeParse({ type: 'left', playerId: 'p1' }).success).toBe(true)
@@ -242,6 +254,9 @@ describe('left', () => {
 describe('unions', () => {
   it('accepts each player message and rejects unknown types', () => {
     expect(PlayerToHostMessageSchema.safeParse({ type: 'join', playerId: 'p1', name: 'a' }).success).toBe(
+      true,
+    )
+    expect(PlayerToHostMessageSchema.safeParse({ type: 'finish', playerId: 'p1' }).success).toBe(
       true,
     )
     expect(PlayerToHostMessageSchema.safeParse({ type: 'waiting' }).success).toBe(false)
@@ -334,6 +349,9 @@ describe('unions', () => {
 
   it('lets the host parse forwarded player messages and left', () => {
     expect(ServerToHostMessageSchema.safeParse({ type: 'left', playerId: 'p1' }).success).toBe(true)
+    expect(ServerToHostMessageSchema.safeParse({ type: 'finish', playerId: 'p1' }).success).toBe(
+      true,
+    )
     expect(
       ServerToHostMessageSchema.safeParse({ type: 'input', playerId: 'p1', dx: 0, dy: 0 }).success,
     ).toBe(true)

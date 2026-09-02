@@ -54,8 +54,8 @@
 
       <!--
         The controller. The joystick is the whole point of it, so it gets the
-        middle of the screen; saying something, redrawing your blob and renaming
-        it are always one tap away along the bottom.
+        middle of the screen; saying something, redrawing your blob and
+        finishing with it are always one tap away along the bottom.
       -->
       <section id="screen-play" class="screen screen-play" hidden>
         <p id="play-name" class="play-name">Blob</p>
@@ -78,7 +78,7 @@
         <nav class="tools" aria-label="What else your blob can do">
           <button id="tool-say" class="tool" type="button">Say</button>
           <button id="tool-draw" class="tool" type="button">Draw</button>
-          <button id="tool-name" class="tool" type="button">Name</button>
+          <button id="tool-finish" class="tool" type="button">Finish</button>
         </nav>
       </section>
     </main>
@@ -122,28 +122,23 @@
       <p id="draw-status" class="hint" role="status"></p>
     </div>
 
-    <div id="sheet-name" class="sheet" hidden>
+    <!--
+      Finishing is the only thing on the phone that undoes anything, so it says
+      plainly what goes and gives an equally easy way back to the joystick.
+    -->
+    <div id="sheet-finish" class="sheet" hidden>
       <header class="sheet-head">
-        <h2>Name your blob</h2>
-        <button id="name-close" class="close" type="button" aria-label="Back to the joystick">✕</button>
+        <h2>Finished playing?</h2>
+        <button id="finish-close" class="close" type="button" aria-label="Back to the joystick">✕</button>
       </header>
-      <form id="rename-form" class="join-form">
-        <input
-          id="rename-input"
-          class="name-input"
-          name="rename"
-          type="text"
-          inputmode="text"
-          autocomplete="off"
-          autocapitalize="words"
-          spellcheck="false"
-          maxlength="16"
-          placeholder="Your name"
-          aria-label="Blob name"
-        />
-        <button id="rename-save" class="button" type="submit" disabled>Save</button>
-      </form>
-      <p id="rename-status" class="hint" role="status"></p>
+      <p class="hint sheet-hint">
+        Your blob goes for good — its name, its picture and where it was
+        standing. Then you can start again with a new name and a new colour.
+      </p>
+      <div class="sheet-buttons">
+        <button id="finish-cancel" class="button button-quiet" type="button">Keep playing</button>
+        <button id="finish-confirm" class="button" type="button">Finish</button>
+      </div>
     </div>
 
   </body>

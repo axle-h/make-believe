@@ -51,6 +51,12 @@ export interface GameState {
   world: World
   players: Map<string, Player>
   /**
+   * Where in the palette the next blob's colour comes from. It only ever goes
+   * forward, so a child who finishes and starts again comes back a different
+   * colour — which, from the sofa, is most of what starting again looks like.
+   */
+  nextColour: number
+  /**
    * What the world is currently asking everybody to do. It is a thing the
    * world wants, never a mode a phone is in: every tool on every phone is live
    * throughout, and a child who ignores it entirely is still playing.
@@ -67,11 +73,12 @@ export function createGame(seed?: number): GameState {
   return {
     world: { width: WORLD_WIDTH, height: WORLD_HEIGHT },
     players: new Map(),
+    nextColour: 0,
     objectives: createDirector(seed),
   }
 }
 
-/** The lowest slot nobody is using, so a leaver's colour is reused. */
+/** The lowest slot nobody is using, so a leaver's place on the floor is reused. */
 export function nextFreeSlot(state: GameState): number {
   const taken = new Set([...state.players.values()].map((player) => player.slot))
   let slot = 0
@@ -87,8 +94,25 @@ export function spawnPosition(state: GameState, slot: number): { x: number; y: n
   return clampToWorld(state, x, y)
 }
 
-export function colourForSlot(slot: number): string {
-  return PALETTE[slot % PALETTE.length] as string
+/**
+ * The colour for a brand new blob: the next one round the palette that nobody
+ * is already wearing. The cursor only goes forward, which is the difference
+ * between a phone that has reconnected — same blob, same colour — and one that
+ * has finished and started again, which should plainly be somebody else.
+ */
+export function takeColour(state: GameState): string {
+  const worn = new Set([...state.players.values()].map((player) => player.colour))
+  for (let step = 0; step < PALETTE.length; step++) {
+    const index = (state.nextColour + step) % PALETTE.length
+    const colour = PALETTE[index] as string
+    if (worn.has(colour)) continue
+    state.nextColour = index + 1
+    return colour
+  }
+  // More blobs than there are colours: somebody has to share one.
+  const colour = PALETTE[state.nextColour % PALETTE.length] as string
+  state.nextColour += 1
+  return colour
 }
 
 /** Keep a position inside the walls, allowing for the blob's own width. */

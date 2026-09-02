@@ -52,7 +52,7 @@ export const SCORE_PER_OBJECTIVE = 10
 /**
  * How long a finished objective stays on screen, cheering or shrugging, before
  * the next one appears. It is not a gap in play: every phone can still drive,
- * talk, draw and rename right through it.
+ * talk and draw right through it.
  */
 export const INTERLUDE_MS = 4_000
 

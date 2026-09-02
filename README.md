@@ -31,7 +31,7 @@ In production mode open `http://<your-lan-ip>:3000/host/` on the TV and `http://
 
 **Running it locally, open the TV by LAN address, never `localhost`.** The QR code on the TV is built from the address that page was opened with, so a TV on `localhost` hands every phone a link back to itself. The deployed app has no such problem — see below.
 
-The TV takes no input at all — it is a window onto the world and the phones run everything. There are no rounds: every phone can drive, say something, redraw its blob and take a new name whenever it likes.
+The TV takes no input at all — it is a window onto the world and the phones run everything. There are no rounds: every phone can drive, say something and redraw its blob whenever it likes, or finish with its blob and start again as somebody new.
 
 Only one TV at a time: opening the host page a second time takes the world over, and the first TV says so and stands down.
 

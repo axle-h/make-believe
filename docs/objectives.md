@@ -24,8 +24,9 @@ precisely the thing that erodes that. So:
   and finishing one immediately generates the next. There is no lobby, no
   countdown to a start, and no gap in which a phone has nothing to do.
 - An objective changes what the **world** is asking for. It never changes what a
-  **phone offers**. Drive, say something, redraw, rename: all four are live the
-  whole time, in every task, for every player, exactly as they are today.
+  **phone offers**. Drive, say something, redraw: all three are live the whole
+  time, in every task, for every player, exactly as they are today — and so is
+  finishing with a blob and starting again as somebody new.
 - A child who ignores the objective entirely and drives their blob round in
   circles is not doing anything wrong and the game must not tell them they are.
 
@@ -363,4 +364,4 @@ together, the TV says so, and a new and slightly harder one appears without
 anybody touching anything. A phone that joins halfway through is told what is
 going on. A child who puts their phone down does not stop the task from being
 finished by the others. And at any point in any task, any phone can still drive,
-say something, redraw its blob and rename itself.
+say something, redraw its blob and finish with it.

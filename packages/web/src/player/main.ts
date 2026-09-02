@@ -25,8 +25,8 @@ import './player.css'
  * tells it. No game state lives here.
  *
  * Everything a blob can do is available the whole time — drive, say something,
- * redraw itself, take a new name. There are no rounds and the TV never tells a
- * phone to switch to anything.
+ * redraw itself, or finish with it and start again as somebody new. There are
+ * no rounds and the TV never tells a phone to switch to anything.
  */
 
 const PLAYER_ID_KEY = 'make-believe.playerId'
@@ -52,8 +52,11 @@ const MAX_WAIT_RETRY_MS = 4_000
 /** How long "Sent" stays under the box before it clears itself. */
 const SENT_MS = 1_500
 
+/** What colour the phone is before a TV has said which blob it is. */
+const DEFAULT_BLOB = '#4ea8ff'
+
 /** What is open over the joystick, if anything. */
-type Sheet = 'say' | 'draw' | 'name'
+type Sheet = 'say' | 'draw' | 'finish'
 
 const screens: Record<Screen, HTMLElement> = {
   join: requireElement<HTMLElement>('#screen-join'),
@@ -64,7 +67,7 @@ const screens: Record<Screen, HTMLElement> = {
 const sheets: Record<Sheet, HTMLElement> = {
   say: requireElement<HTMLElement>('#sheet-say'),
   draw: requireElement<HTMLElement>('#sheet-draw'),
-  name: requireElement<HTMLElement>('#sheet-name'),
+  finish: requireElement<HTMLElement>('#sheet-finish'),
 }
 const joinForm = requireElement<HTMLFormElement>('#join-form')
 const nameInput = requireElement<HTMLInputElement>('#name-input')
@@ -87,10 +90,7 @@ const drawCrayons = requireElement<HTMLElement>('#draw-crayons')
 const drawClear = requireElement<HTMLButtonElement>('#draw-clear')
 const drawDone = requireElement<HTMLButtonElement>('#draw-done')
 const drawStatus = requireElement<HTMLElement>('#draw-status')
-const renameForm = requireElement<HTMLFormElement>('#rename-form')
-const renameInput = requireElement<HTMLInputElement>('#rename-input')
-const renameSave = requireElement<HTMLButtonElement>('#rename-save')
-const renameStatus = requireElement<HTMLElement>('#rename-status')
+const finishConfirm = requireElement<HTMLButtonElement>('#finish-confirm')
 const linkStatus = requireElement<HTMLElement>('#link-status')
 
 function requireElement<T extends Element>(selector: string): T {
@@ -233,10 +233,9 @@ function enterSession(code: string): void {
 }
 
 /**
- * Tell the TV who this phone is. The name is read at the moment of sending
- * rather than when the socket was opened: the client reconnects on its own
- * after a blip, and a blob renamed in between would otherwise be introduced
- * under its old name and quietly renamed back.
+ * Tell the TV who this phone is. It is said on every socket, not just the
+ * first: the client reconnects on its own after a blip, and the hello is how a
+ * world that has never heard of this blob learns about it.
  */
 function sayHello(): void {
   if (!joined) return
@@ -353,6 +352,9 @@ function stop(): void {
   client?.close()
   client = null
   joined = null
+  // Nothing is coming back, so the strip that promises a reconnect must not
+  // be left up over whatever screen we are showing instead.
+  linkStatus.hidden = true
   letSleep()
 }
 
@@ -376,12 +378,12 @@ function showScreen(which: Screen): void {
 for (const [name, button] of [
   ['say', requireElement<HTMLButtonElement>('#tool-say')],
   ['draw', requireElement<HTMLButtonElement>('#tool-draw')],
-  ['name', requireElement<HTMLButtonElement>('#tool-name')],
+  ['finish', requireElement<HTMLButtonElement>('#tool-finish')],
 ] as const) {
   button.addEventListener('click', () => openSheet(name))
 }
 
-for (const selector of ['#say-close', '#draw-close', '#name-close']) {
+for (const selector of ['#say-close', '#draw-close', '#finish-close', '#finish-cancel']) {
   requireElement<HTMLButtonElement>(selector).addEventListener('click', closeSheet)
 }
 
@@ -395,7 +397,6 @@ function openSheet(which: Sheet): void {
   for (const [name, element] of Object.entries(sheets)) element.hidden = name !== which
   if (which === 'say') openKeyboard()
   if (which === 'draw') openSketch()
-  if (which === 'name') openRename()
 }
 
 function closeSheet(): void {
@@ -455,38 +456,44 @@ window.visualViewport?.addEventListener('resize', () => {
   textInput.scrollIntoView({ block: 'center' })
 })
 
-// --- taking a new name ---------------------------------------------------
+// --- finishing with a blob -----------------------------------------------
 
 /**
- * A blob can be renamed whenever its owner fancies it. There is no message for
- * it: saying hello again with a new name is exactly what a rename is, and the
- * world already gives a `playerId` it knows its own blob back.
+ * Done with this blob. The TV is asked to forget it outright — the blob, the
+ * name, the picture and the place on the floor — and this phone forgets the
+ * same things and mints a fresh identity, so that whoever picks it up next
+ * starts at the name screen with nothing inherited.
+ *
+ * There is no answer to wait for. What the phone knows about itself is thrown
+ * away either way, and if the message never lands the blob is left standing
+ * about like any other phone that walked out of wifi range.
  */
-renameForm.addEventListener('submit', (event) => {
-  event.preventDefault()
-  const state = evaluateJoinForm(renameInput.value)
-  if (!state.nameValid || !joined) return
-  joined = { name: state.name }
-  store(NAME_KEY, state.name)
-  sayHello()
-  nameInput.value = state.name
-  playName.textContent = state.name
-  renameStatus.textContent = 'Sent to the TV'
+finishConfirm.addEventListener('click', () => {
+  // Whoever was driving lets go first, or the blob is left running across the
+  // TV for the moment before the world forgets it.
+  release()
+  sendMessage({ type: 'finish', playerId })
   closeSheet()
+  stop()
+  startOver()
+  askForName()
 })
 
-renameInput.addEventListener('input', () => {
-  renameSave.disabled = !evaluateJoinForm(renameInput.value).nameValid
-})
-
-function openRename(): void {
-  renameStatus.textContent = ''
-  renameInput.value = joined?.name ?? ''
-  renameSave.disabled = !evaluateJoinForm(renameInput.value).nameValid
-  setTimeout(() => {
-    renameInput.focus()
-    renameInput.select()
-  }, 50)
+/** Throw away everything this phone knew about the blob it has just finished. */
+function startOver(): void {
+  playerId = createPlayerId()
+  store(PLAYER_ID_KEY, playerId)
+  forget(NAME_KEY)
+  forget(DRAWING_KEY)
+  lastDrawing = null
+  nameInput.value = ''
+  showBrief(null)
+  // The next blob is a different colour, so the drawing has to start again
+  // from that rather than from the last child's picture.
+  blobColour = DEFAULT_BLOB
+  document.documentElement.style.setProperty('--blob', DEFAULT_BLOB)
+  sketch?.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
+  sketchStarted = false
 }
 
 // --- identity ------------------------------------------------------------
@@ -522,10 +529,18 @@ function store(key: string, value: string): void {
   }
 }
 
+function forget(key: string): void {
+  try {
+    window.localStorage.removeItem(key)
+  } catch {
+    // Storage is off, so there was nothing kept to throw away.
+  }
+}
+
 // --- drawing a blob ------------------------------------------------------
 
 /** The colour the TV gave this blob; the drawing starts as a square of it. */
-let blobColour = '#4ea8ff'
+let blobColour = DEFAULT_BLOB
 /** The last drawing sent, ready to put back on a world that has lost it. */
 let lastDrawing = loadStored(DRAWING_KEY)
 let crayon: string = CRAYONS[0]
