@@ -22,6 +22,9 @@ import {
 /** The blob's side length in world units, mirroring the model's own constant. */
 export const BLOB_SIZE = 72
 
+/** How many tasks a room finishes before the world gets harder. Mirrors the model. */
+export const LEVEL_UP_AFTER = 3
+
 export interface PlayerSnapshot {
   playerId: string
   name: string
@@ -256,6 +259,35 @@ export async function objectiveNow(host: Host): Promise<ObjectiveSnapshot | null
 }
 
 /**
+ * Wait until the world is actually asking for something, and say what. A task
+ * that has just been finished stays on screen cheering for a moment, so "there
+ * is an objective" and "there is one to play" are not the same question.
+ */
+export async function runningObjective(host: Host, timeout = 30_000): Promise<ObjectiveSnapshot> {
+  await expect.poll(async () => (await objectiveNow(host))?.outcome, { timeout }).toBe('running')
+  const objective = await objectiveNow(host)
+  if (!objective) throw new Error('expected a running objective')
+  return objective
+}
+
+/** Whichever phone the world has pinned something to — the potato, for now. */
+export function whoIsMarked(objective: ObjectiveSnapshot, crowd: Player[]): Player {
+  const marked = objective.marks[0]?.playerId
+  const player = crowd.find((one) => one.playerId === marked)
+  if (!player) throw new Error(`nobody here is wearing ${marked ?? 'anything'}`)
+  return player
+}
+
+/** The colour the strip above the joystick has been tinted, as the phone sees it. */
+export function briefTint(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const strip = document.querySelector('#brief')
+    if (!strip) throw new Error('the phone has no strip')
+    return getComputedStyle(strip).getPropertyValue('--brief').trim()
+  })
+}
+
+/**
  * Drive a blob to a spot on the floor with its joystick, the way a child does
  * — thumb down, steering, thumb up on arrival. Nothing is teleported: the
  * whole point is that the objective is solved through the controller.
@@ -324,6 +356,8 @@ export async function driveTo(
  * the one way this could wait forever.
  */
 export async function solveTheSpot(host: Host, crowd: Player[], attempts = 8): Promise<void> {
+  // Whatever they have already earned; this call is about earning some more.
+  const before = (await snapshot(host)).objectives.score
   for (let attempt = 0; attempt < attempts; attempt++) {
     const spot = (await objectiveNow(host))?.zones[0]
     if (spot) {
@@ -336,7 +370,7 @@ export async function solveTheSpot(host: Host, crowd: Player[], attempts = 8): P
     }
     // Standing still is the rest of it; the TV counts the hold.
     await host.page.waitForTimeout(2_000)
-    if ((await snapshot(host)).objectives.score > 0) return
+    if ((await snapshot(host)).objectives.score > before) return
   }
   throw new Error('the room never managed to stand on the spot together')
 }

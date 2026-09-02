@@ -334,6 +334,11 @@ task twice running while anything else is eligible, and a template that has
 something of its own to say about how it ended (who was left holding it) keeps
 its own words instead of the generic cheer.
 
+The e2e for it climbs the ladder rather than pretending to: two phones solve
+"everybody on the spot" three times over, the level rises, hot potato turns up
+on its own, and it is passed by driving one blob into the other. It costs
+about a minute, which is the price of the ladder being real.
+
 ### 11c — pads, and the private brief
 
 - `pairs.ts`, `findYourColour.ts`, `followTheChain.ts`.

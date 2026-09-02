@@ -1,6 +1,9 @@
 import { expect } from '@playwright/test'
 import {
   BLOB_SIZE,
+  LEVEL_UP_AFTER,
+  briefTint,
+  driveTo,
   dropSocket,
   finishPlaying,
   hostSession,
@@ -10,9 +13,11 @@ import {
   playerIdNow,
   playerNamed,
   pushJoystick,
+  runningObjective,
   snapshot,
   solveTheSpot,
   test,
+  whoIsMarked,
   worn,
 } from './world.js'
 
@@ -413,6 +418,100 @@ test.describe('an objective', () => {
     const settled = await playerNamed(host, 'Wilf')
     await pushJoystick(wilf, { dx: 0, dy: -1 }, 400)
     expect((await playerNamed(host, 'Wilf')).y).toBeLessThan(settled.y - 20)
+  })
+
+  /**
+   * The room gets good at the one thing it knows, the world notices, and
+   * something else turns up — a chase rather than a huddle, with a potato on
+   * somebody and no spot on the floor at all. Nobody chose it, nobody pressed
+   * anything, and every tool on every phone works right through it.
+   *
+   * This is the slow one: the ladder is only real if it is climbed, so the
+   * room genuinely solves the simple task three times over before the second
+   * one is unlocked.
+   */
+  test('the room levels up, and the world starts asking for something else', async ({ party }) => {
+    test.setTimeout(300_000)
+    const host = await party.openHost()
+    const wilf = await party.joinAs('Wilf')
+    const ida = await party.joinAs('Ida')
+    const crowd = [wilf, ida]
+
+    // Everything it is asked for at first is the one thing it can already do.
+    // Each one has to be finished before the next appears, so the queue here
+    // is the game's, not the test's.
+    /* oxlint-disable no-await-in-loop */
+    for (let solved = 0; solved < LEVEL_UP_AFTER; solved++) {
+      expect((await runningObjective(host)).kind).toBe('onTheSpot')
+      await solveTheSpot(host, crowd)
+    }
+    /* oxlint-enable no-await-in-loop */
+    expect((await snapshot(host)).objectives.level).toBe(2)
+
+    // ...and now there is something else, with nobody having chosen it.
+    const potato = await runningObjective(host)
+    expect(potato.kind).toBe('hotPotato')
+    // Nothing on the floor: this one is entirely about who is touching whom.
+    expect(potato.zones).toEqual([])
+
+    // Somebody is holding it, and every phone is told who.
+    const holder = whoIsMarked(potato, crowd)
+    const chased = crowd.find((one) => one !== holder)
+    if (!chased) throw new Error('expected somebody to chase')
+    await Promise.all(
+      crowd.map(async (phone) => {
+        await expect(phone.page.locator('#brief-headline')).toHaveText('Hot potato!')
+        await expect(phone.page.locator('#brief-detail')).toHaveText(`${holder.name} has it!`)
+      }),
+    )
+    // The strip goes the colour of whoever has it, for a child who cannot read
+    // the name off it.
+    expect(await briefTint(chased.page)).toBe((await playerNamed(host, holder.name)).colour)
+
+    // Being chased takes nothing away from anybody.
+    await expect(chased.page.locator('#pad')).toBeVisible()
+    for (const tool of ['say', 'draw', 'finish']) {
+      // oxlint-disable-next-line no-await-in-loop
+      await expect(chased.page.locator(`#tool-${tool}`)).toBeEnabled()
+    }
+
+    // Driving into somebody is the whole of passing it on. The watch starts
+    // before the drive: they are still touching afterwards, so it can come
+    // straight back once the breather is over.
+    const passed = expect
+      .poll(async () => (await objectiveNow(host))?.marks[0]?.playerId, { timeout: 60_000 })
+      .toBe(chased.playerId)
+    const target = await playerNamed(host, chased.name)
+    await driveTo(host, holder, { x: target.x, y: target.y }, BLOB_SIZE + 2)
+    await passed
+    await expect(holder.page.locator('#brief-detail')).toHaveText(`${chased.name} has it!`)
+
+    // The buzzer is how this one *finishes*, so the score goes up like any
+    // other and somebody is named as having been caught with it. Start
+    // watching first: the cheer is only up for a moment.
+    const cheered = expect(chased.page.locator('#brief')).toHaveAttribute('data-tone', 'win', {
+      timeout: 90_000,
+    })
+    const before = (await snapshot(host)).objectives.score
+    await expect
+      .poll(async () => (await objectiveNow(host))?.outcome, { timeout: 90_000 })
+      .not.toBe('running')
+    await cheered
+
+    const ended = await objectiveNow(host)
+    expect(ended?.outcome).toBe('done')
+    expect(ended?.note).toMatch(/Wilf|Ida/)
+    expect((await snapshot(host)).objectives.score).toBeGreaterThan(before)
+
+    // ...and something else again behind it, without anybody touching anything.
+    expect((await runningObjective(host)).kind).toBe('onTheSpot')
+
+    // The joystick drives exactly as it did before any of that.
+    const settled = await playerNamed(host, chased.name)
+    const away = settled.y < (await snapshot(host)).world.height / 2 ? 1 : -1
+    await pushJoystick(chased, { dx: 0, dy: away }, 400)
+    const moved = (await playerNamed(host, chased.name)).y
+    expect(away > 0 ? moved > settled.y + 20 : moved < settled.y - 20).toBe(true)
   })
 
   /**
