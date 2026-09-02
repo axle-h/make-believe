@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <uses-permission android:name="android.permission.INTERNET" />
+
+  <!--
+    Leanback is how a TV launcher recognises us, but nothing here needs it: the
+    app is a fullscreen WebView and runs just as well on a phone for testing.
+    Not requiring a touchscreen is what makes it installable on a TV at all.
+  -->
+  <uses-feature android:name="android.software.leanback" android:required="false" />
+  <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+  <application
+    android:allowBackup="false"
+    android:banner="@drawable/banner"
+    android:hardwareAccelerated="true"
+    android:icon="@mipmap/ic_launcher"
+    android:label="@string/app_name"
+    android:supportsRtl="true"
+    android:theme="@style/Theme.MakeBelieve">
+
+    <activity
+      android:name=".MainActivity"
+      android:configChanges="density|fontScale|keyboard|keyboardHidden|layoutDirection|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
+      android:exported="true"
+      android:launchMode="singleTask"
+      android:screenOrientation="landscape">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <!-- LEANBACK_LAUNCHER puts it on the TV home screen with its banner;
+             LAUNCHER is only so a sideloaded phone build is reachable too. -->
+        <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The same two colours the web pages use, so the app never flashes white. -->
+<resources>
+  <color name="ground">#10121A</color>
+  <color name="ink">#F4F1EA</color>
+</resources>

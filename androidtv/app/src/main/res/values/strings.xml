@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">MAKE believe</string>
+  <!-- Shown on the TV when the server is not there yet. %1$s is the host. -->
+  <string name="unreachable">Can\'t reach %1$s</string>
+  <string name="retrying">Retrying…</string>
+</resources>

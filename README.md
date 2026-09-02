@@ -46,6 +46,16 @@ phones:  scan the QR — it carries the code, so there is nothing to type
 
 One namespace in k3s, one pod, one world. See [`k8s/README.md`](./k8s/README.md).
 
+## On the TV
+
+There is a small Android TV app in [`androidtv/`](./androidtv): a native Kotlin
+wrapper around one fullscreen WebView pointed at the deployed host page, so the
+TV gets every update without reinstalling anything. It puts MAKE believe on the
+Fire TV home screen with its own banner, keeps the screen awake, and retries by
+itself when the server is not up yet. Building and installing it is in
+[`androidtv/README.md`](./androidtv/README.md); it needs the Android SDK and is
+deliberately outside `pnpm build` and `pnpm test`.
+
 ## Test
 
 ```sh
@@ -73,6 +83,7 @@ packages/shared   message schemas (zod) and room-code helpers, shared by web and
 packages/web      one Vite project with two pages: player (/) and host (/host/)
 packages/server   Node http + ws relay, serves the built web app
 e2e/              Playwright tests
+androidtv/        Android TV app: a Kotlin WebView wrapper around the host page
 .github/          CI: tests on every push, and the image build that publishes to ghcr.io
 k8s/              deployment, service, ingress and TLS manifests
 docs/             the plan for the one thing not built yet: the Android TV app
