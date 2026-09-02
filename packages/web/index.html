@@ -25,9 +25,13 @@
         </svg>
         <p class="hint">Scan the QR code on the TV to join.</p>
         <p id="scan-note" class="error" role="status"></p>
-        <!-- Only ever shown when Chrome has offered the install; see main.ts. -->
-        <button id="install-button" class="button button-quiet" type="button" hidden>
-          Add to home screen
+        <!--
+          Only shown where the browser can actually read a QR code; see
+          scanner.ts. A phone open at its icon has no way out to the camera
+          app, so the camera has to be reachable from in here.
+        -->
+        <button id="scan-camera" class="button" type="button" hidden>
+          Point me at the TV
         </button>
       </section>
 
@@ -56,9 +60,12 @@
       <section id="screen-waiting" class="screen" hidden>
         <h1>MAKE believe</h1>
         <p class="hint">Waiting for the TV…</p>
+        <!--
+          No code here. It only ever travels inside the QR code's link, and a
+          phone has nowhere to type one anyway, so showing it says nothing.
+        -->
         <p class="waiting-detail">
-          <span id="waiting-name" class="waiting-name">Blob</span> is ready with code
-          <strong id="waiting-code" class="room-code">····</strong>
+          <span id="waiting-name" class="waiting-name">Blob</span> is ready.
         </p>
         <button id="change-code-button" class="button button-quiet" type="button">
           Scan the TV again
@@ -144,6 +151,13 @@
         <button id="rename-save" class="button" type="submit" disabled>Save</button>
       </form>
       <p id="rename-status" class="hint" role="status"></p>
+    </div>
+
+    <!-- The camera, over everything, for as long as it takes to see the TV. -->
+    <div id="viewfinder" class="viewfinder" hidden>
+      <video id="viewfinder-video" class="viewfinder-video" playsinline muted></video>
+      <p id="viewfinder-note" class="hint" role="status">Point the camera at the TV.</p>
+      <button id="viewfinder-close" class="button button-quiet" type="button">Stop</button>
     </div>
   </body>
 </html>

@@ -213,12 +213,6 @@ h1 {
   color: var(--blob);
 }
 
-.room-code {
-  font-family: ui-monospace, monospace;
-  font-size: 1.2em;
-  letter-spacing: 0.25em;
-}
-
 /* The controller: name at the top, joystick in the middle, tools at the foot. */
 .screen-play {
   justify-content: space-between;
@@ -327,4 +321,31 @@ h1 {
   border-radius: 50%;
   background: var(--blob);
   transition: transform 60ms linear;
+}
+
+/* The camera. Over the sheets as well as the screens: it is the whole phone. */
+.viewfinder {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: calc(env(safe-area-inset-top) + 1rem) 1.5rem calc(env(safe-area-inset-bottom) + 1.5rem);
+  background: var(--ground);
+}
+
+.viewfinder[hidden] {
+  display: none;
+}
+
+.viewfinder-video {
+  width: min(80vw, 55dvh);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 14%;
+  background: #1b1f2e;
+  box-shadow: 0 0 0 3px var(--blob);
 }

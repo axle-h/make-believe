@@ -208,6 +208,7 @@ What is left:
 - Wake Lock API to stop phones sleeping (may be unavailable without HTTPS — degrade gracefully).
 - Mobile keyboards shift layout — test the Say sheet on a real phone early.
 - The player page is an installable PWA: `public/manifest.webmanifest`, `public/sw.js` (hand-written, ~60 lines, network-first, no Workbox and no build plugin), icons generated from `public/icons/blob.svg` by `scripts/icons.mjs` and committed. **Only the player page** — the host page links no manifest and the worker never touches `/host/`.
+- The scan screen reads the TV's QR code itself where it can (`src/player/scanner.ts`): `BarcodeDetector` over a `getUserMedia` stream, offered only where both exist — Chrome on Android, in a secure context — and hidden silently everywhere else. It is what a phone installed to the home screen has instead of an address bar. Only a same-origin link carrying a valid `room` counts; anything else the camera sees is ignored without complaint and it keeps looking.
 - Staleness is decided by one thing: `/version` against the page's own `__BUILD_VERSION__`, checked on every connect and whenever a new worker takes over. A mismatch reloads the phone — but only on the scan or waiting screen, never mid-joystick (`src/player/updates.ts`, which is where that rule is unit-tested).
 
 ## How I want to work

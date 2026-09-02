@@ -44,6 +44,12 @@ TV:      https://believe.ax-h.com/host/
 phones:  scan the QR — it carries the code, so there is nothing to type
 ```
 
+A phone that has been added to the home screen opens fullscreen, with no address
+bar and no way out to the camera app, so its scan screen carries a camera of its
+own: **Point me at the TV** reads the QR code from inside the app. It appears
+only where the browser can actually read one — Chrome on Android, over HTTPS —
+and everywhere else the phone's camera app is the way in, as before.
+
 One namespace in k3s, one pod, one world. See [`k8s/README.md`](./k8s/README.md).
 
 ## On the TV

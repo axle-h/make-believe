@@ -6,14 +6,14 @@
 declare const __BUILD_VERSION__: string
 
 /**
- * Chrome's install prompt. Not in lib.dom, because it is not standard — every
- * use of it is behind a check that the event actually fired.
+ * The browser's own QR reader. Not in lib.dom, because it is Chromium-only —
+ * the player page checks for it before it offers to use the camera.
  */
-interface BeforeInstallPromptEvent extends Event {
-  prompt(): Promise<void>
-  readonly userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+interface DetectedBarcode {
+  readonly rawValue: string
 }
 
-interface WindowEventMap {
-  beforeinstallprompt: BeforeInstallPromptEvent
+declare class BarcodeDetector {
+  constructor(options?: { formats?: string[] })
+  detect(source: CanvasImageSource): Promise<DetectedBarcode[]>
 }

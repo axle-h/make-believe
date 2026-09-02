@@ -16,7 +16,19 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        // A camera that is always there and always says yes, for the tests
+        // that ask for one. Nothing else opens it.
+        launchOptions: {
+          args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+        },
+      },
+    },
+  ],
   webServer: {
     // Explicitly rebuilt: the server serves `packages/web/dist`, and sirv reads
     // that directory once at startup, so a stale build would be served whole.

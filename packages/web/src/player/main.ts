@@ -17,6 +17,7 @@ import {
 } from './drawing.js'
 import { evaluateJoinForm, joinFormError } from './joinForm.js'
 import { ZERO, createInputThrottle, vectorFromPointer, type Vector } from './joystick.js'
+import { canScan, startScan, type Scan } from './scanner.js'
 import { isDifferentBuild, shouldReload, type Screen } from './updates.js'
 import './player.css'
 
@@ -75,7 +76,11 @@ const nameInput = requireElement<HTMLInputElement>('#name-input')
 const joinButton = requireElement<HTMLButtonElement>('#join-button')
 const joinError = requireElement<HTMLElement>('#join-error')
 const scanNote = requireElement<HTMLElement>('#scan-note')
-const waitingCode = requireElement<HTMLElement>('#waiting-code')
+const scanCamera = requireElement<HTMLButtonElement>('#scan-camera')
+const viewfinder = requireElement<HTMLElement>('#viewfinder')
+const viewfinderVideo = requireElement<HTMLVideoElement>('#viewfinder-video')
+const viewfinderNote = requireElement<HTMLElement>('#viewfinder-note')
+const viewfinderClose = requireElement<HTMLButtonElement>('#viewfinder-close')
 const waitingName = requireElement<HTMLElement>('#waiting-name')
 const changeCodeButton = requireElement<HTMLButtonElement>('#change-code-button')
 const playName = requireElement<HTMLElement>('#play-name')
@@ -190,10 +195,69 @@ function submitJoin(): void {
   store(NAME_KEY, state.name)
   store(ROOM_KEY, state.room)
   session = { room: state.room, name: state.name }
-  waitingCode.textContent = state.room
   waitingName.textContent = state.name
   showScreen('waiting')
   openSocket()
+}
+
+/**
+ * We have a code: from the link a scan opened, from the camera below, or from
+ * last time. Ask who is holding the phone, or go straight in if we know them.
+ *
+ * The code is kept before anyone has joined because one the camera found is
+ * nowhere else — there is no link in the address bar to read it back off — and
+ * a refresh at the name prompt would otherwise throw it away.
+ */
+function enterRoom(code: string): void {
+  roomCode = code
+  store(ROOM_KEY, code)
+  scanNote.textContent = ''
+  if (evaluateJoinForm(roomCode, nameInput.value).canJoin) submitJoin()
+  else askForName()
+}
+
+// --- the camera ----------------------------------------------------------
+
+/**
+ * A phone open at its icon has no address bar and no way out to the camera app
+ * and back, so the scan screen carries a camera of its own wherever the
+ * browser can read a QR code. Reading one is `scanner.ts`; this is the button
+ * in front of it.
+ */
+
+/** The camera, while the viewfinder is open. */
+let scan: Scan | null = null
+
+scanCamera.hidden = !canScan()
+
+scanCamera.addEventListener('click', () => void openViewfinder())
+viewfinderClose.addEventListener('click', closeViewfinder)
+
+async function openViewfinder(): Promise<void> {
+  if (scan) return
+  viewfinderNote.textContent = 'Point the camera at the TV.'
+  viewfinder.hidden = false
+  try {
+    const running = await startScan(viewfinderVideo, window.location.origin, foundRoom)
+    // Shut again while the phone was still asking for the camera: the answer
+    // arrived for nobody, so put it straight back.
+    if (viewfinder.hidden) running.stop()
+    else scan = running
+  } catch {
+    viewfinderNote.textContent = 'No camera here, or no permission for it.'
+  }
+}
+
+function closeViewfinder(): void {
+  scan?.stop()
+  scan = null
+  viewfinder.hidden = true
+}
+
+/** The TV, seen. From here on this is exactly a scan that opened the page. */
+function foundRoom(room: string): void {
+  closeViewfinder()
+  enterRoom(room)
 }
 
 // --- the connection ------------------------------------------------------
@@ -320,6 +384,8 @@ function letSleep(): void {
 // A lock is dropped whenever the phone is backgrounded; take it again on return.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && session) keepAwake()
+  // Nobody is looking through a backgrounded phone's camera; give it back.
+  if (document.visibilityState === 'hidden') closeViewfinder()
 })
 
 /** Give up on the current session entirely. */
@@ -343,7 +409,8 @@ function showScreen(which: Screen): void {
   // Nothing but the joystick has a sheet over it, so leaving the controller
   // takes any sheet with it.
   if (which !== 'play') closeSheet()
-  refreshInstall()
+  // The camera belongs to the scan screen in the same way.
+  if (which !== 'scan') closeViewfinder()
   // A build that arrived while someone was driving gets taken now, if this is
   // one of the screens where a reload goes unnoticed.
   reloadIfSafe()
@@ -705,12 +772,12 @@ function moveThumb(vector: Vector): void {
 // --- being an app --------------------------------------------------------
 
 /**
- * The phone can install the player page from Chrome's own prompt, and from
- * then on it opens fullscreen from an icon. That makes keeping it up to date
- * our problem rather than the browser's: nobody is going to reload an app.
+ * The phone can install the player page from Chrome's own menu, and from then
+ * on it opens fullscreen from an icon. Nothing here offers that: the page has
+ * one job, and a button asking to be installed is not it. Installing does make
+ * keeping the page up to date our problem rather than the browser's, though —
+ * nobody is going to reload an app — which is what the rest of this is for.
  */
-
-const installButton = requireElement<HTMLButtonElement>('#install-button')
 
 /** The service worker registry, or null on a browser or origin without one. */
 const workers = 'serviceWorker' in navigator ? navigator.serviceWorker : null
@@ -724,14 +791,11 @@ let updatePending = false
 /** Set once a reload is on its way; asking twice only races the first. */
 let reloading = false
 
-/** Chrome's install prompt, held back until there is somewhere to put it. */
-let installPrompt: BeforeInstallPromptEvent | null = null
-
 workers
   ?.register(`/sw.js?v=${__BUILD_VERSION__}`, { updateViaCache: 'none' })
   .catch(() => {
     // No secure context, most likely: plain http on the LAN. The page works
-    // exactly as before, it just is not installable.
+    // exactly as before, it just cannot spot a deploy on its own.
   })
 
 workers?.addEventListener('controllerchange', () => {
@@ -773,41 +837,8 @@ async function checkForNewBuild(): Promise<void> {
   }
 }
 
-window.addEventListener('beforeinstallprompt', (event) => {
-  // Chrome's own banner is held off so the offer can sit on the scan screen,
-  // which is the one moment the phone has nothing else to say.
-  event.preventDefault()
-  installPrompt = event
-  refreshInstall()
-})
-
-window.addEventListener('appinstalled', () => {
-  installPrompt = null
-  refreshInstall()
-})
-
-installButton.addEventListener('click', () => {
-  const prompt = installPrompt
-  // One prompt per event: it cannot be shown twice, so the button goes now.
-  installPrompt = null
-  refreshInstall()
-  void prompt?.prompt()
-})
-
-/** True once the page is running from its icon rather than in a browser tab. */
-function isInstalled(): boolean {
-  return ['fullscreen', 'standalone', 'minimal-ui'].some(
-    (mode) => window.matchMedia(`(display-mode: ${mode})`).matches,
-  )
-}
-
-function refreshInstall(): void {
-  installButton.hidden = installPrompt === null || screen !== 'scan' || isInstalled()
-}
-
 // A remembered name and a code, from the QR link or from last time, means there
 // is nothing to ask. Last, so every handler above is wired before it can fire.
-roomCode = initialRoomCode()
-if (!isValidRoomCode(roomCode)) askForScan()
-else if (evaluateJoinForm(roomCode, nameInput.value).canJoin) submitJoin()
-else askForName()
+const startingRoom = initialRoomCode()
+if (isValidRoomCode(startingRoom)) enterRoom(startingRoom)
+else askForScan()
