@@ -1,4 +1,4 @@
-import { MAX_PNG_LENGTH } from '@make-believe/shared'
+import { MAX_PNG_LENGTH, PAINTS, PAINT_HEXES } from '@make-believe/shared'
 
 /**
  * The maths behind the drawing screen, kept pure so it can be unit-tested
@@ -16,16 +16,15 @@ export const CORNER_RATIO = 14 / 72
 
 export const STROKE_WIDTH = 14
 
-/** The colours a child can draw with, dark first. */
-export const CRAYONS = [
-  '#10121a',
-  '#f4f1ea',
-  '#ff5d5d',
-  '#4ea8ff',
-  '#5ddf7f',
-  '#ffd23f',
-  '#c07bff',
-] as const
+/**
+ * The colours a child can draw with, dark first. They live in `shared` because
+ * the TV has to know them too: a task that asks a room to paint themselves
+ * green may only ask for a colour a phone can actually make.
+ */
+export const CRAYONS = PAINT_HEXES
+
+/** The one a phone starts holding: the dark one, which is what draws a face. */
+export const FIRST_CRAYON: string = PAINTS[0].hex
 
 export interface Point {
   x: number

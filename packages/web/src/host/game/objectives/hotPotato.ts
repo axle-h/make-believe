@@ -77,6 +77,7 @@ export const hotPotato: ObjectiveTemplate<HotPotatoObjective> = {
       totalMs,
       zones: [],
       marks: marksFor(start.playerId),
+      carryables: [],
       outcome: 'running',
       note: null,
       it: start.playerId,

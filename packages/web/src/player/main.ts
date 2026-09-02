@@ -10,6 +10,7 @@ import { connect, type WsClient } from '../lib/ws.js'
 import {
   CANVAS_SIZE,
   CRAYONS,
+  FIRST_CRAYON,
   STROKE_WIDTH,
   cornerRadius,
   isSendablePng,
@@ -543,7 +544,7 @@ function forget(key: string): void {
 let blobColour = DEFAULT_BLOB
 /** The last drawing sent, ready to put back on a world that has lost it. */
 let lastDrawing = loadStored(DRAWING_KEY)
-let crayon: string = CRAYONS[0]
+let crayon: string = FIRST_CRAYON
 /** The finger that is drawing, if any. */
 let drawPointer: number | null = null
 /** Set once the canvas has a background, so a round trip does not wipe it. */

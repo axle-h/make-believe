@@ -2,6 +2,7 @@ import { MAX_LEVEL, ZONE_COLOURS } from '../constants.js'
 import { pick, range } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { blobsIn, placeZone, radiusFor, type CircleZone } from '../zones.js'
+import { hold, secondsLeft } from './hold.js'
 import {
   difficulty,
   scale,
@@ -55,7 +56,7 @@ export const onTheSpot: ObjectiveTemplate<OnTheSpotObjective> = {
       x: at.x,
       y: at.y,
       radius,
-      colour: pick(rng, ZONE_COLOURS),
+      colour: pick(rng, ZONE_COLOURS).hex
     }
     return {
       kind: 'onTheSpot',
@@ -65,6 +66,7 @@ export const onTheSpot: ObjectiveTemplate<OnTheSpotObjective> = {
       totalMs: Math.round(scale(TIME_LIMIT.easy, TIME_LIMIT.hard, hard)),
       zones: [zone],
       marks: [],
+      carryables: [],
       outcome: 'running',
       note: null,
       holdMs: Math.round(scale(HOLD.easy, HOLD.hard, hard)),
@@ -76,23 +78,14 @@ export const onTheSpot: ObjectiveTemplate<OnTheSpotObjective> = {
    * Judged against whoever is present *now*: a phone that has wandered off is
    * not counted, so a child putting their phone down never leaves the rest
    * with a task they cannot finish.
-   *
-   * Stepping off drains the hold rather than resetting it, because losing all
-   * of it because somebody nudged you out is exactly the sort of unfairness a
-   * three-year-old will not stand for.
    */
   step(objective, state, dtMs) {
     const present = activePlayers(state)
     const zone = objective.zones[0]
     if (!zone || present.length === 0) return
 
-    const onIt = blobsIn(zone, present).length
-    if (onIt === present.length) {
-      objective.heldMs += dtMs
-      if (objective.heldMs >= objective.holdMs) objective.outcome = 'done'
-      return
-    }
-    objective.heldMs = Math.max(0, objective.heldMs - dtMs)
+    const everybody = blobsIn(zone, present).length === present.length
+    if (hold(objective, everybody, dtMs)) objective.outcome = 'done'
   },
 
   briefs(objective, state) {
@@ -102,11 +95,12 @@ export const onTheSpot: ObjectiveTemplate<OnTheSpotObjective> = {
     const holding = present.length > 0 && onIt === present.length
     // Counting down in whole seconds: it changes once a second at most, so the
     // phones hear about it rarely, and a child can count along with it.
-    const left = Math.max(1, Math.ceil((objective.holdMs - objective.heldMs) / 1000))
     const brief: Brief = {
       to: '*',
       headline: objective.headline,
-      detail: holding ? `Hold it… ${left}` : `${onIt} of ${present.length} on the spot`,
+      detail: holding
+        ? `Hold it… ${secondsLeft(objective)}`
+        : `${onIt} of ${present.length} on the spot`,
       tone: 'task',
     }
     // The strip is tinted the colour of the spot they are looking for.

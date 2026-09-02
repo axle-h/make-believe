@@ -1,3 +1,4 @@
+import type { Rgb } from './colour.js'
 import { BLOB_SIZE, PALETTE, WORLD_HEIGHT, WORLD_WIDTH } from './constants.js'
 import { createDirector, type Director } from './objectives/director.js'
 
@@ -24,6 +25,13 @@ export interface Skin {
   /** Stable per drawing; the renderer uses it as the Phaser texture key. */
   key: string
   png: string
+  /**
+   * Roughly what colour it came out, once somebody has looked. Reading pixels
+   * needs a canvas and the model has none, so the renderer decodes the drawing
+   * it is already turning into a texture and hands the answer back. `null`
+   * until then, and `null` for a drawing nobody has got round to yet.
+   */
+  average: Rgb | null
 }
 
 export interface Player {

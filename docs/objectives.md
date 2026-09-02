@@ -283,9 +283,9 @@ carryables.
 
 ## Work
 
-Five increments, each runnable and each worth playing on its own. 11a and 11b
-are built; what they look like is in the code and the commit history, and the
-list below is left as it was written so the shape of the rest still reads.
+Five increments, each runnable and each worth playing on its own. All five are
+built; what they look like is in the code and the commit history, and the list
+below is left as it was written so the shape of each still reads.
 
 ### 11a — the spine, and one task — **done**
 
@@ -339,14 +339,52 @@ The e2e for it climbs the ladder rather than pretending to: two phones solve
 on its own, and it is passed by driving one blob into the other. It costs
 about a minute, which is the price of the ladder being real.
 
-### 11c — pads, and the private brief
+### 11c — pads, and the private brief — **done**
 
 - `pairs.ts`, `findYourColour.ts`, `followTheChain.ts`.
 - Per-player briefs: the same task saying a different thing to each phone. This
   is the first real exercise of `briefs()` returning more than one entry, and of
   a phone joining mid-task and needing its own line.
 
-### 11d — talking and drawing as tasks
+Five things it grew that the plan above did not name:
+
+- **`pads.ts`**, shared by all three. Pads are laid out on a grid — one square
+  of floor each, jiggled inside it — rather than by the rejection sampling
+  `placeZone` does for a single spot, and a pad is never bigger than its own
+  square. Overlapping pads would let a blob stand on two at once, which makes
+  "which pad are you on?" unanswerable, and with a room of eight asking for pads
+  big enough to hold them all, sampling produced them constantly.
+- The pad colours are **named** as well as coloured (`ZONE_COLOURS` is now
+  `{ name, hex }`), because a phone told privately which pad is theirs has to
+  say it in a word that can be read out loud to a four-year-old.
+- **Pairs asks for "nobody on their own"** rather than "exactly two on each
+  pad". Exactly-two cannot be satisfied by an odd room, and a blob whose phone
+  is put down mid-task, or a child arriving halfway through, would leave the
+  others with a sum that does not come out. Nobody-alone is always solvable by
+  whoever is present, and reads as one line on a banner.
+- **`hold.ts`**: standing still, and the rule that letting go *drains* the bank
+  rather than emptying it. Three of the four tasks that have a hold now share
+  it, `onTheSpot` included — it was the one that defined the rule.
+- **`registry.test.ts`**: what has to be true of every task, whatever it is —
+  it draws inside the world, its ids are unique, it starts running with a clock,
+  it tells the room exactly one line and nobody two, its words fit the caps in
+  `shared`, and a room that ignores it entirely never gets stuck. Adding the
+  tenth task inherits all of that for free.
+
+`findYourColour` also has the harder variant the catalogue describes: from level
+6 each phone is told where *somebody else* goes, passed round in a ring so that
+nobody is told about themselves and everybody is told about by somebody. The
+room can always solve it, provided they talk.
+
+There is **no e2e for any of it**, deliberately. Nothing in that suite reaches
+past the UI to set up a world, so a pad task would have to be climbed to —
+`pairs` and `followTheChain` unlock at level 3 and `findYourColour` at level 4,
+which is nine and twelve solved tasks respectively, at up to a minute each. The
+wire it rides on is covered instead: `relay.test.ts` already sends a private
+brief to the one phone it is for, and the player page has drawn whatever brief
+arrives since 11a.
+
+### 11d — talking and drawing as tasks — **done**
 
 - `observe` on `applyMessage` wired up and tested.
 - `drawIt.ts` with a kid-friendly word list in `shared`; matching that is
@@ -357,12 +395,59 @@ about a minute, which is the price of the ladder being real.
   `{ playerId, r, g, b }` into the model. Keep the model side pure and tested;
   keep the sampling in `phaser/`.
 
-### 11e — carryables
+What it turned up along the way:
+
+- **A real bug in the director.** A task that ends *between* frames — a guess
+  arriving on the socket rather than a timer running out — was never banked:
+  the next step saw a task that was already over and quite reasonably left it
+  alone, so nothing scored. Ending a task is now one function, `settle`,
+  called both by the step that ran out of time and by `observeMessage`.
+- **The crayons moved to `shared`** (`paints.ts`, with a name beside each
+  colour). Both ends need the same list and they need to agree on it: the
+  phone puts them under the drawing canvas, and the TV may only ask a room to
+  paint itself a colour a phone can actually make. `CRAYONS` is now that list.
+- **A drawing's colour lives on the drawing.** `Skin` grew an `average`, set by
+  `noteSkinColour(state, playerId, key, rgb)` — keyed by the drawing rather
+  than the blob, so a child who redraws twice in a second cannot land the older
+  decode on the newer picture. The averaging itself (`averageColour`) is pure
+  and in the model, weighted by alpha so the transparent corners of a blob
+  count for nothing; only `drawImage` and `getImageData` are over in `phaser/`.
+- **Nearest crayon, not "close enough".** A blob is judged by which crayon its
+  drawing looks most like, never by how near it got, because "your green is not
+  green enough" is the one thing this game must never say.
+- **A new drawing is what counts.** Colour hunt records everybody's drawing
+  count when it starts, so a blob that happened to be green already has not
+  done anything — the fun is everybody drawing at once.
+
+### 11e — carryables — **done**
 
 - `game/carryables.ts`: pick up on touch, follow the carrier, drop into a zone,
   and what happens when the carrier's phone goes away.
 - `fetch.ts`, `sorting.ts`, `tooHeavyForOne.ts`.
 - Host render for parcels and crates.
+
+Three things worth knowing about how they came out:
+
+- **There is no button for any of it.** Picking up is touching, carrying is
+  driving, putting down is arriving. A parcel is one to a blob, a delivered
+  parcel cannot be picked up again — a room cannot undo its own work by driving
+  back through the depot — and a parcel whose carrier's phone goes away is left
+  exactly where it was let go of, for somebody else to find.
+- **A crate is not a parcel.** It has no carrier: it moves only while two or
+  more blobs are leaning on it, by the *average* of what those blobs are asking
+  for. Two children pulling opposite ways get exactly what they deserve, which
+  is a crate that does not move.
+- **`tooHeavyForOne` places its crate and its spot opposite each other** through
+  the middle of the floor rather than dropping both at random and hoping. The
+  first version rejection-sampled for a decent distance, gave up after two dozen
+  tries, and occasionally started the crate inside the very spot it was meant to
+  be pushed to.
+
+Neither increment has an e2e, for the same reason 11c has none: nothing in that
+suite reaches past the UI to set up a world, and these unlock between levels 4
+and 7 — a dozen or more solved tasks away. The rendering was checked by hand
+instead, with the level gates temporarily lowered, and the model is covered
+where it lives.
 
 ## Not doing
 

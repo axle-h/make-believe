@@ -3,11 +3,15 @@ import {
   BLOB_SIZE,
   MAX_STEP_MS,
   banner,
+  CRATE_SIZE,
+  noteSkinColour,
+  PARCEL_SIZE,
   objectives,
   playerById,
   players,
   tick,
   type Brief,
+  type Carryable,
   type DirectorSnapshot,
   type GameState,
   type ObjectiveSnapshot,
@@ -15,6 +19,7 @@ import {
   type Zone,
 } from '../game/index.js'
 import { WORLD_SCENE_KEY } from './sceneKey.js'
+import { colourOfImage } from './skinColour.js'
 
 /**
  * The one scene. It renders the model and nothing else: the model moves the
@@ -47,12 +52,23 @@ const TIMER_GAP = 12
 /** How see-through a zone's fill is. Enough to read, never enough to hide a blob. */
 const ZONE_FILL_ALPHA = 0.14
 const ZONE_EDGE_WIDTH = 6
+/** How much of itself a zone keeps while it is waiting its turn to light up. */
+const ZONE_DIM = 0.35
 /** How far the score sits from the corner it lives in. */
 const SCORE_MARGIN = 26
 
+/** A parcel is a small bright square; a crate is a big one with a cross on it. */
+const THING_CORNER = 8
+const THING_EDGE_WIDTH = 4
+/** The name written on a depot, for whoever in the room can read it. */
+const ZONE_LABEL_ALPHA = 0.5
+
 /** The floor is under everything; blobs, names and bubbles stack over it. */
 const DEPTH_ZONE = -10
+/** Things lying about are on the floor; things being carried are held up. */
+const DEPTH_THING_DOWN = -5
 const DEPTH_BLOB = 0
+const DEPTH_THING_HELD = 5
 const DEPTH_NAME = 10
 const DEPTH_BUBBLE = 20
 /** What the world is asking for goes over the lot; it is the point of looking up. */
@@ -113,6 +129,15 @@ const MARK_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
  * a number to notice going up, never a scoreboard to play towards, and nothing
  * a child has to be able to read to play.
  */
+/** What a depot is called, written across it. */
+const ZONE_LABEL_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
+  fontFamily: 'system-ui, sans-serif',
+  fontSize: '22px',
+  fontStyle: 'bold',
+  color: '#10121a',
+  align: 'center',
+}
+
 const SCORE_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'system-ui, sans-serif',
   fontSize: '24px',
@@ -165,6 +190,11 @@ export class WorldScene extends Phaser.Scene {
   private floor: Phaser.GameObjects.Graphics | null = null
   /** What the floor was last drawn for, so it is not redrawn every frame. */
   private floorFor = ''
+  /** What each zone is called, written on it. Kept by zone id. */
+  private readonly zoneLabels = new Map<string, Phaser.GameObjects.Text>()
+  /** Parcels and crates: on the floor, and in somebody's arms. */
+  private thingsDown: Phaser.GameObjects.Graphics | null = null
+  private thingsHeld: Phaser.GameObjects.Graphics | null = null
   private headline: Phaser.GameObjects.Text | null = null
   private detail: Phaser.GameObjects.Text | null = null
   private timer: Phaser.GameObjects.Graphics | null = null
@@ -199,6 +229,8 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5)
 
     this.floor = this.add.graphics().setDepth(DEPTH_ZONE)
+    this.thingsDown = this.add.graphics().setDepth(DEPTH_THING_DOWN)
+    this.thingsHeld = this.add.graphics().setDepth(DEPTH_THING_HELD)
     this.timer = this.add.graphics().setDepth(DEPTH_BANNER)
     const middle = this.state.world.width / 2
     this.headline = this.add.text(middle, BANNER_TOP, '', BANNER_STYLE).setOrigin(0.5, 0).setDepth(DEPTH_BANNER)
@@ -253,6 +285,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.waiting?.setVisible(list.length === 0)
     this.renderFloor(director.objective)
+    this.renderThings(director.objective)
     this.renderMarks(director.objective)
     this.renderBanner(director.objective)
     this.renderScore(director)
@@ -310,12 +343,87 @@ export class WorldScene extends Phaser.Scene {
     if (!floor) return
     floor.clear()
     for (const zone of zones) this.drawZone(floor, zone)
+    this.renderZoneLabels(zones)
+  }
+
+  /**
+   * What a zone is called, written across it — HOME, or the colour a depot
+   * takes. Most zones have no name at all: the spot to stand on is a spot to
+   * stand on, and a word on it would be a word nobody needs to read.
+   */
+  private renderZoneLabels(zones: Zone[]): void {
+    const named = new Set<string>()
+    for (const zone of zones) {
+      if (!zone.label) continue
+      named.add(zone.id)
+      const label = this.zoneLabels.get(zone.id) ?? this.createZoneLabel(zone.id)
+      if (label.text !== zone.label) label.setText(zone.label)
+      label
+        .setPosition(zone.x, zone.y)
+        .setColor(zone.colour)
+        .setAlpha(zone.dim === true ? ZONE_LABEL_ALPHA * ZONE_DIM : ZONE_LABEL_ALPHA)
+    }
+    for (const [id, label] of this.zoneLabels) {
+      if (named.has(id)) continue
+      label.destroy()
+      this.zoneLabels.delete(id)
+    }
+  }
+
+  private createZoneLabel(id: string): Phaser.GameObjects.Text {
+    const label = this.add.text(0, 0, '', ZONE_LABEL_STYLE).setOrigin(0.5, 0.5).setDepth(DEPTH_ZONE)
+    this.zoneLabels.set(id, label)
+    return label
+  }
+
+  /**
+   * The parcels and the crates. They move every frame, so unlike the floor
+   * they are redrawn every frame — there are never more than a handful, and a
+   * thing being carried has to keep up with the blob carrying it.
+   *
+   * What is being held is drawn over its carrier and what is lying about is
+   * drawn under everybody, so "who has got one" needs no reading either.
+   */
+  private renderThings(objective: ObjectiveSnapshot | null): void {
+    const down = this.thingsDown
+    const held = this.thingsHeld
+    if (!down || !held) return
+    down.clear()
+    held.clear()
+
+    for (const thing of objective?.carryables ?? []) {
+      const carried = thing.kind === 'parcel' && thing.carriedBy !== null
+      this.drawThing(carried ? held : down, thing)
+    }
+  }
+
+  private drawThing(into: Phaser.GameObjects.Graphics, thing: Carryable): void {
+    const colour = Phaser.Display.Color.HexStringToColor(thing.colour).color
+    const size = thing.kind === 'crate' ? CRATE_SIZE : PARCEL_SIZE
+    const left = thing.x - size / 2
+    const top = thing.y - size / 2
+    // A delivered thing sits quietly: it is done with, and the eye should go
+    // to whatever is still out on the floor.
+    const alpha = thing.home === null ? 1 : 0.55
+
+    into.fillStyle(colour, alpha)
+    into.lineStyle(THING_EDGE_WIDTH, 0x10121a, alpha)
+    into.fillRoundedRect(left, top, size, size, THING_CORNER)
+    into.strokeRoundedRect(left, top, size, size, THING_CORNER)
+
+    if (thing.kind !== 'crate') return
+    // The tape across a crate, which is what stops it reading as a big parcel.
+    into.lineBetween(left, thing.y, left + size, thing.y)
+    into.lineBetween(thing.x, top, thing.x, top + size)
   }
 
   private drawZone(floor: Phaser.GameObjects.Graphics, zone: Zone): void {
     const colour = Phaser.Display.Color.HexStringToColor(zone.colour).color
-    floor.fillStyle(colour, ZONE_FILL_ALPHA)
-    floor.lineStyle(ZONE_EDGE_WIDTH, colour, 0.9)
+    // A dim pad is one that is on the floor but is not what the world is
+    // asking for this second. It has to be plainly there and plainly not lit.
+    const lit = zone.dim !== true
+    floor.fillStyle(colour, lit ? ZONE_FILL_ALPHA : ZONE_FILL_ALPHA * ZONE_DIM)
+    floor.lineStyle(ZONE_EDGE_WIDTH, colour, lit ? 0.9 : 0.9 * ZONE_DIM)
     if (zone.shape === 'circle') {
       floor.fillCircle(zone.x, zone.y, zone.radius)
       floor.strokeCircle(zone.x, zone.y, zone.radius)
@@ -400,20 +508,41 @@ export class WorldScene extends Phaser.Scene {
     if (!skin || view.skinKey === skin.key) return
 
     const previous = view.skinKey
+    const { playerId } = player
     view.skinKey = skin.key
     if (this.textures.exists(skin.key)) {
-      this.wearSkin(view, skin.key, previous)
+      this.wearSkin(view, playerId, skin.key, previous)
       return
     }
-    this.textures.once(`addtexture-${skin.key}`, () => this.wearSkin(view, skin.key, previous))
+    this.textures.once(`addtexture-${skin.key}`, () =>
+      this.wearSkin(view, playerId, skin.key, previous),
+    )
     this.textures.addBase64(skin.key, skin.png)
   }
 
-  private wearSkin(view: BlobView, key: string, previous: string | null): void {
+  private wearSkin(
+    view: BlobView,
+    playerId: string,
+    key: string,
+    previous: string | null,
+  ): void {
     // A quick second drawing can land while the first is still decoding.
     if (view.skinKey !== key) return
     view.image.setTexture(key).setDisplaySize(BLOB_SIZE, BLOB_SIZE).clearTint()
     if (previous !== key) this.forgetSkin(previous)
+    this.tellTheModelItsColour(playerId, key)
+  }
+
+  /**
+   * What colour that drawing came out, back into the model. It is the one
+   * thing that goes that way from here — a task that asks a room to paint
+   * itself green has to know, and only the side with a canvas can say.
+   */
+  private tellTheModelItsColour(playerId: string, key: string): void {
+    const image = this.textures.get(key)?.getSourceImage()
+    if (!image || image instanceof Phaser.GameObjects.RenderTexture) return
+    const colour = colourOfImage(image)
+    if (colour) noteSkinColour(this.state, playerId, key, colour)
   }
 
   /** Drawings are one per player at a time; the old one leaves the GPU. */
@@ -478,5 +607,8 @@ export class WorldScene extends Phaser.Scene {
 /** Enough of a zone to tell whether the floor needs redrawing. */
 function zoneSignature(zone: Zone): string {
   const size = zone.shape === 'circle' ? zone.radius : `${zone.width}x${zone.height}`
-  return `${zone.id}:${zone.shape}:${Math.round(zone.x)}:${Math.round(zone.y)}:${size}:${zone.colour}`
+  // The dimming is in here because a chain of lights moves by nothing else
+  // changing: leave it out and the floor never redraws as the light travels.
+  const at = `${Math.round(zone.x)}:${Math.round(zone.y)}`
+  return `${zone.id}:${zone.shape}:${at}:${size}:${zone.colour}:${zone.dim === true}`
 }

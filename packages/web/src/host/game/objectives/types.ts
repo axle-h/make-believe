@@ -1,9 +1,18 @@
 import type { Recipient, ServerToHostMessage } from '@make-believe/shared'
+import type { Carryable } from '../carryables.js'
 import type { Rng } from '../rng.js'
 import type { GameState, Player, World } from '../state.js'
 import type { Zone } from '../zones.js'
+import type { ColourHuntObjective } from './colourHunt.js'
+import type { DrawItObjective } from './drawIt.js'
+import type { FetchObjective } from './fetch.js'
+import type { FindYourColourObjective } from './findYourColour.js'
+import type { FollowTheChainObjective } from './followTheChain.js'
 import type { HotPotatoObjective } from './hotPotato.js'
 import type { OnTheSpotObjective } from './onTheSpot.js'
+import type { PairsObjective } from './pairs.js'
+import type { SortingObjective } from './sorting.js'
+import type { TooHeavyObjective } from './tooHeavyForOne.js'
 
 /**
  * What the world is asking for. There is always exactly one of these running,
@@ -51,6 +60,8 @@ export interface ObjectiveBase {
   zones: Zone[]
   /** Whatever the world has pinned to particular blobs, if anything. */
   marks: Mark[]
+  /** The parcels and crates this task has put on the floor, if any. */
+  carryables: Carryable[]
   outcome: Outcome
   /**
    * What the TV says once it is over — cheerful either way, because running
@@ -60,7 +71,17 @@ export interface ObjectiveBase {
 }
 
 /** Every kind of objective there is. One file each, listed in the registry. */
-export type Objective = OnTheSpotObjective | HotPotatoObjective
+export type Objective =
+  | OnTheSpotObjective
+  | HotPotatoObjective
+  | PairsObjective
+  | FollowTheChainObjective
+  | FindYourColourObjective
+  | ColourHuntObjective
+  | DrawItObjective
+  | FetchObjective
+  | SortingObjective
+  | TooHeavyObjective
 
 export interface GenerateContext {
   /** Minted by the director, so ids are stable and predictable in a test. */

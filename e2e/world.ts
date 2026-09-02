@@ -57,6 +57,20 @@ export interface MarkSnapshot {
   badge: string
 }
 
+export interface CarryableSnapshot {
+  id: string
+  kind: 'parcel' | 'crate'
+  x: number
+  y: number
+  colour: string
+  /** The zone it has been delivered to, or `null` while it is still out. */
+  home: string | null
+  /** Parcels only: whoever is carrying it. */
+  carriedBy?: string | null
+  /** Crates only: everybody leaning on it. */
+  pushedBy?: string[]
+}
+
 export interface ObjectiveSnapshot {
   id: string
   kind: string
@@ -67,6 +81,7 @@ export interface ObjectiveSnapshot {
   note: string | null
   zones: ZoneSnapshot[]
   marks: MarkSnapshot[]
+  carryables: CarryableSnapshot[]
 }
 
 export interface DirectorSnapshot {

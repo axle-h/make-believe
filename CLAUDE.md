@@ -209,21 +209,34 @@ the QR code and reconnect handling with a Playwright suite, k3s, HTTPS at the
 edge, and the phone PWA. What they built is described by the code, the commit
 history and `k8s/README.md` — don't go looking for a plan document for any of it.
 
-What is left:
+What is left is milestone 10; milestone 11 is built and is described below
+rather than removed, because what it decided is worth keeping to hand.
 
 10. Android TV app: minimal native Kotlin WebView wrapper in `/androidtv`, leanback launcher entry, loads the host page remotely so it updates itself. Not Capacitor, not a browser. Target device is a Fire TV Stick 4K Max (Fire OS 7, Android 9, API 28); nothing Fire-specific. Planned in [`docs/android-tv.md`](docs/android-tv.md).
 11. Objectives: something to actually do. Zones, then carryables; one task
     running at all times, procedurally parameterised and levelled up as the
     room gets good at them. Never rounds — no phone ever waits its turn.
     Planned in [`docs/objectives.md`](docs/objectives.md).
-    **11a and 11b are built**: the seeded RNG, zones, the director, the
-    `brief` message, the banner and timer on the TV and the strip above the
-    joystick; "everybody on the spot" and "hot potato"; the ladder, with
-    `minLevel` gating what a room may be asked for and the director never
-    asking for the same thing twice running; marks (the potato, worn on a
-    blob) and the score and level in the corner of the TV. 11c to 11e — pads
-    and private briefs, talking and drawing as tasks, carryables — are still
-    to do, in that order.
+    **All of it is built.** Ten tasks, in `src/host/game/objectives/`, each a
+    file and a line in `registry.ts`: stand on the spot, hot potato, two to a
+    pad, follow the lights, find your own pad, colour hunt, draw it, fetch,
+    sorting, and a crate too heavy for one. Underneath them: the seeded RNG,
+    zones and pads, carryables, the director and the ladder (`minLevel` gates
+    what a room may be asked for, and it never asks for the same thing twice
+    running), marks worn on a blob, the `brief` message with per-phone lines,
+    and the banner, timer, floor and score on the TV.
+
+    Two rules that hold across all of them and must keep holding: **a task can
+    only ever change what the world is asking for**, never what a phone offers
+    — drive, say, draw and finish are live in every task, for everybody,
+    throughout — and **a task is judged against whoever is present right now**,
+    so a child who wanders off never leaves the others with something they
+    cannot finish. `registry.test.ts` asserts what has to be true of every
+    task; adding the eleventh inherits it.
+
+    What is *not* built, deliberately: sumo, keep the crown, and any e2e for
+    the tasks above level 2 (the suite never reaches past the UI, so those
+    would have to be climbed to, at about a minute a rung).
 
 ## Phaser notes (host)
 

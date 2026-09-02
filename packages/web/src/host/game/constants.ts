@@ -40,8 +40,17 @@ export const PALETTE = [
 /**
  * The floor is dark, so a zone is drawn in something the blob palette does not
  * use. Nobody should ever have to work out whether a spot is somebody's blob.
+ *
+ * Each one is named as well as coloured, because a task that tells one phone
+ * privately which pad is theirs has to say it in a word a four-year-old can be
+ * read out loud: "yours is the blue one".
  */
-export const ZONE_COLOURS = ['#f6f0e2', '#8de0ff', '#ffe08a', '#b9ffb0'] as const
+export const ZONE_COLOURS = [
+  { name: 'white', hex: '#f6f0e2' },
+  { name: 'blue', hex: '#8de0ff' },
+  { name: 'yellow', hex: '#ffe08a' },
+  { name: 'green', hex: '#b9ffb0' },
+] as const
 
 /** How many objectives the room has to finish before the next one gets harder. */
 export const LEVEL_UP_AFTER = 3

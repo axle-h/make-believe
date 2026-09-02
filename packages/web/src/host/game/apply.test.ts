@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyMessage } from './apply.js'
+import { applyMessage, noteSkinColour } from './apply.js'
 import { BLOB_SIZE, BUBBLE_MS, PALETTE, WORLD_HEIGHT, WORLD_WIDTH } from './constants.js'
 import { playerById } from './selectors.js'
 import { createGame, nextFreeSlot, type GameState } from './state.js'
@@ -325,7 +325,7 @@ describe('drawing', () => {
     const result = draw(state, 'p1', png('AAAA'))
 
     expect(result).toMatchObject({ applied: true, kind: 'drawing' })
-    expect(playerOf(result).skin).toEqual({ key: 'skin-p1-1', png: png('AAAA') })
+    expect(playerOf(result).skin).toEqual({ key: 'skin-p1-1', png: png('AAAA'), average: null })
   })
 
   it('changes the key when a second drawing arrives', () => {
@@ -333,7 +333,39 @@ describe('drawing', () => {
     draw(state, 'p1', png('AAAA'))
     draw(state, 'p1', png('BBBB'))
 
-    expect(playerById(state, 'p1')?.skin).toEqual({ key: 'skin-p1-2', png: png('BBBB') })
+    expect(playerById(state, 'p1')?.skin).toEqual({
+      key: 'skin-p1-2',
+      png: png('BBBB'),
+      average: null,
+    })
+  })
+
+  /**
+   * The colour of a drawing comes back from whoever decoded it, a moment after
+   * the drawing itself — and lands on the drawing it was read from, never on
+   * whatever the blob happens to be wearing by then.
+   */
+  it('takes the colour of a drawing from the renderer that decoded it', () => {
+    const state = playing()
+    draw(state, 'p1', png('AAAA'))
+
+    expect(noteSkinColour(state, 'p1', 'skin-p1-1', { r: 10, g: 200, b: 40 })).toBe(true)
+    expect(playerById(state, 'p1')?.skin?.average).toEqual({ r: 10, g: 200, b: 40 })
+  })
+
+  it('drops the colour of a drawing that has already been redrawn', () => {
+    const state = playing()
+    draw(state, 'p1', png('AAAA'))
+    draw(state, 'p1', png('BBBB'))
+
+    expect(noteSkinColour(state, 'p1', 'skin-p1-1', { r: 10, g: 200, b: 40 })).toBe(false)
+    expect(playerById(state, 'p1')?.skin?.average).toBeNull()
+  })
+
+  it('shrugs at a colour for a blob that has gone', () => {
+    const state = playing()
+
+    expect(noteSkinColour(state, 'ghost', 'skin-ghost-1', { r: 0, g: 0, b: 0 })).toBe(false)
   })
 
   it('keeps the skin when the phone goes away and comes back', () => {

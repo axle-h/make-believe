@@ -19,6 +19,12 @@ export interface ZoneBase {
   colour: string
   /** Drawn on the floor when the pad means something on its own. */
   label?: string
+  /**
+   * Drawn faintly: it is on the floor, but it is not what the world is asking
+   * for this second. The pads a chain of lights has not reached yet are dim,
+   * and the one lit up is not — so which one to run at needs no reading at all.
+   */
+  dim?: boolean
 }
 
 export interface CircleZone extends ZoneBase {

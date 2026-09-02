@@ -6,7 +6,8 @@ import { createGame, type GameState } from '../state.js'
 import { tick } from '../tick.js'
 import { contains } from '../zones.js'
 import { banner, briefFor, stepObjectives } from './director.js'
-import type { Objective } from './types.js'
+import type { DrawItObjective } from './drawIt.js'
+import type { Brief, Objective } from './types.js'
 
 /**
  * The director is the thing that must never turn the game into rounds, so
@@ -31,25 +32,38 @@ function started(state: GameState): Objective {
 }
 
 /**
- * Start the task this test is about. The director never asks for the same
- * thing twice running while there is anything else it could ask for, so saying
- * what was just played is how a test says what it wants next. The guard is
- * there for the day a third template makes that no longer enough.
+ * Start the task this test is about. Which of the eligible templates the
+ * director asks for is its own business, so a test that wants a particular one
+ * puts back everything else until that one comes round — which it does, since
+ * it never asks for the same thing twice running.
  */
-function startedOnTheSpot(state: GameState): Objective {
-  state.objectives.lastKind = 'hotPotato'
-  const objective = started(state)
-  expect(objective.kind).toBe('onTheSpot')
-  return objective
+function startedKind(state: GameState, kind: Objective['kind']): Objective {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const objective = started(state)
+    if (objective.kind === kind) return objective
+    state.objectives.current = null
+  }
+  throw new Error(`the director never asked for ${kind}`)
 }
 
-/** Watch a few tasks go by, however each of them ends, and say what they were. */
+function startedOnTheSpot(state: GameState): Objective {
+  return startedKind(state, 'onTheSpot')
+}
+
+/**
+ * Watch a few tasks go by, however each of them ends, and say what they were.
+ * The level is held where the test put it: this is about what one rung of the
+ * ladder allows, and a room that levelled up halfway through would be answering
+ * a different question.
+ */
 function kindsOverTime(state: GameState, count: number): Objective['kind'][] {
+  const { level } = state.objectives
   const kinds: Objective['kind'][] = []
   while (kinds.length < count) {
     kinds.push(started(state).kind)
     runUntilFinished(state, 1_000)
     stepObjectives(state, INTERLUDE_MS + 1)
+    state.objectives.level = level
   }
   return kinds
 }
@@ -262,6 +276,101 @@ describe('a ladder of tasks', () => {
     const shown = objectives(state).objective
     expect(shown?.marks).toEqual(objective.marks)
     expect(shown?.marks[0]?.playerId).toBe((objective as { it?: string }).it)
+  })
+})
+
+/**
+ * Some tasks have something to say to one phone that they are not saying to
+ * the room. It is still only words: the phone it reaches can drive, talk and
+ * draw exactly as every other phone can, and the TV still has its own line.
+ */
+describe('a line for one phone only', () => {
+  function findingColours(state: GameState): Objective {
+    state.objectives.level = 4
+    return startedKind(state, 'findYourColour')
+  }
+
+  it('tells each phone something different, and the room something they all share', () => {
+    const state = room(['Wilf', 'Ida', 'Ted'], 12)
+    findingColours(state)
+
+    const mine = briefFor(state, 'p1')
+    const theirs = briefFor(state, 'p2')
+
+    expect(mine?.to).toBe('p1')
+    expect(mine?.detail).not.toBe(theirs?.detail)
+    // ...and the TV is not told anybody's secret.
+    expect(banner(state)?.to).toBe('*')
+    expect(banner(state)?.detail).toBe('0 of 3 home')
+  })
+
+  it('tells a phone that turns up halfway through where it goes', () => {
+    const state = room(['Wilf', 'Ida'], 12)
+    findingColours(state)
+    applyMessage(state, { type: 'join', playerId: 'p3', name: 'Ted' })
+    stepObjectives(state, 16)
+
+    expect(briefFor(state, 'p3')?.to).toBe('p3')
+    expect(briefFor(state, 'p3')?.detail).toContain('pad')
+  })
+
+  /**
+   * A phone left holding a private line about a task that is over would be the
+   * one bit of the game that remembers a mode. When it ends, the strip comes
+   * down of its own accord.
+   */
+  it('takes the private line down as soon as the task is over', () => {
+    const state = room(['Wilf', 'Ida'], 12)
+    findingColours(state)
+
+    let last: Brief[] = []
+    for (let elapsed = 0; elapsed < 120_000; elapsed += 1_000) {
+      last = stepObjectives(state, 1_000)
+      if (state.objectives.current?.outcome !== 'running') break
+    }
+
+    expect(last.some((brief) => brief.to === 'p1' && brief.headline === '')).toBe(true)
+    expect(briefFor(state, 'p1')?.to).toBe('*')
+  })
+})
+
+/**
+ * Two tasks are about what a phone *says* rather than where it drives, and
+ * they hear it through `applyMessage` — the same path a speech bubble takes.
+ * Nothing about the Say box changes when one is running: it is the world that
+ * has started listening, not the phone that has been handed a form to fill in.
+ */
+describe('a task that listens', () => {
+  it('hears what a phone said, and can be finished by it', () => {
+    const state = room(['Wilf', 'Ida', 'Ted'], 12)
+    state.objectives.level = 6
+    const objective = startedKind(state, 'drawIt') as DrawItObjective
+    const guesser = activePlayers(state).find((player) => player.playerId !== objective.artist)
+    if (!guesser) throw new Error('expected somebody to guess')
+
+    applyMessage(state, { type: 'text', playerId: guesser.playerId, value: objective.word })
+
+    expect(objective.outcome).toBe('done')
+    // ...and it is still a speech bubble, exactly as it would be at any other moment.
+    expect(guesser.bubble?.text).toBe(objective.word)
+
+    stepObjectives(state, 16)
+    expect(state.objectives.score).toBe(SCORE_PER_OBJECTIVE)
+    expect(banner(state)?.tone).toBe('win')
+  })
+
+  it('ignores what phones say once it is over', () => {
+    const state = room(['Wilf', 'Ida'], 12)
+    state.objectives.level = 6
+    const objective = startedKind(state, 'drawIt') as DrawItObjective
+    const guesser = activePlayers(state).find((player) => player.playerId !== objective.artist)
+    if (!guesser) throw new Error('expected somebody to guess')
+    applyMessage(state, { type: 'text', playerId: guesser.playerId, value: objective.word })
+    const first = objective.guesser
+
+    applyMessage(state, { type: 'text', playerId: guesser.playerId, value: objective.word })
+
+    expect(objective.guesser).toBe(first)
   })
 })
 

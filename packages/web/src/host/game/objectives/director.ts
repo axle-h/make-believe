@@ -88,6 +88,11 @@ export function observeMessage(state: GameState, message: ServerToHostMessage): 
   const objective = state.objectives.current
   if (!objective || objective.outcome !== 'running') return
   templateFor(objective.kind).observe?.(objective, state, message)
+
+  // A guess can finish a task between two frames. Whatever ends it has to be
+  // banked where it ends, because the next step sees a task that is already
+  // over and quite reasonably leaves it alone.
+  settle(state.objectives, objective)
 }
 
 /**
@@ -145,6 +150,16 @@ function run(state: GameState, objective: Objective, dtMs: number): void {
   template.step(objective, state, dtMs)
   if (objective.outcome === 'running' && objective.remainingMs <= 0) objective.outcome = 'expired'
 
+  settle(director, objective)
+}
+
+/**
+ * A task that has ended, banked: the score, the cheer, and the moment it stays
+ * on screen before the next one. Called wherever a task can end, which is both
+ * the step that ran out of time and the guess that arrived between two frames.
+ * A task still running is left alone.
+ */
+function settle(director: Director, objective: Objective): void {
   if (objective.outcome === 'done') complete(director, objective)
   else if (objective.outcome === 'expired') expire(director, objective)
 }

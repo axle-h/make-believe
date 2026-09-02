@@ -1,5 +1,13 @@
+import { colourHunt } from './colourHunt.js'
+import { drawIt } from './drawIt.js'
+import { fetch } from './fetch.js'
+import { findYourColour } from './findYourColour.js'
+import { followTheChain } from './followTheChain.js'
 import { hotPotato } from './hotPotato.js'
 import { onTheSpot } from './onTheSpot.js'
+import { pairs } from './pairs.js'
+import { sorting } from './sorting.js'
+import { tooHeavyForOne } from './tooHeavyForOne.js'
 import type { Objective, ObjectiveTemplate } from './types.js'
 
 /**
@@ -10,7 +18,18 @@ import type { Objective, ObjectiveTemplate } from './types.js'
  * written against its own kind, and TypeScript's bivariant method parameters
  * are what let both be true without a cast — see `ObjectiveTemplate`.
  */
-export const TEMPLATES: readonly ObjectiveTemplate<Objective>[] = [onTheSpot, hotPotato]
+export const TEMPLATES: readonly ObjectiveTemplate<Objective>[] = [
+  onTheSpot,
+  hotPotato,
+  pairs,
+  followTheChain,
+  findYourColour,
+  colourHunt,
+  drawIt,
+  fetch,
+  sorting,
+  tooHeavyForOne,
+]
 
 export function templateFor(kind: Objective['kind']): ObjectiveTemplate<Objective> {
   const template = TEMPLATES.find((candidate) => candidate.kind === kind)

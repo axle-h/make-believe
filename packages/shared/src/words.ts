@@ -1,0 +1,73 @@
+/**
+ * Things a small child can draw, and a smaller one can recognise.
+ *
+ * Every word here has to survive being drawn with a fat crayon on a phone in
+ * twenty seconds and still be guessable from the sofa, so they are all
+ * concrete, common, and shaped like nothing else on the list: no "animal", no
+ * "happy", and nothing two of them could both be.
+ */
+
+export const DRAWABLE_WORDS = [
+  'cat',
+  'dog',
+  'fish',
+  'bird',
+  'duck',
+  'cow',
+  'pig',
+  'sheep',
+  'horse',
+  'mouse',
+  'bee',
+  'spider',
+  'snake',
+  'frog',
+  'dinosaur',
+  'sun',
+  'moon',
+  'star',
+  'cloud',
+  'rainbow',
+  'tree',
+  'flower',
+  'apple',
+  'banana',
+  'carrot',
+  'cake',
+  'pizza',
+  'ice cream',
+  'house',
+  'door',
+  'window',
+  'car',
+  'bus',
+  'train',
+  'boat',
+  'plane',
+  'rocket',
+  'bike',
+  'hat',
+  'shoe',
+  'sock',
+  'ball',
+  'book',
+  'cup',
+  'spoon',
+  'key',
+  'clock',
+  'chair',
+  'bed',
+  'robot',
+  'ghost',
+  'crown',
+  'castle',
+  'bridge',
+  'umbrella',
+  'balloon',
+  'kite',
+  'snowman',
+  'pumpkin',
+  'egg',
+] as const
+
+export type DrawableWord = (typeof DRAWABLE_WORDS)[number]
