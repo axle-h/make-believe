@@ -4,8 +4,7 @@ import { clampToWorld, type GameState } from './state.js'
 
 /**
  * One step of the world. The model is the only thing that moves a blob: the
- * renderer reads positions from here rather than integrating its own (see
- * docs/DECISIONS.md, D-013).
+ * renderer reads positions from here rather than integrating its own.
  *
  * `tick` takes whatever step it is given, so a test can wind the clock forward
  * in one call. Capping a real frame is the renderer's job: see `MAX_STEP_MS`.

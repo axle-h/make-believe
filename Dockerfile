@@ -18,6 +18,10 @@ RUN pnpm build
 
 # --- runtime -------------------------------------------------------------
 # One bundled file and the built pages: no node_modules in the image at all.
+#
+# The bundle is ESM (`ws` needs a `createRequire` banner to survive bundling —
+# see the server's build script) and lands as `.mjs` because there is no
+# package.json here, so a `.js` file would be parsed as CommonJS.
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production

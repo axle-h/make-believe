@@ -4,7 +4,7 @@
  * message schemas and the host all agree on what a usable name is.
  */
 
-/** Longest blob name a player may pick (see docs/DECISIONS.md, D-003). */
+/** Longest blob name a player may pick; it has to fit above a blob on the TV. */
 export const MAX_NAME_LENGTH = 16
 
 /** Control characters (C0 and C1) have no business being drawn on the TV. */

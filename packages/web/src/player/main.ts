@@ -25,7 +25,7 @@ import './player.css'
  *
  * Everything a blob can do is available the whole time — drive, say something,
  * redraw itself, take a new name. There are no rounds and the TV never tells a
- * phone to switch to anything (docs D-026).
+ * phone to switch to anything.
  */
 
 const PLAYER_ID_KEY = 'make-believe.playerId'
@@ -121,7 +121,7 @@ nameInput.value = loadStored(NAME_KEY) ?? ''
 /**
  * Tonight's code, or '' when we have not got one. There is nowhere to type it:
  * the TV shows only a QR code, with the code inside it, so the code arrives in
- * the link a scan opens or not at all (see docs/DECISIONS.md, D-025).
+ * the link a scan opens or not at all.
  */
 let roomCode = ''
 
@@ -411,7 +411,7 @@ window.visualViewport?.addEventListener('resize', () => {
 /**
  * A blob can be renamed whenever its owner fancies it. There is no message for
  * it: saying hello again with a new name is exactly what a rename is, and the
- * world already gives a `playerId` it knows its own blob back (docs D-026).
+ * world already gives a `playerId` it knows its own blob back.
  */
 renameForm.addEventListener('submit', (event) => {
   event.preventDefault()

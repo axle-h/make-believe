@@ -22,7 +22,7 @@ body {
 
 /*
  * The world gets the whole screen; everything else floats on top of it, so
- * nothing steals a pixel of playing space (see docs/DECISIONS.md, D-025).
+ * nothing steals a pixel of playing space.
  */
 .stage {
   position: relative;
@@ -71,7 +71,7 @@ body {
 }
 
 /*
- * The TV has no controls of any kind (docs D-026); this is the one thing it
+ * The TV has no controls of any kind; this is the one thing it
  * ever says for itself, and only when something is wrong. With nothing to
  * report it takes up no room at all.
  */

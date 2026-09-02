@@ -161,7 +161,7 @@ export async function pushJoystick(
 
 /**
  * Open one of the tools over the joystick. They are always there — the TV has
- * no say in what a phone is doing (docs D-026).
+ * no say in what a phone is doing.
  */
 export async function openTool(player: Player, tool: 'say' | 'draw' | 'name'): Promise<void> {
   await player.page.click(`#tool-${tool}`)

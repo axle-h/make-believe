@@ -55,7 +55,7 @@ export function pointerToCanvas(rect: Rect, pointer: Point, size: number = CANVA
   return { x: clamp(x, 0, size), y: clamp(y, 0, size) }
 }
 
-/** True if this data URL is something the server will accept (D-003). */
+/** True if this data URL is something the server will accept. */
 export function isSendablePng(dataUrl: string): boolean {
   return dataUrl.startsWith('data:image/png;base64,') && dataUrl.length <= MAX_PNG_LENGTH
 }

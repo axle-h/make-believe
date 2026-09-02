@@ -4,7 +4,7 @@ A party game for the living room, played on the TV with phones as controllers. T
 
 Everything ships as one Node process: it serves the host page at `/host/`, the player page at `/`, and relays WebSocket messages between them at `/ws`. The host owns all game state; phones are dumb controllers. There is only ever one world per deployment; the 4-letter code shown on the TV just stops stale phones joining tonight's session.
 
-The full design brief for this project lives in [`CLAUDE.md`](./CLAUDE.md). The phased implementation plan and its working state live in [`docs/`](./docs/README.md).
+The full design brief lives in [`CLAUDE.md`](./CLAUDE.md). Everything already built is described by the code and its comments; the two pieces still to come are planned in [`docs/`](./docs).
 
 ## Prerequisites
 
@@ -31,7 +31,7 @@ In production mode open `http://<your-lan-ip>:3000/host/` on the TV and `http://
 
 **Running it locally, open the TV by LAN address, never `localhost`.** The QR code on the TV is built from the address that page was opened with, so a TV on `localhost` hands every phone a link back to itself. The deployed app has no such problem — see below.
 
-While the game is running, the keys `P`, `T`, `D` and `L` on the TV switch the phones between the joystick, the text box, the drawing pad and the lobby. The current phase is shown along the bottom of the screen.
+The TV takes no input at all — it is a window onto the world and the phones run everything. There are no rounds: every phone can drive, say something, redraw its blob and take a new name whenever it likes.
 
 Only one TV at a time: opening the host page a second time takes the world over, and the first TV says so and stands down.
 
@@ -74,7 +74,6 @@ packages/web      one Vite project with two pages: player (/) and host (/host/)
 packages/server   Node http + ws relay, serves the built web app
 e2e/              Playwright tests
 .github/          CI: tests on every push, and the image build that publishes to ghcr.io
-androidtv/        Android TV WebView wrapper that puts the host page on the TV home screen
-docs/             implementation plan and working state
-k8s/              deployment and service manifests
+k8s/              deployment, service, ingress and TLS manifests
+docs/             plans for the two things not built yet: the phone PWA and the Android TV app
 ```

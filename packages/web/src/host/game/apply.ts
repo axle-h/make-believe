@@ -5,10 +5,10 @@ import { colourForSlot, nextFreeSlot, spawnPosition, type GameState, type Player
 /**
  * Everything the world hears from a phone, applied to the state. The state is
  * mutated in place and the result says what happened, so the host can answer a
- * join and the renderer can react to a new blob (see docs/DECISIONS.md, D-012).
+ * join and the renderer can react to a new blob.
  *
  * Nothing here asks what the world is doing first: the session is one
- * continuous game, so every message is welcome whenever it arrives (D-026).
+ * continuous game, so every message is welcome whenever it arrives.
  */
 
 /** A message about somebody the world has never heard of. */
@@ -40,7 +40,7 @@ export function applyMessage(state: GameState, message: ServerToHostMessage): Ap
  * non-event — and only takes the new name. Anyone else gets a fresh blob.
  *
  * This is also how a blob is renamed: a phone that wants a new name says hello
- * again with it, and the blob it already has takes it (docs D-026).
+ * again with it, and the blob it already has takes it.
  */
 function join(state: GameState, playerId: string, rawName: string): ApplyResult {
   // The schema has already refused a blank name; tidy it for the label.
@@ -79,7 +79,7 @@ function join(state: GameState, playerId: string, rawName: string): ApplyResult 
  * Sending nothing at all takes the bubble down early.
  *
  * There is no round to be in and no wrong moment for it: half the fun is
- * shouting something while everyone is running about (docs D-016, D-026).
+ * shouting something while everyone is running about.
  */
 function text(state: GameState, playerId: string, value: string): ApplyResult {
   const player = state.players.get(playerId)
@@ -93,7 +93,7 @@ function text(state: GameState, playerId: string, value: string): ApplyResult {
  * Somebody drew something. The drawing becomes the blob's skin, under a key
  * the renderer turns into a texture. Each one gets its own key so the renderer
  * can tell a new drawing from the one already on screen — which is what lets a
- * blob be redrawn as often as its owner likes (docs D-026).
+ * blob be redrawn as often as its owner likes.
  */
 function drawing(state: GameState, playerId: string, png: string): ApplyResult {
   const player = state.players.get(playerId)

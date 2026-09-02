@@ -20,8 +20,7 @@ export interface Connection {
 /**
  * A second TV took over the world. The old one is told so, rather than being
  * closed quietly: a quiet close looks like a network blip, and the old TV would
- * reconnect, take the world back, and the two would fight over it forever
- * (see docs/DECISIONS.md, D-020).
+ * reconnect, take the world back, and the two would fight over it forever.
  */
 export const CLOSE_REPLACED = 4002
 

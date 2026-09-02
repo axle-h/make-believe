@@ -17,7 +17,7 @@ phone the whole time: drive, say something, redraw your blob, take a new name,
 in any order, whenever. **The TV takes no input at all** — no keyboard, no
 remote, nothing to click. It is a window onto the world; the phones run it.
 Rounds may arrive one day with an actual game idea (milestone 11); until then
-nothing may put a phone into a mode or make it wait its turn (docs D-026).
+nothing may put a phone into a mode or make it wait its turn.
 
 Android + desktop browsers only. iPhone is explicitly not a target.
 
@@ -59,9 +59,9 @@ Everything ships as **one container running one Node process**. The two "modes" 
   package.json              # root scripts: dev, build, test, test:e2e, lint, typecheck
   tsconfig.base.json
   Dockerfile
-  k8s/                      # deployment.yaml, service.yaml (ingress = future work)
+  k8s/                      # deployment, service, traefik ingress + middleware
   e2e/                      # Playwright tests (root-level, exercise the built app)
-  androidtv/                # Android TV (Kotlin) WebView wrapper for the host. Gradle project, not a pnpm package. Phase 10.
+  androidtv/                # Android TV (Kotlin) WebView wrapper for the host. Gradle project, not a pnpm package. Not built yet — docs/android-tv.md.
   packages/
     shared/                 # message types + zod schemas, room-code helpers. Zero runtime deps except zod.
     web/                    # ONE Vite project
@@ -151,7 +151,7 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 - DOM wiring is covered by e2e, not unit tests.
 
 **e2e (`/e2e`, Playwright)** — runs against `pnpm build && pnpm start`.
-- One browser context opens `/host/` and reads the room code from the DOM.
+- One browser context opens `/host/` and reads the room code off the `window.__game` test hook. Nothing on the TV spells the code out — it lives only inside the QR code's URL.
 - Two more contexts open `/?room=<code>` (the link the QR code carries), enter a name, and join.
 - Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round-trips a PNG; a blob is renamed and redrawn mid-game without losing its place.
 - Uses Playwright's `webServer` option to start the built app. `pnpm test:e2e`. Not run on every `pnpm test` — it's slower and needs browsers installed.
@@ -162,34 +162,33 @@ Conventions: `*.test.ts` next to the code. No mocking of `shared` — it's tiny 
 
 **Dockerfile** (multi-stage):
 1. `node:22-alpine` + `corepack enable`; copy lockfile + workspace manifests; `pnpm install --frozen-lockfile`; copy source; `pnpm build`.
-2. `node:22-alpine` runtime: copy `packages/server/dist/index.js` and `packages/web/dist/`. No `node_modules`. `USER node`. `EXPOSE 3000`. `CMD ["node", "server/index.js"]`.
+2. `node:22-alpine` runtime: copy `packages/server/dist/index.js` and `packages/web/dist/`. No `node_modules`. `USER node`. `EXPOSE 3000`. `CMD ["node", "server/index.mjs"]`.
 
 **k8s/** — a `Deployment` (replicas: 1, `strategy: Recreate` since the world is in-memory and two pods would split it), a `ClusterIP` `Service` on 3000, readiness + liveness probes on `/healthz`. Resource requests can be tiny.
 
 ## Future work (explicitly out of scope for now — do not implement)
 
 - Any persistence (scores, saved drawings).
-- CI. When it comes, GitHub Actions running `pnpm test` + `pnpm build` + docker build is enough.
 
 ## Milestones
 
-1. **Skeleton (do this first, nothing else):** pnpm workspace, `shared` schemas, `server` relay + tests, `web` with both pages. Host page shows the room code and one coloured square per connected player on a plain `<canvas>` (no Phaser yet). Player page has a joystick that moves your square. `pnpm dev` works; `pnpm build && pnpm start` works; Dockerfile builds and runs.
-2. Join screen with name entry → name label above square. Host page titled "MAKE believe".
-3. Introduce the pure game model + its tests. Swap the plain canvas for Phaser (arcade physics, world bounds, `Scale.FIT`).
-4. Text → speech bubbles.
-5. Drawing → canvas on phone → `textures.addBase64` → sprite skin.
-6. QR code on host screen; reconnect handling; Playwright e2e.
-7. k8s manifests, deploy to k3s.
-8. HTTPS at the edge: ingress, hostname, Let's Encrypt. Needed before the PWA; also turns on Wake Lock and clipboard on phones.
-9. Phone PWA: installable, self-updating player page (hand-written network-first service worker, no plugin).
-10. Android TV app: minimal native Kotlin WebView wrapper in `/androidtv`, leanback launcher entry, loads the host page remotely so it updates itself. Not Capacitor, not a browser. Target device is a Fire TV Stick 4K Max (Fire OS 7, Android 9, API 28); nothing Fire-specific.
-11. Then actual game ideas.
+Milestones 1 to 8 are **done and deployed**: the workspace and relay, join and
+names, the pure game model under Phaser, speech bubbles, drawings as blob skins,
+the QR code and reconnect handling with a Playwright suite, k3s, and HTTPS at the
+edge. What they built is described by the code, the commit history and
+`k8s/README.md` — don't go looking for a plan document for any of it.
+
+What is left:
+
+9. Phone PWA: installable, self-updating player page (hand-written network-first service worker, no plugin). Planned in [`docs/phone-pwa.md`](docs/phone-pwa.md).
+10. Android TV app: minimal native Kotlin WebView wrapper in `/androidtv`, leanback launcher entry, loads the host page remotely so it updates itself. Not Capacitor, not a browser. Target device is a Fire TV Stick 4K Max (Fire OS 7, Android 9, API 28); nothing Fire-specific. Planned in [`docs/android-tv.md`](docs/android-tv.md).
+11. Then actual game ideas — and the place rounds would come back, if they ever do.
 
 ## Phaser notes (host)
 
-- `new Phaser.Game({ type: Phaser.AUTO, width: 1280, height: 720, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }, physics: { default: 'arcade' }, scene: [...] })`.
-- Scenes: `preload` / `create` / `update`. Open the WebSocket in `create`, feed messages into the game model, apply velocities in `update` via `sprite.setVelocity(dx * speed, dy * speed)`.
-- Arcade physics + `setCollideWorldBounds(true)` — never hand-roll movement in the Phaser layer.
+- `new Phaser.Game({ type: Phaser.AUTO, width: 1280, height: 720, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }, scene: [...] })`.
+- **Arcade physics is deliberately not enabled.** The pure model owns every blob's position: `tick` integrates movement, clamps to the world bounds and separates overlapping blobs, and the scene's `update` calls `tick` then copies positions onto sprites. Two integrators would fight, and the model is the one that is unit-tested and that the e2e suite reads. If real physics is ever wanted (bounce, momentum, mass), it grows in `src/host/game/`, not in the Phaser layer — do not quietly turn arcade physics back on beside a model that is still moving things.
+- Scenes: `preload` / `create` / `update`. The socket lives in `main.ts`, not the scene; messages go into the game model and the scene only draws it.
 - Drawing: `this.textures.addBase64(key, png)`, then on the `addtexture-<key>` event call `sprite.setTexture(key)`.
 - Names and speech bubbles are `this.add.text(...)` objects positioned relative to the sprite each frame; fade bubbles with a tween then `destroy()`.
 - Verify Phaser 4 APIs against `node_modules/phaser/types/phaser.d.ts` if unsure; don't guess from Phaser 3 memory.
@@ -197,13 +196,13 @@ Conventions: `*.test.ts` next to the code. No mocking of `shared` — it's tiny 
 ## Player notes
 
 - Touch joystick: `nipplejs` or ~50 lines of pointer-event code. Send normalised `{dx, dy}`, throttled.
-- Drawing: fixed-size canvas (256×256) with a faint outline of the blob as a guide. "Done" → `toDataURL('image/png')` → send.
+- Drawing: fixed-size canvas (256×256) that starts as the blob itself — the player's own colour, in the same rounded-square shape — so the guide is the shape rather than an outline on top of it. "Done" → `toDataURL('image/png')` → send.
 - Wake Lock API to stop phones sleeping (may be unavailable without HTTPS — degrade gracefully).
 - Mobile keyboards shift layout — test the Say sheet on a real phone early.
 
 ## How I want to work
 
-- Small, runnable increments. Milestone 1 before anything else, including its tests.
+- Small, runnable increments, one milestone at a time and in order.
 - Tests alongside the code they test, written in the same change.
 - Don't add dependencies beyond `phaser`, `ws`, `sirv`, `zod`, `nipplejs` (optional), a QR library, `vitest`, `playwright`, `tsx`, `esbuild` without asking.
 - Keep the three packages cleanly separated; `shared` is the only cross-import.

@@ -11,8 +11,7 @@ import { WORLD_SCENE_KEY } from './sceneKey.js'
 
 /**
  * The one scene. It renders the model and nothing else: the model moves the
- * blobs (see docs/DECISIONS.md, D-013), so this layer stays thin enough that
- * it needs no tests of its own.
+ * blobs, so this layer stays thin enough that it needs no tests of its own.
  */
 
 /** A white rounded square, generated once and tinted per blob. */

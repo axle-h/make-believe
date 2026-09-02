@@ -13,7 +13,7 @@ import {
 /**
  * One evening in front of the TV: two phones scan in, drive their own blobs,
  * say something, and draw — all of it whenever they like, because the session
- * is one continuous game with no rounds (docs D-026). Everything is asserted
+ * is one continuous game with no rounds. Everything is asserted
  * through the host's model, which is the single source of truth.
  */
 test.describe('a party', () => {

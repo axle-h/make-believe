@@ -9,7 +9,10 @@ import { MAX_NAME_LENGTH, isValidName } from './blobName.js'
 
 /** Longest speech-bubble text a player may send. */
 export const MAX_TEXT_LENGTH = 60
-/** Longest `data:` URL accepted for a drawing (see docs/DECISIONS.md, D-003). */
+/**
+ * Longest `data:` URL accepted for a drawing. A 256x256 doodle is far below
+ * 256 KiB; a photo-sized paste is not, and the server drops it.
+ */
 export const MAX_PNG_LENGTH = 262_144
 
 const PNG_DATA_URL_PREFIX = 'data:image/png;base64,'
@@ -87,7 +90,7 @@ export const HostToPlayerMessageSchema = z.discriminatedUnion('type', [
 /**
  * What the host actually puts on the wire: a player message plus a `to`. The
  * TV has one thing to say to a phone — which blob it is — because the game is
- * one continuous session with no rounds to announce (docs D-026).
+ * one continuous session with no rounds to announce.
  */
 export const HostOutboundMessageSchema = AssignedMessageSchema.extend({
   to: RecipientSchema,

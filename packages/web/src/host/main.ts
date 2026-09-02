@@ -17,7 +17,7 @@ import './host.css'
  * socket and the wiring between the two.
  *
  * The TV takes no input of its own — no keys, no buttons, nothing to click. It
- * is a window onto the world and the phones run everything (docs D-026).
+ * is a window onto the world and the phones run everything.
  */
 
 const state: GameState = createGame()
@@ -92,7 +92,7 @@ const client = connect({
   },
   onFatal: ({ reason }) => {
     // Another TV opened the host page and took the world. This one steps
-    // aside rather than reconnecting and fighting for it (D-020).
+    // aside rather than reconnecting and fighting for it.
     if (statusEl) {
       statusEl.textContent =
         reason === 'replaced'
