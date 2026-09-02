@@ -28,6 +28,12 @@ export interface Director {
   interludeMs: number
   /** How many objectives this world has made; ids and nothing else. */
   made: number
+  /**
+   * What was played last, so the next one is something else where there is
+   * anything else to play. Three goes at the same task in a row reads as a
+   * broken game long before it reads as bad luck.
+   */
+  lastKind: Objective['kind'] | null
   /** The last thing each phone was told, so only changes go on the wire. */
   announced: Brief[]
 }
@@ -52,6 +58,7 @@ export function createDirector(seed: number = randomSeed()): Director {
     current: null,
     interludeMs: 0,
     made: 0,
+    lastKind: null,
     announced: [],
   }
 }
@@ -107,8 +114,12 @@ function startNext(state: GameState): void {
   // not a failure and nobody is told off for it.
   if (eligible.length === 0) return
 
+  // Anything but the one they have just done, unless that is all there is.
+  const fresh = eligible.filter((template) => template.kind !== director.lastKind)
+  const template = pick(director.rng, fresh.length > 0 ? fresh : eligible)
+
   director.made += 1
-  const template = pick(director.rng, eligible)
+  director.lastKind = template.kind
   director.current = template.generate({
     id: `obj-${director.made}`,
     world: state.world,
@@ -146,7 +157,9 @@ function complete(director: Director, objective: Objective): void {
     director.streak = 0
     director.level = Math.min(MAX_LEVEL, director.level + 1)
   }
-  objective.note = pick(director.rng, WELL_DONE)
+  // A task with something of its own to say about how it ended has already
+  // said it — who was left holding the potato is better than "Brilliant!".
+  objective.note ??= pick(director.rng, WELL_DONE)
   director.interludeMs = INTERLUDE_MS
 }
 
@@ -155,7 +168,7 @@ function complete(director: Director, objective: Objective): void {
  * streak towards the next one. It simply ends and another appears.
  */
 function expire(director: Director, objective: Objective): void {
-  objective.note = pick(director.rng, NEVER_MIND)
+  objective.note ??= pick(director.rng, NEVER_MIND)
   director.interludeMs = INTERLUDE_MS
 }
 

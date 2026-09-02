@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from '../apply.js'
 import { INTERLUDE_MS, LEVEL_UP_AFTER, SCORE_PER_OBJECTIVE } from '../constants.js'
-import { activePlayers } from '../selectors.js'
+import { activePlayers, objectives } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { tick } from '../tick.js'
 import { contains } from '../zones.js'
@@ -28,6 +28,30 @@ function started(state: GameState): Objective {
   const objective = state.objectives.current
   if (!objective) throw new Error('expected an objective')
   return objective
+}
+
+/**
+ * Start the task this test is about. The director never asks for the same
+ * thing twice running while there is anything else it could ask for, so saying
+ * what was just played is how a test says what it wants next. The guard is
+ * there for the day a third template makes that no longer enough.
+ */
+function startedOnTheSpot(state: GameState): Objective {
+  state.objectives.lastKind = 'hotPotato'
+  const objective = started(state)
+  expect(objective.kind).toBe('onTheSpot')
+  return objective
+}
+
+/** Watch a few tasks go by, however each of them ends, and say what they were. */
+function kindsOverTime(state: GameState, count: number): Objective['kind'][] {
+  const kinds: Objective['kind'][] = []
+  while (kinds.length < count) {
+    kinds.push(started(state).kind)
+    runUntilFinished(state, 1_000)
+    stepObjectives(state, INTERLUDE_MS + 1)
+  }
+  return kinds
 }
 
 /** Stand everybody on the first zone, exactly as driving there would. */
@@ -135,10 +159,10 @@ describe('finishing one', () => {
   })
 
   it('asks for a smaller spot as the level goes up', () => {
-    const easy = started(room(['Wilf', 'Ida', 'Ted'], 9))
+    const easy = startedOnTheSpot(room(['Wilf', 'Ida', 'Ted'], 9))
     const state = room(['Wilf', 'Ida', 'Ted'], 9)
     state.objectives.level = 6
-    const hard = started(state)
+    const hard = startedOnTheSpot(state)
 
     const before = easy.zones[0]
     const after = hard.zones[0]
@@ -155,7 +179,7 @@ describe('running out of time', () => {
     state.objectives.score = 30
     state.objectives.streak = 2
     state.objectives.level = 3
-    const objective = started(state)
+    const objective = startedOnTheSpot(state)
     runUntilFinished(state, 1000)
 
     expect(objective.outcome).toBe('expired')
@@ -167,10 +191,77 @@ describe('running out of time', () => {
 
   it('says something kind about it', () => {
     const state = room(['Wilf', 'Ida'])
-    const objective = started(state)
+    const objective = startedOnTheSpot(state)
     runUntilFinished(state, 1000)
 
     expect(objective.note).toBeTruthy()
+  })
+})
+
+/**
+ * More than one thing to do. The level decides what the room is allowed to be
+ * asked for, and the director decides which of those it actually asks — never
+ * the same thing twice running while there is anything else going.
+ */
+describe('a ladder of tasks', () => {
+  it('keeps the harder task off the floor until the room has levelled up', () => {
+    const state = room(['Wilf', 'Ida', 'Ted'], 3)
+
+    expect(new Set(kindsOverTime(state, 6))).toEqual(new Set(['onTheSpot']))
+  })
+
+  it('asks for something else once the room has levelled up', () => {
+    const state = room(['Wilf', 'Ida', 'Ted'], 3)
+    state.objectives.level = 2
+
+    expect(new Set(kindsOverTime(state, 6))).toEqual(new Set(['onTheSpot', 'hotPotato']))
+  })
+
+  it('never asks for the same thing twice running', () => {
+    const state = room(['Wilf', 'Ida', 'Ted'], 5)
+    state.objectives.level = 4
+    const kinds = kindsOverTime(state, 8)
+
+    for (const [index, kind] of kinds.entries()) {
+      if (index > 0) expect(kind).not.toBe(kinds[index - 1])
+    }
+  })
+
+  /** With nothing else eligible, repeating is not a fault — it is all there is. */
+  it('repeats itself only when there is nothing else it could ask for', () => {
+    const state = room(['Wilf', 'Ida'], 5)
+
+    expect(kindsOverTime(state, 3)).toEqual(['onTheSpot', 'onTheSpot', 'onTheSpot'])
+  })
+
+  /**
+   * "Brilliant!" is what the world says when a task has nothing of its own to
+   * say. Who was left holding the potato is better, so the task's own words win.
+   */
+  it('lets a task say for itself how it ended', () => {
+    const state = room(['Wilf', 'Ida'], 5)
+    state.objectives.level = 2
+    state.objectives.lastKind = 'onTheSpot'
+    const objective = started(state)
+    expect(objective.kind).toBe('hotPotato')
+
+    runUntilFinished(state, 1_000)
+
+    expect(objective.note).toContain('holding it')
+    expect(banner(state)?.tone).toBe('win')
+    expect(state.objectives.score).toBe(SCORE_PER_OBJECTIVE)
+  })
+
+  /** The potato has to reach the screen, and it rides on the blob wearing it. */
+  it('puts what the task has pinned to a blob into the snapshot', () => {
+    const state = room(['Wilf', 'Ida'], 5)
+    state.objectives.level = 2
+    state.objectives.lastKind = 'onTheSpot'
+    const objective = started(state)
+
+    const shown = objectives(state).objective
+    expect(shown?.marks).toEqual(objective.marks)
+    expect(shown?.marks[0]?.playerId).toBe((objective as { it?: string }).it)
   })
 })
 

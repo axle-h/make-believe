@@ -64,6 +64,7 @@ export const onTheSpot: ObjectiveTemplate<OnTheSpotObjective> = {
       remainingMs: Math.round(scale(TIME_LIMIT.easy, TIME_LIMIT.hard, hard)),
       totalMs: Math.round(scale(TIME_LIMIT.easy, TIME_LIMIT.hard, hard)),
       zones: [zone],
+      marks: [],
       outcome: 'running',
       note: null,
       holdMs: Math.round(scale(HOLD.easy, HOLD.hard, hard)),

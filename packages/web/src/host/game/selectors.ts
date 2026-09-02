@@ -1,4 +1,4 @@
-import type { Outcome } from './objectives/types.js'
+import type { Mark, Outcome } from './objectives/types.js'
 import type { GameState, Player } from './state.js'
 import type { Zone } from './zones.js'
 
@@ -52,6 +52,8 @@ export interface ObjectiveSnapshot {
   /** What the TV says once it is over, or `null` while it is running. */
   note: string | null
   zones: Zone[]
+  /** What the world has pinned to particular blobs — the potato, and later a crown. */
+  marks: Mark[]
 }
 
 export interface DirectorSnapshot {
@@ -92,6 +94,7 @@ export function objectives(state: GameState): DirectorSnapshot {
             outcome: objective.outcome,
             note: objective.note,
             zones: objective.zones,
+            marks: objective.marks,
           },
   }
 }
@@ -129,6 +132,12 @@ function copyObjectives(director: DirectorSnapshot): DirectorSnapshot {
   return {
     ...director,
     objective:
-      objective === null ? null : { ...objective, zones: structuredClone(objective.zones) },
+      objective === null
+        ? null
+        : {
+            ...objective,
+            zones: structuredClone(objective.zones),
+            marks: structuredClone(objective.marks),
+          },
   }
 }

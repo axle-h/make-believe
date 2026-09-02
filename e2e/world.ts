@@ -48,6 +48,12 @@ export interface ZoneSnapshot {
   colour: string
 }
 
+/** Something the world has pinned to one blob: the potato, and later a crown. */
+export interface MarkSnapshot {
+  playerId: string
+  badge: string
+}
+
 export interface ObjectiveSnapshot {
   id: string
   kind: string
@@ -57,6 +63,7 @@ export interface ObjectiveSnapshot {
   outcome: 'running' | 'done' | 'expired'
   note: string | null
   zones: ZoneSnapshot[]
+  marks: MarkSnapshot[]
 }
 
 export interface DirectorSnapshot {

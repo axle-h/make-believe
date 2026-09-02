@@ -1,3 +1,4 @@
+import { hotPotato } from './hotPotato.js'
 import { onTheSpot } from './onTheSpot.js'
 import type { Objective, ObjectiveTemplate } from './types.js'
 
@@ -9,7 +10,7 @@ import type { Objective, ObjectiveTemplate } from './types.js'
  * written against its own kind, and TypeScript's bivariant method parameters
  * are what let both be true without a cast — see `ObjectiveTemplate`.
  */
-export const TEMPLATES: readonly ObjectiveTemplate<Objective>[] = [onTheSpot]
+export const TEMPLATES: readonly ObjectiveTemplate<Objective>[] = [onTheSpot, hotPotato]
 
 export function templateFor(kind: Objective['kind']): ObjectiveTemplate<Objective> {
   const template = TEMPLATES.find((candidate) => candidate.kind === kind)

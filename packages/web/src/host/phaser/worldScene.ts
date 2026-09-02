@@ -4,10 +4,13 @@ import {
   MAX_STEP_MS,
   banner,
   objectives,
+  playerById,
   players,
   tick,
   type Brief,
+  type DirectorSnapshot,
   type GameState,
+  type ObjectiveSnapshot,
   type Player,
   type Zone,
 } from '../game/index.js'
@@ -44,6 +47,8 @@ const TIMER_GAP = 12
 /** How see-through a zone's fill is. Enough to read, never enough to hide a blob. */
 const ZONE_FILL_ALPHA = 0.14
 const ZONE_EDGE_WIDTH = 6
+/** How far the score sits from the corner it lives in. */
+const SCORE_MARGIN = 26
 
 /** The floor is under everything; blobs, names and bubbles stack over it. */
 const DEPTH_ZONE = -10
@@ -96,6 +101,25 @@ const TONE_COLOURS: Record<Brief['tone'], string> = {
   miss: '#ffd23f',
 }
 
+/** What the world has pinned to a blob, worn in the middle of it. */
+const MARK_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
+  fontFamily: 'system-ui, sans-serif',
+  fontSize: '46px',
+  align: 'center',
+}
+
+/**
+ * How well the room is doing. It is deliberately the quietest thing on screen:
+ * a number to notice going up, never a scoreboard to play towards, and nothing
+ * a child has to be able to read to play.
+ */
+const SCORE_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
+  fontFamily: 'system-ui, sans-serif',
+  fontSize: '24px',
+  color: 'rgba(244, 241, 234, 0.4)',
+  align: 'right',
+}
+
 const BUBBLE_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'system-ui, sans-serif',
   fontSize: '30px',
@@ -134,6 +158,8 @@ export class WorldScene extends Phaser.Scene {
   private readonly state: GameState
   private readonly options: SceneOptions
   private readonly views = new Map<string, BlobView>()
+  /** Whatever the task has pinned to a blob, by `playerId`. */
+  private readonly marks = new Map<string, Phaser.GameObjects.Text>()
   private waiting: Phaser.GameObjects.Text | null = null
   /** The floor markings, redrawn only when the zones themselves change. */
   private floor: Phaser.GameObjects.Graphics | null = null
@@ -142,6 +168,7 @@ export class WorldScene extends Phaser.Scene {
   private headline: Phaser.GameObjects.Text | null = null
   private detail: Phaser.GameObjects.Text | null = null
   private timer: Phaser.GameObjects.Graphics | null = null
+  private score: Phaser.GameObjects.Text | null = null
 
   constructor(state: GameState, options: SceneOptions = {}) {
     super(WORLD_SCENE_KEY)
@@ -176,6 +203,15 @@ export class WorldScene extends Phaser.Scene {
     const middle = this.state.world.width / 2
     this.headline = this.add.text(middle, BANNER_TOP, '', BANNER_STYLE).setOrigin(0.5, 0).setDepth(DEPTH_BANNER)
     this.detail = this.add.text(middle, BANNER_TOP, '', BANNER_DETAIL_STYLE).setOrigin(0.5, 0).setDepth(DEPTH_BANNER)
+    this.score = this.add
+      .text(
+        this.state.world.width - SCORE_MARGIN,
+        this.state.world.height - SCORE_MARGIN,
+        '',
+        SCORE_STYLE,
+      )
+      .setOrigin(1, 1)
+      .setDepth(DEPTH_BANNER)
   }
 
   override update(_time: number, delta: number): void {
@@ -188,6 +224,9 @@ export class WorldScene extends Phaser.Scene {
 
   private render(): void {
     const list = players(this.state)
+    // One read of the objective for the whole frame; four separate ones would
+    // rebuild the same snapshot four times over.
+    const director = objectives(this.state)
     const seen = new Set<string>()
 
     for (const player of list) {
@@ -213,8 +252,47 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.waiting?.setVisible(list.length === 0)
-    this.renderFloor()
-    this.renderBanner()
+    this.renderFloor(director.objective)
+    this.renderMarks(director.objective)
+    this.renderBanner(director.objective)
+    this.renderScore(director)
+  }
+
+  /**
+   * Whatever the task has pinned to particular blobs — the potato, and one day
+   * a crown. It is worn in the middle of the blob rather than above it: the
+   * space over their heads is already names and speech bubbles, and a child
+   * working out who has it should not have to read anything to find out.
+   */
+  private renderMarks(objective: ObjectiveSnapshot | null): void {
+    const worn = new Set<string>()
+    for (const mark of objective?.marks ?? []) {
+      const player = playerById(this.state, mark.playerId)
+      if (!player) continue
+      worn.add(mark.playerId)
+      const badge = this.marks.get(mark.playerId) ?? this.createMark(mark.playerId)
+      if (badge.text !== mark.badge) badge.setText(mark.badge)
+      badge.setPosition(player.x, player.y).setAlpha(player.away ? AWAY_ALPHA : 1)
+    }
+    for (const [playerId, badge] of this.marks) {
+      if (worn.has(playerId)) continue
+      badge.destroy()
+      this.marks.delete(playerId)
+    }
+  }
+
+  private createMark(playerId: string): Phaser.GameObjects.Text {
+    const badge = this.add.text(0, 0, '', MARK_STYLE).setOrigin(0.5, 0.5).setDepth(DEPTH_NAME)
+    this.marks.set(playerId, badge)
+    return badge
+  }
+
+  /** How the room is doing, in the corner, for whoever cares to look. */
+  private renderScore(director: DirectorSnapshot): void {
+    const score = this.score
+    if (!score) return
+    const line = `Level ${director.level} · ${director.score}`
+    if (score.text !== line) score.setText(line)
   }
 
   /**
@@ -222,8 +300,8 @@ export class WorldScene extends Phaser.Scene {
    * is concerned — the banner explains, but the spot is the thing they look at
    * — so they are drawn plainly and under everybody's feet.
    */
-  private renderFloor(): void {
-    const zones = objectives(this.state).objective?.zones ?? []
+  private renderFloor(objective: ObjectiveSnapshot | null): void {
+    const zones = objective?.zones ?? []
     const signature = zones.map(zoneSignature).join('|')
     if (signature === this.floorFor) return
     this.floorFor = signature
@@ -254,7 +332,7 @@ export class WorldScene extends Phaser.Scene {
    * phones are told, so a child looking down and a child looking up are reading
    * the same thing.
    */
-  private renderBanner(): void {
+  private renderBanner(objective: ObjectiveSnapshot | null): void {
     const headline = this.headline
     const detail = this.detail
     if (!headline || !detail) return
@@ -268,16 +346,18 @@ export class WorldScene extends Phaser.Scene {
     if (detail.text !== under) detail.setText(under)
     detail.setVisible(text.length > 0 && under.length > 0).setY(headline.y + headline.height)
 
-    this.renderTimer(detail.visible ? detail.y + detail.height : headline.y + headline.height)
+    this.renderTimer(
+      objective,
+      detail.visible ? detail.y + detail.height : headline.y + headline.height,
+    )
   }
 
   /** How much of the clock is left, as a bar rather than a number to read. */
-  private renderTimer(top: number): void {
+  private renderTimer(objective: ObjectiveSnapshot | null, top: number): void {
     const timer = this.timer
     if (!timer) return
     timer.clear()
 
-    const objective = objectives(this.state).objective
     if (!objective || objective.outcome !== 'running' || objective.totalMs <= 0) return
 
     const left = (this.state.world.width - TIMER_WIDTH) / 2

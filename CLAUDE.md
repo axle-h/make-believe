@@ -216,11 +216,14 @@ What is left:
     running at all times, procedurally parameterised and levelled up as the
     room gets good at them. Never rounds — no phone ever waits its turn.
     Planned in [`docs/objectives.md`](docs/objectives.md).
-    **11a is built**: the seeded RNG, zones, the director, "everybody on the
-    spot", the `brief` message, the banner and timer on the TV and the strip
-    above the joystick. 11b to 11e — more tasks and the ladder, pads and
-    private briefs, talking and drawing as tasks, carryables — are still to
-    do, in that order.
+    **11a and 11b are built**: the seeded RNG, zones, the director, the
+    `brief` message, the banner and timer on the TV and the strip above the
+    joystick; "everybody on the spot" and "hot potato"; the ladder, with
+    `minLevel` gating what a room may be asked for and the director never
+    asking for the same thing twice running; marks (the potato, worn on a
+    blob) and the score and level in the corner of the TV. 11c to 11e — pads
+    and private briefs, talking and drawing as tasks, carryables — are still
+    to do, in that order.
 
 ## Phaser notes (host)
 

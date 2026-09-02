@@ -2,6 +2,7 @@ import type { Recipient, ServerToHostMessage } from '@make-believe/shared'
 import type { Rng } from '../rng.js'
 import type { GameState, Player, World } from '../state.js'
 import type { Zone } from '../zones.js'
+import type { HotPotatoObjective } from './hotPotato.js'
 import type { OnTheSpotObjective } from './onTheSpot.js'
 
 /**
@@ -28,6 +29,18 @@ export interface Brief {
   tone: 'task' | 'win' | 'miss'
 }
 
+/**
+ * Something the world has pinned to one blob: the potato, the crown, whose
+ * turn it is to draw. It is drawn *on* the blob rather than beside it, because
+ * a child working out who has it should not have to read anything to find out,
+ * and the names and bubbles are already stacked above their heads.
+ */
+export interface Mark {
+  playerId: string
+  /** A character or two. It has to carry across a room at a glance. */
+  badge: string
+}
+
 export interface ObjectiveBase {
   /** Stable across the objective's life; the renderer keeps its views by it. */
   id: string
@@ -36,6 +49,8 @@ export interface ObjectiveBase {
   remainingMs: number
   totalMs: number
   zones: Zone[]
+  /** Whatever the world has pinned to particular blobs, if anything. */
+  marks: Mark[]
   outcome: Outcome
   /**
    * What the TV says once it is over — cheerful either way, because running
@@ -45,7 +60,7 @@ export interface ObjectiveBase {
 }
 
 /** Every kind of objective there is. One file each, listed in the registry. */
-export type Objective = OnTheSpotObjective
+export type Objective = OnTheSpotObjective | HotPotatoObjective
 
 export interface GenerateContext {
   /** Minted by the director, so ids are stable and predictable in a test. */

@@ -283,9 +283,9 @@ carryables.
 
 ## Work
 
-Five increments, each runnable and each worth playing on its own. 11a is
-built; what it looks like is in the code and the commit history, and the list
-below is left as it was written so the shape of the rest still reads.
+Five increments, each runnable and each worth playing on its own. 11a and 11b
+are built; what they look like is in the code and the commit history, and the
+list below is left as it was written so the shape of the rest still reads.
 
 ### 11a — the spine, and one task — **done**
 
@@ -315,13 +315,24 @@ below is left as it was written so the shape of the rest still reads.
 - e2e: two players join, both drive into the circle, the objective completes and
   the score rises — asserted through `window.__game`, not pixels.
 
-### 11b — a second task, and the ladder
+### 11b — a second task, and the ladder — **done**
 
 - `hotPotato.ts`, using the collisions that already exist. It is PVP, so it
   proves the engine is not shaped only around cooperation.
 - The director picks between eligible templates rather than always generating
   the same one; `minLevel` starts gating.
 - The score and level get their quiet corner of the TV.
+
+It also grew one thing the plan above did not name: a **mark**, a badge the
+world pins to a particular blob and the renderer draws in the middle of it.
+The potato is the first; the crown and whose turn it is to draw are the same
+idea. It lives on `ObjectiveBase` beside `zones`, so the renderer draws it
+without knowing which task put it there.
+
+Two smaller decisions worth keeping: the director will not ask for the same
+task twice running while anything else is eligible, and a template that has
+something of its own to say about how it ended (who was left holding it) keeps
+its own words instead of the generic cheer.
 
 ### 11c — pads, and the private brief
 
