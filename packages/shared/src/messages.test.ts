@@ -118,18 +118,38 @@ describe('text', () => {
 
 describe('assigned and waiting', () => {
   it('accepts valid host messages', () => {
-    expect(AssignedMessageSchema.safeParse({ type: 'assigned', colour: '#ff0000', slot: 0 }).success).toBe(
-      true,
-    )
+    expect(
+      AssignedMessageSchema.safeParse({
+        type: 'assigned',
+        colour: '#ff0000',
+        slot: 0,
+        hasDrawing: false,
+      }).success,
+    ).toBe(true)
     expect(WaitingMessageSchema.safeParse({ type: 'waiting' }).success).toBe(true)
   })
 
   it('rejects malformed host messages', () => {
-    expect(AssignedMessageSchema.safeParse({ type: 'assigned', colour: '#f00', slot: -1 }).success).toBe(
+    expect(
+      AssignedMessageSchema.safeParse({ type: 'assigned', colour: '#f00', slot: -1, hasDrawing: false })
+        .success,
+    ).toBe(false)
+    expect(
+      AssignedMessageSchema.safeParse({ type: 'assigned', colour: '', slot: 0, hasDrawing: false }).success,
+    ).toBe(false)
+    expect(WaitingMessageSchema.safeParse({ type: 'nearly-waiting' }).success).toBe(false)
+  })
+
+  it('makes the host say whether it has the drawing, rather than guessing', () => {
+    // A phone that cannot tell would either lose its picture or resend it on
+    // every hello, so the answer is required and must be a boolean.
+    expect(AssignedMessageSchema.safeParse({ type: 'assigned', colour: '#f00', slot: 0 }).success).toBe(
       false,
     )
-    expect(AssignedMessageSchema.safeParse({ type: 'assigned', colour: '', slot: 0 }).success).toBe(false)
-    expect(WaitingMessageSchema.safeParse({ type: 'nearly-waiting' }).success).toBe(false)
+    expect(
+      AssignedMessageSchema.safeParse({ type: 'assigned', colour: '#f00', slot: 0, hasDrawing: 'yes' })
+        .success,
+    ).toBe(false)
   })
 })
 
@@ -154,17 +174,30 @@ describe('unions', () => {
 
   it('accepts host messages to a player and to everyone', () => {
     expect(
-      HostOutboundMessageSchema.safeParse({ type: 'assigned', colour: '#0f0', slot: 1, to: '*' }).success,
+      HostOutboundMessageSchema.safeParse({
+        type: 'assigned',
+        colour: '#0f0',
+        slot: 1,
+        hasDrawing: false,
+        to: '*',
+      }).success,
     ).toBe(true)
     expect(
-      HostOutboundMessageSchema.safeParse({ type: 'assigned', colour: '#0f0', slot: 1, to: 'p2' }).success,
+      HostOutboundMessageSchema.safeParse({
+        type: 'assigned',
+        colour: '#0f0',
+        slot: 1,
+        hasDrawing: true,
+        to: 'p2',
+      }).success,
     ).toBe(true)
   })
 
   it('rejects a host message without a recipient', () => {
-    expect(HostOutboundMessageSchema.safeParse({ type: 'assigned', colour: '#0f0', slot: 1 }).success).toBe(
-      false,
-    )
+    expect(
+      HostOutboundMessageSchema.safeParse({ type: 'assigned', colour: '#0f0', slot: 1, hasDrawing: false })
+        .success,
+    ).toBe(false)
   })
 
   it('will not let the host send a phone off to wait — only the relay does that', () => {
@@ -181,9 +214,10 @@ describe('unions', () => {
     expect(
       ServerToHostMessageSchema.safeParse({ type: 'input', playerId: 'p1', dx: 0, dy: 0 }).success,
     ).toBe(true)
-    expect(ServerToHostMessageSchema.safeParse({ type: 'assigned', colour: 'red', slot: 0 }).success).toBe(
-      false,
-    )
+    expect(
+      ServerToHostMessageSchema.safeParse({ type: 'assigned', colour: 'red', slot: 0, hasDrawing: false })
+        .success,
+    ).toBe(false)
   })
 })
 

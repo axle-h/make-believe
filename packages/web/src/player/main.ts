@@ -32,6 +32,13 @@ import './player.css'
 const PLAYER_ID_KEY = 'make-believe.playerId'
 const NAME_KEY = 'make-believe.name'
 const ROOM_KEY = 'make-believe.room'
+/**
+ * The last drawing this phone sent. The world keeps no state across a restart,
+ * so the phone is the only place a picture survives one — and it is kept in
+ * storage rather than memory so that reloading the phone does not lose it
+ * either.
+ */
+const DRAWING_KEY = 'make-believe.drawing'
 
 /** How long to wait before trying the TV again while it is away. */
 const FIRST_WAIT_RETRY_MS = 800
@@ -194,7 +201,7 @@ function submitJoin(): void {
 /** Open a socket for the current session. The TV decides what happens next. */
 function openSocket(): void {
   if (!session) return
-  const { room, name } = session
+  const { room } = session
   client?.close()
   client = connect({
     query: { role: 'player', room, playerId },
@@ -204,7 +211,7 @@ function openSocket(): void {
       linkStatus.hidden = status === 'open'
       if (status !== 'open') return
       retryMs = FIRST_WAIT_RETRY_MS
-      sendMessage({ type: 'join', playerId, name })
+      sayHello()
       keepAwake()
       void checkForNewBuild()
     },
@@ -224,6 +231,17 @@ function openSocket(): void {
 }
 
 /**
+ * Tell the TV who this phone is. The name is read at the moment of sending
+ * rather than when the socket was opened: the client reconnects on its own
+ * after a blip, and a blob renamed in between would otherwise be introduced
+ * under its old name and quietly renamed back.
+ */
+function sayHello(): void {
+  if (!session) return
+  sendMessage({ type: 'join', playerId, name: session.name })
+}
+
+/**
  * The TV has two things it can say. `assigned` means "you are the blue one",
  * and it doubles as the way in: it only ever arrives in answer to a hello, so
  * it is proof the TV knows this phone and the controller can go up.
@@ -234,6 +252,12 @@ function applyMessage(message: HostToPlayerMessage): void {
     blobColour = message.colour
     playName.textContent = session?.name ?? ''
     if (screen !== 'play') showScreen('play')
+    // A world that has never seen this blob's drawing gets it now: a TV that
+    // has reloaded has forgotten every picture on it, and this phone is
+    // holding the only copy of its own.
+    if (!message.hasDrawing && lastDrawing) {
+      sendMessage({ type: 'drawing', playerId, png: lastDrawing })
+    }
     return
   }
   // The TV has gone. The relay hangs up right behind this message, so the
@@ -260,8 +284,8 @@ function retryLater(): void {
  * couple of seconds and nothing at all when there is no session or no socket.
  */
 setInterval(() => {
-  if (screen !== 'waiting' || !session) return
-  sendMessage({ type: 'join', playerId, name: session.name })
+  if (screen !== 'waiting') return
+  sayHello()
 }, KNOCK_MS)
 
 // --- keeping the screen on -----------------------------------------------
@@ -422,7 +446,7 @@ renameForm.addEventListener('submit', (event) => {
   if (!state.nameValid || !session) return
   session = { ...session, name: state.name }
   store(NAME_KEY, state.name)
-  sendMessage({ type: 'join', playerId, name: state.name })
+  sayHello()
   nameInput.value = state.name
   playName.textContent = state.name
   renameStatus.textContent = 'Sent to the TV'
@@ -488,6 +512,8 @@ function forget(key: string): void {
 
 /** The colour the TV gave this blob; the drawing starts as a square of it. */
 let blobColour = '#4ea8ff'
+/** The last drawing sent, ready to put back on a world that has lost it. */
+let lastDrawing = loadStored(DRAWING_KEY)
 let crayon: string = CRAYONS[0]
 /** The finger that is drawing, if any. */
 let drawPointer: number | null = null
@@ -590,6 +616,8 @@ function sendDrawing(): void {
     return
   }
   sendMessage({ type: 'drawing', playerId, png: sendable })
+  lastDrawing = sendable
+  store(DRAWING_KEY, sendable)
   // Straight back to the joystick: the drawing appearing on the blob is much
   // better proof it arrived than a line of text on the phone would be.
   closeSheet()

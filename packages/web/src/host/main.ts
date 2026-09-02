@@ -111,13 +111,23 @@ function send(message: HostOutboundMessage): void {
  * TV has to answer is a hello, and the answer is which blob you are. That
  * message is also the phone's cue to put its controller up, so it goes out on
  * a rejoin as well — a phone that has just reloaded is waiting for it.
+ *
+ * The answer carries whether this blob already has its drawing, because a
+ * world that has just been created has forgotten every one of them and the
+ * phones are the only place they still exist.
  */
 function handleMessage(message: ServerToHostMessage): void {
   const result = applyMessage(state, message)
   if (!result.applied) return
   if (result.kind !== 'joined' && result.kind !== 'rejoined') return
   const { player } = result
-  send({ type: 'assigned', colour: player.colour, slot: player.slot, to: player.playerId })
+  send({
+    type: 'assigned',
+    colour: player.colour,
+    slot: player.slot,
+    hasDrawing: player.skin !== null,
+    to: player.playerId,
+  })
 }
 
 const phaser = startPhaser(world, state)

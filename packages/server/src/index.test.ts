@@ -80,13 +80,13 @@ it('serves healthz and relays between a host and two players', async () => {
   expect(await host.next()).toEqual({ type: 'join', playerId: 'p1', name: 'Wilf' })
 
   // host → one player, with `to` stripped off
-  host.send({ type: 'assigned', colour: '#ff0000', slot: 0, to: 'p1' })
-  expect(await one.next()).toEqual({ type: 'assigned', colour: '#ff0000', slot: 0 })
+  host.send({ type: 'assigned', colour: '#ff0000', slot: 0, hasDrawing: false, to: 'p1' })
+  expect(await one.next()).toEqual({ type: 'assigned', colour: '#ff0000', slot: 0, hasDrawing: false })
 
   // host → everyone
-  host.send({ type: 'assigned', colour: '#4ea8ff', slot: 0, to: '*' })
-  expect(await one.next()).toEqual({ type: 'assigned', colour: '#4ea8ff', slot: 0 })
-  expect(await two.next()).toEqual({ type: 'assigned', colour: '#4ea8ff', slot: 0 })
+  host.send({ type: 'assigned', colour: '#4ea8ff', slot: 0, hasDrawing: false, to: '*' })
+  expect(await one.next()).toEqual({ type: 'assigned', colour: '#4ea8ff', slot: 0, hasDrawing: false })
+  expect(await two.next()).toEqual({ type: 'assigned', colour: '#4ea8ff', slot: 0, hasDrawing: false })
 
   // rubbish is dropped, and the socket carries on working
   one.send({ type: 'input', playerId: 'p1', dx: 99, dy: 0 })

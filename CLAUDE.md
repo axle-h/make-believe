@@ -96,7 +96,10 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 { type: 'text',    playerId: string, value: string }            // cap ~60 chars
 
 // host → player
-{ type: 'assigned', colour: string, slot: number }              // also the phone's cue to show its controller
+{ type: 'assigned', colour: string, slot: number, hasDrawing: boolean }
+//                                                              // also the phone's cue to show its controller.
+//                                                              // hasDrawing false = "I haven't got your picture";
+//                                                              // the phone keeps the last one it sent and re-sends it.
 
 // relay → player (never sent by the host)
 { type: 'waiting' }                                             // no TV for you: wait and keep knocking
@@ -198,6 +201,10 @@ What is left:
 
 - Touch joystick: `nipplejs` or ~50 lines of pointer-event code. Send normalised `{dx, dy}`, throttled.
 - Drawing: fixed-size canvas (256×256) that starts as the blob itself — the player's own colour, in the same rounded-square shape — so the guide is the shape rather than an outline on top of it. "Done" → `toDataURL('image/png')` → send.
+  The phone keeps the last PNG it sent in localStorage and puts it back
+  whenever an `assigned` arrives with `hasDrawing: false` — a world that has
+  just been created has forgotten every picture, and the phones hold the only
+  copies. The phone still never decides anything: the TV says what it needs.
 - Wake Lock API to stop phones sleeping (may be unavailable without HTTPS — degrade gracefully).
 - Mobile keyboards shift layout — test the Say sheet on a real phone early.
 - The player page is an installable PWA: `public/manifest.webmanifest`, `public/sw.js` (hand-written, ~60 lines, network-first, no Workbox and no build plugin), icons generated from `public/icons/blob.svg` by `scripts/icons.mjs` and committed. **Only the player page** — the host page links no manifest and the worker never touches `/host/`.

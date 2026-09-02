@@ -25,6 +25,8 @@ function fakeConnection(): Fake {
 }
 
 const waiting = { type: 'waiting' }
+/** What the host says back to a hello, minus the recipient the relay strips. */
+const assigned = { type: 'assigned', colour: '#0f0', slot: 1, hasDrawing: false } as const
 
 describe('relay', () => {
   let relay: Relay
@@ -86,9 +88,9 @@ describe('relay', () => {
     relay.attachPlayer('ABCD', 'p1', one)
     relay.attachPlayer('ABCD', 'p2', two)
 
-    expect(relay.routeFromHost({ type: 'assigned', colour: '#f00', slot: 0, to: 'p1' })).toBe(true)
+    expect(relay.routeFromHost({ ...assigned, to: 'p1' })).toBe(true)
 
-    expect(one.sent).toEqual([{ type: 'assigned', colour: '#f00', slot: 0 }])
+    expect(one.sent).toEqual([assigned])
     expect(two.sent).toEqual([])
   })
 
@@ -99,15 +101,15 @@ describe('relay', () => {
     relay.attachPlayer('ABCD', 'p1', one)
     relay.attachPlayer('ABCD', 'p2', two)
 
-    expect(relay.routeFromHost({ type: 'assigned', colour: '#0f0', slot: 1, to: '*' })).toBe(true)
+    expect(relay.routeFromHost({ ...assigned, to: '*' })).toBe(true)
 
-    expect(one.sent).toEqual([{ type: 'assigned', colour: '#0f0', slot: 1 }])
-    expect(two.sent).toEqual([{ type: 'assigned', colour: '#0f0', slot: 1 }])
+    expect(one.sent).toEqual([assigned])
+    expect(two.sent).toEqual([assigned])
   })
 
   it('drops a host message addressed to a player who is not here', () => {
     relay.attachHost('ABCD', host)
-    expect(relay.routeFromHost({ type: 'assigned', colour: '#0f0', slot: 1, to: 'nobody' })).toBe(false)
+    expect(relay.routeFromHost({ ...assigned, to: 'nobody' })).toBe(false)
   })
 
   it('rejects a player whose room code does not match', () => {
@@ -140,8 +142,8 @@ describe('relay', () => {
 
     expect(first.closed).toBe(true)
     expect(relay.playerIds()).toEqual(['p1'])
-    relay.routeFromHost({ type: 'assigned', colour: '#0f0', slot: 1, to: 'p1' })
-    expect(second.sent).toEqual([{ type: 'assigned', colour: '#0f0', slot: 1 }])
+    relay.routeFromHost({ ...assigned, to: 'p1' })
+    expect(second.sent).toEqual([assigned])
   })
 
   it('tells the host when a player disconnects', () => {

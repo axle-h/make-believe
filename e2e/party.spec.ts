@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test'
 import {
   BLOB_SIZE,
+  dropSocket,
   hostRoomCode,
   openTool,
   playerNamed,
@@ -203,6 +204,76 @@ test.describe('a party', () => {
       })
       .toEqual(['Wilf'])
     await expect(wilf.page.locator('#screen-play')).toBeVisible()
+  })
+
+  test('a phone that drops off comes back as who it is now, not who it was', async ({ party }) => {
+    const host = await party.openHost()
+    const wilf = await party.joinAs(host.roomCode, 'Wilf')
+
+    await openTool(wilf, 'name')
+    await wilf.page.fill('#rename-input', 'Sir Wilf')
+    await wilf.page.click('#rename-save')
+    await expect.poll(async () => (await snapshot(host)).players[0]?.name).toBe('Sir Wilf')
+
+    // Out of wifi and back again, which is a phone's most ordinary disaster.
+    // The phone reconnects on its own, with nobody touching it.
+    await dropSocket(wilf)
+    await expect(wilf.page.locator('#screen-play')).toBeVisible()
+
+    // The hello it sends on the way back carries the name it has now. Saying
+    // the one it opened the socket with would rename the blob back to it.
+    await expect.poll(async () => (await snapshot(host)).players[0]?.away, { timeout: 15_000 }).toBe(
+      false,
+    )
+    await wilf.page.waitForTimeout(1_000)
+    expect((await snapshot(host)).players.map((player) => player.name)).toEqual(['Sir Wilf'])
+
+    // ...and it is the same blob, still driveable.
+    const settled = await playerNamed(host, 'Sir Wilf')
+    expect(settled.playerId).toBe(wilf.playerId)
+    await pushJoystick(wilf, { dx: 0, dy: 1 }, 400)
+    expect((await playerNamed(host, 'Sir Wilf')).y).toBeGreaterThan(settled.y + 20)
+  })
+
+  test('a TV that forgets everything gets the drawings back from the phones', async ({ party }) => {
+    const host = await party.openHost()
+    const wilf = await party.joinAs(host.roomCode, 'Wilf')
+
+    await openTool(wilf, 'name')
+    await wilf.page.fill('#rename-input', 'Sir Wilf')
+    await wilf.page.click('#rename-save')
+    await openTool(wilf, 'draw')
+    await scribble(wilf.page)
+    await wilf.page.click('#draw-done')
+    await expect.poll(async () => (await playerNamed(host, 'Sir Wilf')).skinKey).toBe(
+      `skin-${wilf.playerId}-1`,
+    )
+
+    // The phone reloads too, so what comes back can only have come from
+    // storage rather than from a variable that happened to survive.
+    await wilf.page.reload()
+    await expect(wilf.page.locator('#screen-play')).toBeVisible()
+
+    // A reloaded TV is a brand new world: it has never heard of this blob.
+    await host.page.reload()
+    await expect(host.page.locator('#qr svg')).toBeVisible()
+
+    // The phone knocks, says who it is, and puts its picture back up.
+    await expect
+      .poll(async () => (await snapshot(host)).players.map((player) => player.name), {
+        timeout: 20_000,
+      })
+      .toEqual(['Sir Wilf'])
+    await expect
+      .poll(async () => (await playerNamed(host, 'Sir Wilf')).skinKey, { timeout: 20_000 })
+      .toBe(`skin-${wilf.playerId}-1`)
+    await expect
+      .poll(async () => (await worn(host))[wilf.playerId], { timeout: 10_000 })
+      .toBe(`skin-${wilf.playerId}-1`)
+
+    // ...and only once: the TV says it has the drawing, so nobody sends it again.
+    await wilf.page.waitForTimeout(3_000)
+    expect((await playerNamed(host, 'Sir Wilf')).skinKey).toBe(`skin-${wilf.playerId}-1`)
   })
 })
 

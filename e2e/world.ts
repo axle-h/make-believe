@@ -1,4 +1,10 @@
-import { test as base, expect, type BrowserContext, type Page } from '@playwright/test'
+import {
+  test as base,
+  expect,
+  type BrowserContext,
+  type Page,
+  type WebSocketRoute,
+} from '@playwright/test'
 
 /**
  * Helpers for driving one TV and its phones. The assertions read the host's
@@ -49,6 +55,12 @@ export interface Player {
   page: Page
   playerId: string
   name: string
+  /**
+   * Every socket this phone has opened, newest last. They are proxied straight
+   * through to the real server; the test only holds them so that it can pull
+   * the live one out, which is the one thing a browser will not do to order.
+   */
+  sockets: WebSocketRoute[]
 }
 
 /**
@@ -109,6 +121,13 @@ export function hostRoomCode(page: Page): Promise<string> {
 
 async function joinAs(open: OpenPage, roomCode: string, name: string): Promise<Player> {
   const page = await open()
+  // Watch the phone's sockets without standing in their way: everything is
+  // forwarded to the real relay, so the phone cannot tell the difference.
+  const sockets: WebSocketRoute[] = []
+  await page.routeWebSocket(/\/ws\?/, (ws) => {
+    ws.connectToServer()
+    sockets.push(ws)
+  })
   // The link a QR scan would open.
   await page.goto(`/?room=${roomCode}`)
   await page.fill('#name-input', name)
@@ -116,7 +135,20 @@ async function joinAs(open: OpenPage, roomCode: string, name: string): Promise<P
   await expect(page.locator('#screen-play')).toBeVisible()
   const playerId = await page.evaluate(() => window.localStorage.getItem('make-believe.playerId'))
   expect(playerId).toBeTruthy()
-  return { page, playerId: playerId as string, name }
+  return { page, playerId: playerId as string, name, sockets }
+}
+
+/**
+ * Yank the phone's connection away, as walking out of wifi range does, and
+ * wait for the client to open the next one. Nothing on the page is touched:
+ * the phone does not know it happened and nobody has pressed anything.
+ */
+export async function dropSocket(player: Player): Promise<void> {
+  const live = player.sockets.at(-1)
+  if (!live) throw new Error('the phone has not connected to anything')
+  const before = player.sockets.length
+  await live.close()
+  await expect.poll(() => player.sockets.length, { timeout: 20_000 }).toBeGreaterThan(before)
 }
 
 export function snapshot(host: Host): Promise<GameSnapshot> {

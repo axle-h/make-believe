@@ -71,6 +71,13 @@ export const AssignedMessageSchema = z.object({
   type: z.literal('assigned'),
   colour: z.string().min(1).max(32),
   slot: z.number().int().nonnegative(),
+  /**
+   * Whether the world already has this blob's drawing. The phone keeps the
+   * last one it sent, so a `false` here — a TV that has reloaded, or a world
+   * that has forgotten a blob — is its cue to send it up again. The host is
+   * still the one that knows; the phone only answers.
+   */
+  hasDrawing: z.boolean(),
 })
 
 /**
