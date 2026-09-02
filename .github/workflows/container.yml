@@ -50,6 +50,9 @@ jobs:
           push: false
           load: true # into the runner's docker, so the smoke test can run it
           tags: make-believe:ci
+          # What the phone compares against `/version` to notice this deploy.
+          build-args: |
+            BUILD_VERSION=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -86,6 +89,15 @@ jobs:
             *'id="screen-join"'*) echo "the player page is there" ;;
             *) echo "::error::/ did not serve the controller page"; exit 1 ;;
           esac
+
+          # An installed phone finds out it is out of date by asking for this, so an image that
+          # answers `unknown` leaves every phone on whatever build it happened to install.
+          version=$(curl -fsS http://localhost:3000/version)
+          if [ "$version" != "$GITHUB_SHA" ]; then
+            echo "::error::/version answered '$version', not this commit — the build version did not reach the image"
+            exit 1
+          fi
+          echo "the image knows it is $version"
 
           # And the relay actually relays. Node 22 has a WebSocket client built in, so this needs
           # nothing installed.

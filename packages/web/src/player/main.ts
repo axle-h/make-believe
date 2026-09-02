@@ -17,6 +17,7 @@ import {
 } from './drawing.js'
 import { evaluateJoinForm, joinFormError } from './joinForm.js'
 import { ZERO, createInputThrottle, vectorFromPointer, type Vector } from './joystick.js'
+import { isDifferentBuild, shouldReload, type Screen } from './updates.js'
 import './player.css'
 
 /**
@@ -46,9 +47,6 @@ const KNOCK_MS = 2_000
 
 /** How long "Sent" stays under the box before it clears itself. */
 const SENT_MS = 1_500
-
-/** The four things the phone can be doing. Only one is ever on screen. */
-type Screen = 'scan' | 'join' | 'waiting' | 'play'
 
 /** What is open over the joystick, if anything. */
 type Sheet = 'say' | 'draw' | 'name'
@@ -208,6 +206,7 @@ function openSocket(): void {
       retryMs = FIRST_WAIT_RETRY_MS
       sendMessage({ type: 'join', playerId, name })
       keepAwake()
+      void checkForNewBuild()
     },
     onFatal: ({ reason }) => {
       // The relay hung up for good. A TV that is not there yet is worth
@@ -320,6 +319,10 @@ function showScreen(which: Screen): void {
   // Nothing but the joystick has a sheet over it, so leaving the controller
   // takes any sheet with it.
   if (which !== 'play') closeSheet()
+  refreshInstall()
+  // A build that arrived while someone was driving gets taken now, if this is
+  // one of the screens where a reload goes unnoticed.
+  reloadIfSafe()
 }
 
 // --- the tools over the joystick -----------------------------------------
@@ -669,6 +672,109 @@ function moveThumb(vector: Vector): void {
   const rect = pad.getBoundingClientRect()
   const reach = rect.width / 2 - rect.width * 0.19
   thumb.style.transform = `translate(${vector.dx * reach}px, ${vector.dy * reach}px)`
+}
+
+// --- being an app --------------------------------------------------------
+
+/**
+ * The phone can install the player page from Chrome's own prompt, and from
+ * then on it opens fullscreen from an icon. That makes keeping it up to date
+ * our problem rather than the browser's: nobody is going to reload an app.
+ */
+
+const installButton = requireElement<HTMLButtonElement>('#install-button')
+
+/** The service worker registry, or null on a browser or origin without one. */
+const workers = 'serviceWorker' in navigator ? navigator.serviceWorker : null
+
+/** Whether a worker was already driving this page when it loaded. */
+const hadController = Boolean(workers?.controller)
+
+/** Set when a newer build is ready but the phone is busy with something. */
+let updatePending = false
+
+/** Set once a reload is on its way; asking twice only races the first. */
+let reloading = false
+
+/** Chrome's install prompt, held back until there is somewhere to put it. */
+let installPrompt: BeforeInstallPromptEvent | null = null
+
+workers
+  ?.register(`/sw.js?v=${__BUILD_VERSION__}`, { updateViaCache: 'none' })
+  .catch(() => {
+    // No secure context, most likely: plain http on the LAN. The page works
+    // exactly as before, it just is not installable.
+  })
+
+workers?.addEventListener('controllerchange', () => {
+  // A worker claiming a page that had none is the first install, not an
+  // update; there is nothing newer to go and get.
+  if (!hadController) return
+  // A new worker is a reason to look, not a reason to reload: it can be the
+  // very build this page is already running, claiming it a moment late.
+  void checkForNewBuild()
+})
+
+/** Take a waiting build now if this is a moment where nobody would notice. */
+function reloadIfSafe(): void {
+  if (reloading || !shouldReload(screen, updatePending)) return
+  reloading = true
+  window.location.reload()
+}
+
+/**
+ * Is this page the build the server is serving? Asked every time the phone
+ * gets a socket — a phone left open across a deploy would otherwise sit on the
+ * old build until somebody thought to reload it — and again whenever a new
+ * worker takes over.
+ *
+ * The answer from `/version` is the only thing that decides staleness. A new
+ * worker on its own does not: it is often this very build claiming the page a
+ * moment late, and reloading on that reloads twice for one deploy.
+ */
+async function checkForNewBuild(): Promise<void> {
+  try {
+    const response = await fetch('/version', { cache: 'no-store' })
+    if (!response.ok) return
+    if (!isDifferentBuild(__BUILD_VERSION__, await response.text())) return
+    updatePending = true
+    await (await workers?.getRegistration())?.update()
+    reloadIfSafe()
+  } catch {
+    // Offline, or a dev server with no /version: try again on the next connect.
+  }
+}
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  // Chrome's own banner is held off so the offer can sit on the scan screen,
+  // which is the one moment the phone has nothing else to say.
+  event.preventDefault()
+  installPrompt = event
+  refreshInstall()
+})
+
+window.addEventListener('appinstalled', () => {
+  installPrompt = null
+  refreshInstall()
+})
+
+installButton.addEventListener('click', () => {
+  const prompt = installPrompt
+  // One prompt per event: it cannot be shown twice, so the button goes now.
+  installPrompt = null
+  refreshInstall()
+  void prompt?.prompt()
+})
+
+/** True once the page is running from its icon rather than in a browser tab. */
+function isInstalled(): boolean {
+  return ['fullscreen', 'standalone', 'minimal-ui'].some(
+    (mode) => window.matchMedia(`(display-mode: ${mode})`).matches,
+  )
+}
+
+function refreshInstall(): void {
+  installButton.hidden = installPrompt === null || screen !== 'scan' || isInstalled()
 }
 
 // A remembered name and a code, from the QR link or from last time, means there

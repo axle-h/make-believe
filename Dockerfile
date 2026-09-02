@@ -14,6 +14,12 @@ RUN pnpm install --frozen-lockfile
 
 COPY tsconfig.base.json ./
 COPY packages ./packages
+
+# What build this is, for the phone's "am I out of date?" check. There is no
+# .git in here, so CI passes the commit in; without it the build falls back to
+# a timestamp, which does the same job less legibly.
+ARG BUILD_VERSION=""
+ENV BUILD_VERSION=$BUILD_VERSION
 RUN pnpm build
 
 # --- runtime -------------------------------------------------------------

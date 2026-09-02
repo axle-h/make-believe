@@ -31,6 +31,7 @@ Everything ships as **one container running one Node process**. The two "modes" 
 | `/` | Player page: touch joystick, text inputs, drawing canvas. No Phaser, no game logic. | Phone / laptop browser, joined via QR code |
 | `/ws` | WebSocket relay between the one host and its players | The Node server |
 | `/healthz` | Liveness/readiness for k8s | The Node server |
+| `/version` | The build the pages beside it came from, so an installed phone can tell it is out of date | The Node server |
 
 **Non-negotiable rule: the host owns ALL game state. Players are dumb.** They send inputs and receive small instructions ("you are blue", "show the drawing UI"). Never sync game state to phones; never run game logic on phones. A phone that drops off just reconnects and carries on.
 
@@ -113,7 +114,8 @@ Relay semantics:
 
 ## Server (packages/server)
 
-- Node 22, `node:http`. Routes: `GET /healthz` → 200; `Upgrade` on `/ws` → `ws` server; everything else → `sirv('../web/dist', { single: false })` so `/host/` resolves to `host/index.html`.
+- Node 22, `node:http`. Routes: `GET /healthz` → 200; `GET /version` → the build string the web build wrote to `web/dist/version.txt`, `no-store`; `Upgrade` on `/ws` → `ws` server; everything else → `sirv('../web/dist', { single: false })` so `/host/` resolves to `host/index.html`.
+- Static cache headers: hashed `/assets/*` are `immutable`, everything else (both pages, the worker, the manifest) is `no-cache`. A phone holding a stale page across a deploy is the one thing the service worker exists to prevent, so nothing but a hashed filename may be kept without asking.
 - `relay.ts` exports a `createRelay()` that takes no I/O — it's a pure single-world registry (one host slot, a `Map` of players, the current room code) with `attachHost`, `attachPlayer`, `route(msg)` etc. No `Map` of rooms. `index.ts` wires sockets to it. This split is what makes it testable without real sockets.
 - Port from `PORT` env, default 3000. Listen on `0.0.0.0`.
 - Dev: `tsx watch src/index.ts`. Prod: `esbuild src/index.ts --bundle --platform=node --target=node22 --outfile=dist/index.js`.
@@ -172,15 +174,14 @@ Conventions: `*.test.ts` next to the code. No mocking of `shared` — it's tiny 
 
 ## Milestones
 
-Milestones 1 to 8 are **done and deployed**: the workspace and relay, join and
+Milestones 1 to 9 are **done and deployed**: the workspace and relay, join and
 names, the pure game model under Phaser, speech bubbles, drawings as blob skins,
-the QR code and reconnect handling with a Playwright suite, k3s, and HTTPS at the
-edge. What they built is described by the code, the commit history and
-`k8s/README.md` — don't go looking for a plan document for any of it.
+the QR code and reconnect handling with a Playwright suite, k3s, HTTPS at the
+edge, and the phone PWA. What they built is described by the code, the commit
+history and `k8s/README.md` — don't go looking for a plan document for any of it.
 
 What is left:
 
-9. Phone PWA: installable, self-updating player page (hand-written network-first service worker, no plugin). Planned in [`docs/phone-pwa.md`](docs/phone-pwa.md).
 10. Android TV app: minimal native Kotlin WebView wrapper in `/androidtv`, leanback launcher entry, loads the host page remotely so it updates itself. Not Capacitor, not a browser. Target device is a Fire TV Stick 4K Max (Fire OS 7, Android 9, API 28); nothing Fire-specific. Planned in [`docs/android-tv.md`](docs/android-tv.md).
 11. Then actual game ideas — and the place rounds would come back, if they ever do.
 
@@ -199,6 +200,8 @@ What is left:
 - Drawing: fixed-size canvas (256×256) that starts as the blob itself — the player's own colour, in the same rounded-square shape — so the guide is the shape rather than an outline on top of it. "Done" → `toDataURL('image/png')` → send.
 - Wake Lock API to stop phones sleeping (may be unavailable without HTTPS — degrade gracefully).
 - Mobile keyboards shift layout — test the Say sheet on a real phone early.
+- The player page is an installable PWA: `public/manifest.webmanifest`, `public/sw.js` (hand-written, ~60 lines, network-first, no Workbox and no build plugin), icons generated from `public/icons/blob.svg` by `scripts/icons.mjs` and committed. **Only the player page** — the host page links no manifest and the worker never touches `/host/`.
+- Staleness is decided by one thing: `/version` against the page's own `__BUILD_VERSION__`, checked on every connect and whenever a new worker takes over. A mismatch reloads the phone — but only on the scan or waiting screen, never mid-joystick (`src/player/updates.ts`, which is where that rule is unit-tested).
 
 ## How I want to work
 

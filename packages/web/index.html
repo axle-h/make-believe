@@ -25,6 +25,10 @@
         </svg>
         <p class="hint">Scan the QR code on the TV to join.</p>
         <p id="scan-note" class="error" role="status"></p>
+        <!-- Only ever shown when Chrome has offered the install; see main.ts. -->
+        <button id="install-button" class="button button-quiet" type="button" hidden>
+          Add to home screen
+        </button>
       </section>
 
       <section id="screen-join" class="screen" hidden>

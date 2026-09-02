@@ -1,6 +1,9 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import WebSocket from 'ws'
-import { startServer, type StartedServer } from './server.js'
+import { readBuildVersion, startServer, type StartedServer } from './server.js'
 
 let app: StartedServer
 
@@ -126,4 +129,30 @@ it('hangs up on a bad room code, a bad role and a bad playerId', async () => {
       },
     ),
   )
+})
+
+it('tells a phone which build it is serving, and never lets it be cached', async () => {
+  const response = await fetch(`http://127.0.0.1:${app.port}/version`)
+
+  expect(response.status).toBe(200)
+  expect(response.headers.get('cache-control')).toBe('no-store')
+  // The value itself is whatever the web build wrote beside the pages, which
+  // is a build's business; the unit test below covers where it comes from.
+  expect((await response.text()).length).toBeGreaterThan(0)
+})
+
+it('reads the build version the web build left beside the pages', () => {
+  const dist = mkdtempSync(join(tmpdir(), 'make-believe-'))
+  try {
+    writeFileSync(join(dist, 'version.txt'), '7fe4ccb\n')
+    expect(readBuildVersion(dist)).toBe('7fe4ccb')
+
+    // A build that never wrote one, and no pages at all: both answer something
+    // a phone will simply never match, rather than throwing.
+    rmSync(join(dist, 'version.txt'))
+    expect(readBuildVersion(dist)).toBe('unknown')
+    expect(readBuildVersion(null)).toBe('unknown')
+  } finally {
+    rmSync(dist, { recursive: true, force: true })
+  }
 })

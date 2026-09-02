@@ -42,7 +42,8 @@ Ask for these when the APK is ready, not before.
   Gradle wrapper, a `.gitignore` for build output and local properties.
   `minSdk = 28`, `targetSdk` current, application id `com.axh.makebelieve.tv`.
 - `AndroidManifest.xml`: launcher intent with `LEANBACK_LAUNCHER`,
-  `android:banner` (320x180 PNG from the same SVG as the PWA icons),
+  `android:banner` (320x180 PNG from `packages/web/public/icons/blob.svg`,
+  the same source as the phone's icons),
   `uses-feature android.software.leanback required=false`,
   `uses-feature android.hardware.touchscreen required=false`, `INTERNET`,
   landscape, `android:label="MAKE believe"`.

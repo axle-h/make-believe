@@ -75,5 +75,5 @@ packages/server   Node http + ws relay, serves the built web app
 e2e/              Playwright tests
 .github/          CI: tests on every push, and the image build that publishes to ghcr.io
 k8s/              deployment, service, ingress and TLS manifests
-docs/             plans for the two things not built yet: the phone PWA and the Android TV app
+docs/             the plan for the one thing not built yet: the Android TV app
 ```

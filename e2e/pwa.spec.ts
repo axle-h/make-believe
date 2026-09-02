@@ -39,6 +39,27 @@ test.describe('the phone app', () => {
     )
   })
 
+  test('registers a worker for the build the server is serving', async ({ page, request }) => {
+    const version = (await (await request.get('/version')).text()).trim()
+    // `unknown` is what the server answers when the build left no version
+    // beside the pages, which would leave every phone unable to spot a deploy.
+    expect(version).not.toBe('unknown')
+    expect(version).not.toBe('')
+
+    const worker = await request.get('/sw.js')
+    expect(worker.status()).toBe(200)
+    expect(worker.headers()['content-type']).toContain('javascript')
+
+    await page.goto('/')
+    const scriptURL = await page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.ready
+      return registration.active?.scriptURL ?? ''
+    })
+    // The build is in the worker's own URL: that is how a deploy becomes a new
+    // worker, and how the worker knows what to call its cache.
+    expect(scriptURL).toContain(`/sw.js?v=${version}`)
+  })
+
   test('leaves the TV out of it', async ({ page }) => {
     // The host is not installable and never should be: the TV has its own
     // wrapper, and an installed TV page would be a second way in.

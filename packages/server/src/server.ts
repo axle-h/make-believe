@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { dirname, resolve } from 'node:path'
 import sirv from 'sirv'
@@ -41,18 +41,53 @@ export function findWebDist(scriptPath = process.argv[1] ?? process.cwd()): stri
   return candidates.find((candidate) => existsSync(candidate)) ?? null
 }
 
+/**
+ * How long the browser may keep a file without asking again.
+ *
+ * Vite hashes every asset filename, so those can be kept forever: a new build
+ * means new names. Everything else — the two pages, the worker, the manifest —
+ * must be revalidated, or a phone can hold yesterday's page across a deploy
+ * and never find out, which is exactly what the worker exists to prevent.
+ */
+function setHeaders(res: ServerResponse, pathname: string): void {
+  const forever = pathname.startsWith('/assets/')
+  res.setHeader('cache-control', forever ? 'public, max-age=31536000, immutable' : 'no-cache')
+}
+
+/**
+ * What build the pages beside us came from. The web build writes it there, so
+ * the page and this answer can never disagree — which is the whole point of
+ * it, since a phone compares the two to notice a deploy while it is open.
+ */
+export function readBuildVersion(webDist: string | null): string {
+  if (!webDist) return 'unknown'
+  try {
+    return readFileSync(resolve(webDist, 'version.txt'), 'utf8').trim() || 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
 export function buildServer(): { server: Server; relay: Relay } {
   const relay = createRelay()
   const webDist = findWebDist()
-  const serveStatic = webDist ? sirv(webDist, { single: false, etag: true }) : null
+  const serveStatic = webDist ? sirv(webDist, { single: false, etag: true, setHeaders }) : null
   if (!webDist) {
     console.warn('[make-believe] no built web pages found; serving the api only')
   }
+  const version = readBuildVersion(webDist)
 
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     if (req.method === 'GET' && req.url === '/healthz') {
       res.writeHead(200, { 'content-type': 'text/plain' })
       res.end('ok')
+      return
+    }
+    // What a phone asks to find out it is running yesterday's build. Never
+    // cached: a stale answer here is worse than no answer.
+    if (req.method === 'GET' && req.url === '/version') {
+      res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
+      res.end(version)
       return
     }
     if (serveStatic) {

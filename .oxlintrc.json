@@ -19,7 +19,8 @@
       "warn",
       {
         "allow": [
-          "__game"
+          "__game",
+          "__BUILD_VERSION__"
         ]
       }
     ]
