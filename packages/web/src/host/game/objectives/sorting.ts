@@ -111,7 +111,7 @@ export const sorting: ObjectiveTemplate<SortingObjective> = {
         detail:
           left === 0
             ? 'All sorted!'
-            : `${home} of ${objective.parcels} sorted — match the colours`,
+            : `${home} of ${objective.parcels} sorted. Match the colours`,
         tone: 'task',
       },
     ]

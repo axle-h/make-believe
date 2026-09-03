@@ -16,7 +16,7 @@ describe('contains', () => {
     expect(contains(spot, 145, 145)).toBe(false)
   })
 
-  it('counts the edge as in — a blob dead on the line is on the spot', () => {
+  it('counts the edge as in: a blob dead on the line is on the spot', () => {
     expect(contains(spot, 150, 100)).toBe(true)
     expect(contains(spot, 150.01, 100)).toBe(false)
   })

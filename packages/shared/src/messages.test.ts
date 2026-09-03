@@ -314,7 +314,7 @@ describe('unions', () => {
     ).toBe(false)
   })
 
-  it('will not let the host send a phone off to wait — only the relay does that', () => {
+  it('will not let the host send a phone off to wait; only the relay does that', () => {
     expect(HostOutboundMessageSchema.safeParse({ type: 'waiting', to: '*' }).success).toBe(false)
   })
 
@@ -341,7 +341,7 @@ describe('unions', () => {
     expect(HostInboundMessageSchema.safeParse({ type: 'left', playerId: 'p1' }).success).toBe(true)
   })
 
-  it('will not let the host send a session — the relay is the only one that says', () => {
+  it('will not let the host send a session; the relay is the only one that says', () => {
     expect(HostOutboundMessageSchema.safeParse({ type: 'session', session: 'AB23', to: '*' }).success).toBe(
       false,
     )

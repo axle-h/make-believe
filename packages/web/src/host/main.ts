@@ -74,7 +74,7 @@ const client = connect({
   onStatus: (status) => {
     if (!statusEl) return
     statusEl.textContent =
-      status === 'open' ? '' : status === 'connecting' ? 'Connecting…' : 'Lost the server — retrying…'
+      status === 'open' ? '' : status === 'connecting' ? 'Connecting…' : 'Lost the server, retrying…'
   },
   onFatal: ({ reason }) => {
     // Another TV opened the host page and took the world. This one steps

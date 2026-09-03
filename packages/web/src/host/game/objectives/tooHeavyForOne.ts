@@ -112,7 +112,7 @@ export const tooHeavyForOne: ObjectiveTemplate<TooHeavyObjective> = {
       detail:
         pushing >= CRATE_PUSHERS
           ? 'Heave! Same way, both of you…'
-          : `${pushing} of ${CRATE_PUSHERS} leaning on it — it takes two`,
+          : `${pushing} of ${CRATE_PUSHERS} leaning on it. It takes two`,
       tone: 'task',
     }
     const spot = objective.zones[0]

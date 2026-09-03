@@ -99,7 +99,7 @@ export const colourHunt: ObjectiveTemplate<ColourHuntObjective> = {
       {
         to: '*',
         headline: objective.headline,
-        detail: `${done} of ${present.length} painted — tap Draw!`,
+        detail: `${done} of ${present.length} painted. Tap Draw!`,
         colour: objective.paintHex,
         tone: 'task',
       },

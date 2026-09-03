@@ -110,7 +110,7 @@ export const drawIt: ObjectiveTemplate<DrawItObjective> = {
     const shared: Brief = {
       to: '*',
       headline: objective.headline,
-      detail: artist ? `${artist.name} is drawing it — say what you think!` : 'Somebody is drawing…',
+      detail: artist ? `${artist.name} is drawing it. Say what you think!` : 'Somebody is drawing…',
       tone: 'task',
     }
     if (artist) shared.colour = artist.colour
@@ -139,7 +139,7 @@ export const drawIt: ObjectiveTemplate<DrawItObjective> = {
 
     objective.guesser = message.playerId
     objective.outcome = 'done'
-    objective.note = `${nameOf(state, message.playerId)} got it — ${objective.word}!`
+    objective.note = `${nameOf(state, message.playerId)} got it: ${objective.word}!`
   },
 }
 

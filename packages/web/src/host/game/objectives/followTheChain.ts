@@ -116,7 +116,7 @@ export const followTheChain: ObjectiveTemplate<FollowTheChainObjective> = {
       headline: objective.headline,
       detail: everybody
         ? `Hold it… ${secondsLeft(objective)}`
-        : `Light ${objective.position + 1} of ${objective.chain.length} — ${on} of ${present.length} on it`,
+        : `Light ${objective.position + 1} of ${objective.chain.length}: ${on} of ${present.length} on it`,
       tone: 'task',
     }
     // The strip is the colour of the pad they are being sent to, which is the

@@ -137,7 +137,7 @@ export const findYourColour: ObjectiveTemplate<FindYourColourObjective> = {
         headline: objective.headline,
         detail: mine
           ? `Yours is the ${colour} pad`
-          : `${nameOf(state, about)} goes on the ${colour} pad — tell them!`,
+          : `${nameOf(state, about)} goes on the ${colour} pad, so tell them!`,
         colour: pad.colour,
         tone: 'task',
       })

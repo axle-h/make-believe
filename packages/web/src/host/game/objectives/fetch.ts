@@ -105,7 +105,7 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
       detail:
         left === 0
           ? 'All of it!'
-          : `${home} of ${objective.parcels} home — drive into one to pick it up`,
+          : `${home} of ${objective.parcels} home. Drive into one to pick it up`,
       tone: 'task',
     }
     const depot = objective.zones[0]

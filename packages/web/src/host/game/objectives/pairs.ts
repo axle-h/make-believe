@@ -80,7 +80,7 @@ export const pairs: ObjectiveTemplate<PairsObjective> = {
         headline: objective.headline,
         detail: done
           ? `Hold it… ${secondsLeft(objective)}`
-          : `${settled} of ${present.length} paired up — nobody on their own!`,
+          : `${settled} of ${present.length} paired up. Nobody on their own!`,
         tone: 'task',
       },
     ]
