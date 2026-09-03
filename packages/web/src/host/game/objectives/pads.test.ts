@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WORLD_HEIGHT, WORLD_WIDTH, ZONE_COLOURS } from '../constants.js'
+import { BLOB_COLOURS, WORLD_HEIGHT, WORLD_WIDTH, ZONE_COLOURS } from '../constants.js'
 import { radiusFor } from '../zones.js'
 import { createRng } from '../rng.js'
 import { colourOfPad, makePads, nameOfColour, MAX_NAMED_PADS } from './pads.js'
@@ -116,5 +116,21 @@ describe('making pads', () => {
       expect(nameOfColour(colourOfPad(index))).toMatch(/^[a-z]+$/)
     }
     expect(nameOfColour('#123456')).toBe('shiny')
+  })
+
+  /**
+   * The floor is checked before the blobs, so a blob colour that shares a hex
+   * with a pad colour would be described by the pad's name. "Yours is the
+   * white one" said of a cream pad is the sort of thing that only goes wrong
+   * in a lit room with a three-year-old in it.
+   */
+  it('calls every blob colour by its own name', () => {
+    for (const colour of BLOB_COLOURS) expect(nameOfColour(colour.hex)).toBe(colour.name)
+  })
+
+  it('has ten blob colours, each with a name of its own', () => {
+    expect(BLOB_COLOURS).toHaveLength(10)
+    expect(new Set(BLOB_COLOURS.map((colour) => colour.name)).size).toBe(BLOB_COLOURS.length)
+    expect(new Set(BLOB_COLOURS.map((colour) => colour.hex)).size).toBe(BLOB_COLOURS.length)
   })
 })

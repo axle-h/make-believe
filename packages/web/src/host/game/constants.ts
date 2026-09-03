@@ -33,11 +33,17 @@ export const AWAY_TIMEOUT_MS = 30_000
 export const BUBBLE_MS = 6_000
 
 /**
- * One colour per slot, in slot order — and what to call each of them.
+ * Every colour a blob can be, and what to call each of them.
  *
- * The names are not decoration: a pad the colour of somebody's blob has to be
- * sayable out loud on a phone ("yours is the orange one") and by whoever is
- * sitting next to a four-year-old who cannot read it.
+ * The names are not decoration: a child picks their blob by one of these, and
+ * a pad the colour of somebody's blob has to be sayable out loud on a phone
+ * ("yours is the orange one") by whoever is sitting next to a four-year-old
+ * who cannot read it.
+ *
+ * **Ten of them, and that is the ceiling.** Every one has to be a word a
+ * three-year-old owns and a colour tellable from the other nine across a lit
+ * room, which is most of why there is no eleventh — and since a colour each is
+ * how a child picks a blob, ten colours is also a hard cap of ten blobs.
  */
 export const BLOB_COLOURS = [
   { name: 'red', hex: '#ff5d5d' },
@@ -48,10 +54,20 @@ export const BLOB_COLOURS = [
   { name: 'orange', hex: '#ff8f3f' },
   { name: 'teal', hex: '#3fe0d0' },
   { name: 'pink', hex: '#ff6fc1' },
+  { name: 'white', hex: '#ffffff' },
+  { name: 'brown', hex: '#c68b59' },
 ] as const
 
 /** Just the colours, which is all most of the model cares about. */
 export const PALETTE: readonly string[] = BLOB_COLOURS.map((colour) => colour.hex)
+
+/**
+ * How many blobs there can be at once, which is exactly how many colours there
+ * are. The eleventh phone waits with its name typed and gets in the moment
+ * somebody quits: it is the only queue in the game, and it is a physical limit
+ * rather than a round — no phone that is *in* ever waits for anything.
+ */
+export const MAX_BLOBS = BLOB_COLOURS.length
 
 /**
  * The floor is dark, so a zone is drawn in something the blob palette does not
@@ -62,7 +78,9 @@ export const PALETTE: readonly string[] = BLOB_COLOURS.map((colour) => colour.he
  * read out loud: "yours is the blue one".
  */
 export const ZONE_COLOURS = [
-  { name: 'white', hex: '#f6f0e2' },
+  // Cream rather than white, which is what #f6f0e2 actually is: a blob can be
+  // white now, and two things a room has to tell apart may not share a name.
+  { name: 'cream', hex: '#f6f0e2' },
   { name: 'blue', hex: '#8de0ff' },
   { name: 'yellow', hex: '#ffe08a' },
   { name: 'green', hex: '#b9ffb0' },
