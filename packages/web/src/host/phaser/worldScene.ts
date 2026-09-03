@@ -676,7 +676,10 @@ export class WorldScene extends Phaser.Scene {
     if (!timer) return
     timer.clear()
 
+    // A held clock is not counting, so there is nothing to draw a bar of: the
+    // race gathers everybody on the start line with no time limit at all.
     if (!objective || objective.outcome !== 'running' || objective.totalMs <= 0) return
+    if (objective.clock === 'held') return
 
     const left = (this.state.world.width - TIMER_WIDTH) / 2
     const y = top + TIMER_GAP

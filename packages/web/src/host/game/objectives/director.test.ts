@@ -864,7 +864,8 @@ describe('going up a level', () => {
     runUntilFinished(state)
 
     expect(state.objectives.level).toBe(3)
-    expect(state.objectives.pending).toEqual(['pairs', 'followTheChain'])
+    expect(state.objectives.pending).toEqual(unlockedAt(3))
+    expect(state.objectives.pending.length).toBeGreaterThan(1)
   })
 
   /** At the top there is nothing left to unlock and nothing to announce. */

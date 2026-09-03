@@ -4,7 +4,7 @@ import { BLOB_SIZE, MAX_LEVEL, PALETTE } from '../constants.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
-import { contains, radiusFor } from '../zones.js'
+import { contains, radiusFor, roofHeight } from '../zones.js'
 import { eligibleTemplates, templateFor, TEMPLATES, unlockedAt } from './registry.js'
 import type { ObjectiveTemplate } from './types.js'
 import { joinPlayer } from '../testRoom.js'
@@ -119,12 +119,18 @@ describe('every task, at every level, in every size of room', () => {
           for (let seed = 0; seed < 12; seed++) {
             const state = room(template.minPlayers + (seed % 5), seed)
             const objective = generate(template, state, level, seed)
+            // Per axis rather than as a circle around the middle: a start pad
+            // is a tall thin rectangle, and treating it as a square that wide
+            // says it is off the side of a floor it is nowhere near.
             for (const zone of objective.zones) {
-              const reach = zone.shape === 'circle' ? zone.radius : Math.max(zone.width, zone.height) / 2
-              expect(zone.x - reach).toBeGreaterThanOrEqual(0)
-              expect(zone.y - reach).toBeGreaterThanOrEqual(0)
-              expect(zone.x + reach).toBeLessThanOrEqual(state.world.width)
-              expect(zone.y + reach).toBeLessThanOrEqual(state.world.height)
+              const across = zone.shape === 'circle' ? zone.radius : zone.width / 2
+              const down = zone.shape === 'circle' ? zone.radius : zone.height / 2
+              // A roof rises above the body it sits on.
+              const up = down + (zone.shape === 'house' ? roofHeight(zone) : 0)
+              expect(zone.x - across).toBeGreaterThanOrEqual(0)
+              expect(zone.y - up).toBeGreaterThanOrEqual(0)
+              expect(zone.x + across).toBeLessThanOrEqual(state.world.width)
+              expect(zone.y + down).toBeLessThanOrEqual(state.world.height)
             }
             expect(new Set(objective.zones.map((zone) => zone.id)).size).toBe(objective.zones.length)
 

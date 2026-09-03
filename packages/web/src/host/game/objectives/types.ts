@@ -14,6 +14,7 @@ import type { MovingPadObjective } from './movingPad.js'
 import type { InOrderObjective } from './inOrder.js'
 import type { KeepTheCrownObjective } from './keepTheCrown.js'
 import type { OnTheSpotObjective } from './onTheSpot.js'
+import type { RaceObjective } from './race.js'
 import type { PairsObjective } from './pairs.js'
 import type { SortingObjective } from './sorting.js'
 import type { SumoObjective } from './sumo.js'
@@ -76,6 +77,18 @@ export interface ObjectiveBase {
   headline: string
   remainingMs: number
   totalMs: number
+  /**
+   * Whether the clock is counting. `held` stops it — and takes the timer bar
+   * off the TV — for a task with something to do before the timed part of it
+   * starts: the race gathers everybody on the start line with no clock at all,
+   * because a countdown that is already running while people arrive is a
+   * countdown that punishes whoever was slowest to pick their phone up.
+   *
+   * It is optional, and absent means running. Every generator spells out its
+   * own zones, obstacles, marks and carryables by hand, and a required field
+   * here is a required edit to fourteen files.
+   */
+  clock?: 'running' | 'held'
   zones: Zone[]
   /**
    * The walls this task has put on the floor, if any. Blobs cannot drive
@@ -97,6 +110,7 @@ export interface ObjectiveBase {
 /** Every kind of objective there is. One file each, listed in the registry. */
 export type Objective =
   | OnTheSpotObjective
+  | RaceObjective
   | MovingPadObjective
   | HotPotatoObjective
   | PairsObjective

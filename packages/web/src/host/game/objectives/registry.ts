@@ -8,6 +8,7 @@ import { inOrder } from './inOrder.js'
 import { movingPad } from './movingPad.js'
 import { keepTheCrown } from './keepTheCrown.js'
 import { onTheSpot } from './onTheSpot.js'
+import { race } from './race.js'
 import { pairs } from './pairs.js'
 import { sorting } from './sorting.js'
 import { sumo } from './sumo.js'
@@ -24,6 +25,7 @@ import type { Objective, ObjectiveTemplate } from './types.js'
  */
 export const TEMPLATES: readonly ObjectiveTemplate<Objective>[] = [
   onTheSpot,
+  race,
   movingPad,
   hotPotato,
   pairs,

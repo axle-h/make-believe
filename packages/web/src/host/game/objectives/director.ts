@@ -389,9 +389,15 @@ function run(state: GameState, objective: Objective, dtMs: number): void {
     return
   }
 
-  objective.remainingMs = Math.max(0, objective.remainingMs - dtMs)
+  // A held clock is a task that has not started being timed yet. The step
+  // still runs — the room is doing something, it is just not against a clock.
+  if (objective.clock !== 'held') {
+    objective.remainingMs = Math.max(0, objective.remainingMs - dtMs)
+  }
   template.step(objective, state, dtMs)
-  if (objective.outcome === 'running' && objective.remainingMs <= 0) objective.outcome = 'expired'
+  if (objective.outcome === 'running' && objective.remainingMs <= 0 && objective.clock !== 'held') {
+    objective.outcome = 'expired'
+  }
 
   settle(director, objective)
 }

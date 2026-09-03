@@ -68,6 +68,8 @@ export interface ObjectiveSnapshot {
   headline: string
   remainingMs: number
   totalMs: number
+  /** `held` while the clock is not counting: no bar is drawn for one. */
+  clock?: 'running' | 'held'
   outcome: Outcome
   /** What the TV says once it is over, or `null` while it is running. */
   note: string | null
@@ -122,6 +124,7 @@ export function objectives(state: GameState): DirectorSnapshot {
             headline: objective.headline,
             remainingMs: objective.remainingMs,
             totalMs: objective.totalMs,
+            ...(objective.clock === undefined ? {} : { clock: objective.clock }),
             outcome: objective.outcome,
             note: objective.note,
             zones: objective.zones,
