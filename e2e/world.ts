@@ -85,6 +85,17 @@ export interface CarryableSnapshot {
   pushedBy?: string[]
 }
 
+/** Something drifting across the floor to be got out of the way of. */
+export interface HazardSnapshot {
+  id: string
+  x: number
+  y: number
+  vx: number
+  vy: number
+  size: number
+  glyph: string
+}
+
 export interface ObjectiveSnapshot {
   id: string
   kind: string
@@ -97,6 +108,9 @@ export interface ObjectiveSnapshot {
   obstacles: ObstacleSnapshot[]
   marks: MarkSnapshot[]
   carryables: CarryableSnapshot[]
+  hazards: HazardSnapshot[]
+  /** Blobs this task has made insubstantial: still driving, not hittable. */
+  fuzzy: string[]
 }
 
 export interface DirectorSnapshot {

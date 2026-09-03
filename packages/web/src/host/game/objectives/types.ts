@@ -1,5 +1,6 @@
 import type { Recipient, ServerToHostMessage } from '@make-believe/shared'
 import type { Carryable } from '../carryables.js'
+import type { Hazard } from '../hazards.js'
 import type { Obstacle } from '../obstacles.js'
 import type { Rng } from '../rng.js'
 import type { GameState, Player, World } from '../state.js'
@@ -9,6 +10,7 @@ import type { DrawItObjective } from './drawIt.js'
 import type { FetchObjective } from './fetch.js'
 import type { FindYourColourObjective } from './findYourColour.js'
 import type { FollowTheChainObjective } from './followTheChain.js'
+import type { DodgeObjective } from './dodge.js'
 import type { HotPotatoObjective } from './hotPotato.js'
 import type { MazeObjective } from './maze.js'
 import type { MovingPadObjective } from './movingPad.js'
@@ -100,6 +102,20 @@ export interface ObjectiveBase {
   marks: Mark[]
   /** The parcels and crates this task has put on the floor, if any. */
   carryables: Carryable[]
+  /**
+   * Things drifting across the floor that a blob would rather not be hit by.
+   * Optional in the same way `clock` is, and for the same reason: a required
+   * field here is a required edit to every generator there is.
+   */
+  hazards?: Hazard[]
+  /**
+   * Blobs the task has made insubstantial: still driving, no longer hittable,
+   * and drawn faint so that the room can see it. Nobody is ever eliminated, so
+   * this is the shape every "you are out" idea has to take — somewhere to
+   * drive about in rather than a chair to sit on — and it goes the instant the
+   * task is over.
+   */
+  fuzzy?: string[]
   outcome: Outcome
   /**
    * What the TV says once it is over — cheerful either way, because running
@@ -123,6 +139,7 @@ export type Objective =
   | SortingObjective
   | InOrderObjective
   | MazeObjective
+  | DodgeObjective
   | TooHeavyObjective
   | SumoObjective
   | KeepTheCrownObjective

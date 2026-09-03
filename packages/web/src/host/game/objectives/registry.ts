@@ -1,4 +1,5 @@
 import { colourHunt } from './colourHunt.js'
+import { dodge } from './dodge.js'
 import { drawIt } from './drawIt.js'
 import { fetch } from './fetch.js'
 import { findYourColour } from './findYourColour.js'
@@ -39,6 +40,7 @@ export const TEMPLATES: readonly ObjectiveTemplate<Objective>[] = [
   inOrder,
   maze,
   tooHeavyForOne,
+  dodge,
   sumo,
   keepTheCrown,
 ]

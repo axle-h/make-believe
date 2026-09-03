@@ -1,5 +1,6 @@
 import type { PaletteEntry } from '@make-believe/shared'
 import type { Carryable } from './carryables.js'
+import type { Hazard } from './hazards.js'
 import { BLOB_COLOURS, CROWN_BADGE } from './constants.js'
 import type { Mark, Outcome } from './objectives/types.js'
 import type { Obstacle } from './obstacles.js'
@@ -80,6 +81,10 @@ export interface ObjectiveSnapshot {
   marks: Mark[]
   /** The parcels and crates on the floor, if this task has any. */
   carryables: Carryable[]
+  /** Things drifting across the floor to be got out of the way of, if any. */
+  hazards: Hazard[]
+  /** Blobs this task has made insubstantial: drawn faint, and not hittable. */
+  fuzzy: string[]
 }
 
 export interface DirectorSnapshot {
@@ -131,6 +136,8 @@ export function objectives(state: GameState): DirectorSnapshot {
             obstacles: objective.obstacles,
             marks: objective.marks,
             carryables: objective.carryables,
+            hazards: objective.hazards ?? [],
+            fuzzy: objective.fuzzy ?? [],
           },
   }
 }
@@ -191,6 +198,8 @@ function copyObjectives(director: DirectorSnapshot): DirectorSnapshot {
             obstacles: structuredClone(objective.obstacles),
             marks: structuredClone(objective.marks),
             carryables: structuredClone(objective.carryables),
+            hazards: structuredClone(objective.hazards),
+            fuzzy: [...objective.fuzzy],
           },
   }
 }

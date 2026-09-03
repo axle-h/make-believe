@@ -287,11 +287,11 @@ code obeys everywhere but states nowhere.
 11. Objectives: something to actually do. Zones, then carryables; one task
     running at all times, procedurally parameterised and levelled up as the
     room gets good at them. Never rounds — no phone ever waits its turn.
-    **All of it is built.** Sixteen tasks, in `src/host/game/objectives/`,
+    **All of it is built.** Seventeen tasks, in `src/host/game/objectives/`,
     each a file and a line in `registry.ts`: stand on the spot, the spot that
     runs away, the race, hot potato, two to a pad, follow the lights, find your
-    own pad, colour hunt, draw it, fetch, sorting, in order, the maze, a crate
-    too heavy for one, sumo, and keep the crown. Underneath
+    own pad, colour hunt, dodge, draw it, fetch, sorting, in order, the maze, a
+    crate too heavy for one, sumo, and keep the crown. Underneath
     them: the seeded RNG, zones and pads, carryables, obstacles (walls a blob
     cannot drive through — anybody standing where one appears is slid out over
     a few frames rather than teleported, and higher up the race's course they
@@ -333,7 +333,10 @@ code obeys everywhere but states nowhere.
       wanders off never leaves the others with something they cannot finish.
     - **Nobody is ever eliminated**, and no task may put a child in a state
       they cannot drive out of. Being shoved off the island is somewhere to
-      drive back from, not a punishment.
+      drive back from, not a punishment — and losing your last life in dodge
+      makes a blob **fuzzy**: still driving, no longer hittable, and no longer
+      fuzzy the instant the task ends. That is the shape every "you are out"
+      idea has to take here.
     - **Failure barely exists.** Running out of time is not losing: the score
       only ever goes up, the level never comes down, and the banner is
       cheerful either way. The youngest player is three.
@@ -343,7 +346,7 @@ code obeys everywhere but states nowhere.
       with six bowed heads.
 
     `registry.test.ts` asserts what has to be true of every task; adding the
-    seventeenth inherits it. The e2e for the two at the top of the ladder is
+    eighteenth inherits it. The e2e for the two at the top of the ladder is
     described under Testing.
 
 ## Phaser notes (host)

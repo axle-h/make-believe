@@ -359,10 +359,14 @@ export class WorldScene extends Phaser.Scene {
     // on top of it.
     const badges = badgesByPlayer(director)
 
+    // A blob the task has made fuzzy is still driving and still theirs: it is
+    // drawn faint so that the room can see it cannot be hit, and it stops
+    // being faint the instant the task is over.
+    const fuzzy = new Set(director.objective?.fuzzy ?? [])
     for (const player of list) {
       seen.add(player.playerId)
       const view = this.views.get(player.playerId) ?? this.createView(player)
-      const alpha = player.away ? AWAY_ALPHA : 1
+      const alpha = player.away || fuzzy.has(player.playerId) ? AWAY_ALPHA : 1
 
       const pose = this.squelchOf(view, player, step)
       view.image
@@ -476,6 +480,14 @@ export class WorldScene extends Phaser.Scene {
     held.clear()
 
     const drawn = new Set<string>()
+    // Things drifting across the floor. Drawn over everything, because getting
+    // out of the way of one is the whole game while there are any.
+    for (const hazard of objective?.hazards ?? []) {
+      drawn.add(hazard.id)
+      this.renderGlyph({ id: hazard.id, x: hazard.x, y: hazard.y, glyph: hazard.glyph })
+      held.fillStyle(0xf4f1ea, 0.16)
+      held.fillCircle(hazard.x, hazard.y, hazard.size / 2)
+    }
     for (const thing of objective?.carryables ?? []) {
       // A delivered parcel is counted rather than drawn: a dozen of them
       // landing on one spot used to stack into a heap that said less about how
@@ -503,7 +515,7 @@ export class WorldScene extends Phaser.Scene {
    * They move every frame, so like the things themselves they are placed every
    * frame; they are kept by carryable id, exactly as the tallies are by zone.
    */
-  private renderGlyph(thing: Carryable): void {
+  private renderGlyph(thing: { id: string; x: number; y: number; glyph?: string }): void {
     const glyph = this.glyphs.get(thing.id) ?? this.createGlyph(thing.id)
     if (glyph.text !== thing.glyph) glyph.setText(thing.glyph ?? '')
     glyph.setPosition(thing.x, thing.y)
