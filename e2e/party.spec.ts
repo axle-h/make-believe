@@ -7,6 +7,7 @@ import {
   chaseSomebody,
   driveTo,
   dropSocket,
+  everyKind,
   finishPlaying,
   freeColours,
   herdOnto,
@@ -217,6 +218,47 @@ test.describe('a party', () => {
     // ...and nobody ends up standing inside anybody.
     const wilfNow = await playerNamed(host, 'Wilf')
     expect(Math.abs(after.x - wilfNow.x)).toBeGreaterThanOrEqual(BLOB_SIZE - 1)
+  })
+
+  /**
+   * Every task there is, put on the TV and left to run for a moment.
+   *
+   * The model is unit-tested to death and Phaser is not tested at all — it
+   * needs a canvas and jsdom has none — so this is the one thing that says the
+   * TV can actually *draw* all of them: the pictures on parcels, a bar turned
+   * on its side, a maze of thirty walls, tomatoes crossing the floor. It reads
+   * the console rather than the pixels, because a scene that throws is the
+   * failure worth catching and a pixel diff of Phaser is not worth having.
+   */
+  test('the TV draws every task without falling over', async ({ party }) => {
+    test.setTimeout(180_000)
+    const host = await party.openHost()
+    const complaints: string[] = []
+    host.page.on('pageerror', (error) => complaints.push(String(error)))
+    host.page.on('console', (message) => {
+      if (message.type() === 'error') complaints.push(message.text())
+    })
+    // Four blobs: enough for every task there is, including two to a pad.
+    const crowd = []
+    for (const name of ['Wilf', 'Ida', 'Ted', 'Bo']) {
+      // oxlint-disable-next-line no-await-in-loop
+      crowd.push(await party.joinAs(name))
+    }
+
+    for (const kind of await everyKind(host)) {
+      // oxlint-disable-next-line no-await-in-loop
+      const objective = await askFor(host, kind, 8)
+      expect(objective.kind).toBe(kind)
+      // Long enough for a bar to turn, a pad to drift and a tomato to cross.
+      // oxlint-disable-next-line no-await-in-loop
+      await host.page.waitForTimeout(1_200)
+      // oxlint-disable-next-line no-await-in-loop
+      expect((await objectiveNow(host))?.kind).toBe(kind)
+    }
+
+    expect(complaints).toEqual([])
+    // And the phones were never asked to do anything about any of it.
+    await expect(crowd[0]?.page.locator('#pad') ?? host.page.locator('#world')).toBeVisible()
   })
 
   /**

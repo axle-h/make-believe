@@ -15,6 +15,7 @@ import {
   obeyGrownup,
   palette,
   snapshot,
+  TEMPLATES,
   type Brief,
   type GameSnapshot,
   type Sound,
@@ -48,6 +49,12 @@ declare global {
       worn: () => Record<string, string>
       /** The world the relay gave us, or '' before it has said. Never shown. */
       session: () => string
+      /**
+       * Every kind of task there is. The e2e suite reads it so that a test
+       * about all of them need keep no list of its own — and so that adding
+       * the eighteenth is covered by the same test as the other seventeen.
+       */
+      kinds: () => string[]
     }
   }
 }
@@ -258,4 +265,5 @@ window.__game = {
   snapshot: () => snapshot(state),
   worn: () => wornTextures(phaser),
   session: () => session,
+  kinds: () => TEMPLATES.map((template) => template.kind),
 }

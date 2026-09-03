@@ -136,6 +136,8 @@ declare global {
       worn: () => Record<string, string>
       /** The world the relay gave this TV. Nothing on screen ever shows it. */
       session: () => string
+      /** Every kind of task there is, so a test need keep no list of its own. */
+      kinds: () => string[]
       /**
        * The live world. Nothing in this suite reads it — `snapshot()` is for
        * that — and only `askFor` writes to it. See what that says about why.
@@ -567,6 +569,19 @@ export async function askFor(
     if (objective.kind === kind) return objective
   }
   throw new Error(`the world never got round to asking for ${kind}`)
+}
+
+/**
+ * Every kind of task there is, read off the TV's own registry. A test that
+ * wants to cover all of them should not have a list of its own to keep up to
+ * date: adding the eighteenth would silently not be covered.
+ */
+export function everyKind(host: Host): Promise<string[]> {
+  return host.page.evaluate(() => {
+    const game = window.__game
+    if (!game) throw new Error('the host page has no test seam')
+    return game.kinds()
+  })
 }
 
 /** Whether a blob is standing on a circular patch of floor, as the model judges it. */

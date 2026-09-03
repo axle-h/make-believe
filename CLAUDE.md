@@ -252,6 +252,7 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 - Two more contexts open `/`, wait for the TV, type a name, tap a colour and join. That is the whole of getting in — and the join screen cannot be filled in before the TV answers, because the swatches *are* the palette it sent.
 - A TV reload gives every phone a new identity under the same name, with nobody touching them.
 - A phone that joins as Daddy opens the ☰ menu, finds one more line, picks sumo, and the TV is running sumo — alongside one that joins as somebody else and finds the menu holding nothing but Quit, with no trace of the sheet anywhere in its page.
+- Every kind of task there is, put on the TV and left to run for a moment, with the console watched for anything thrown. It is the only thing that says the Phaser layer can *draw* all of them — pictures on parcels, a bar turned on its side, a maze of thirty walls, tomatoes crossing the floor — and it reads the kinds off the host's own registry so that adding the eighteenth is covered by the same test.
 - Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round-trips a PNG; a blob is redrawn mid-game without losing its place; a blob that finishes is forgotten by the TV and its phone comes back as somebody new, choosing again; a colour somebody has is greyed on every other phone with their name on it, and a name somebody has is refused in as many words; the room solves the simple task until the level rises and the world starts asking for a different one, which is played by driving into each other. That one climbs the ladder for real rather than poking the model, so it takes about a minute, and nothing may replace it with a shortcut.
 
   The tasks at the top of the ladder are covered too — sumo, and the crown taken by driving into whoever has it. Those unlock twelve and twenty-one solved tasks up, which is not a slow test but no test at all, so `askFor` in `e2e/world.ts` sets the level and puts tasks back until the director asks for the one wanted. It is the **only** thing in the suite that reaches past the UI, and everything after it is the real director, real joysticks and the real TV. Do not add a second such seam; do not use this one to skip the climb.
@@ -279,11 +280,16 @@ the QR code and reconnect handling with a Playwright suite, k3s, HTTPS at the
 edge, and the phone PWA. What they built is described by the code, the commit
 history and `k8s/README.md` — don't go looking for a plan document for any of it.
 
-What is left is milestone 10. Milestone 11 is built and has no plan document
-either; its entry below is kept only for the rules it decided by, which the
+Milestone 11 is built, and so are 12 to 17, which came out of the second play
+test and are planned in [`docs/playtest-2.md`](docs/playtest-2.md): the repairs
+that play test asked for, picking your own colour, the grown-up's menu on a
+phone, the noises, themes and collecting, and four new games. 11 has no plan
+document; its entry below is kept only for the rules it decided by, which the
 code obeys everywhere but states nowhere.
 
-10. Android TV app: minimal native Kotlin WebView wrapper in `/androidtv`, leanback launcher entry, loads the host page remotely so it updates itself. Not Capacitor, not a browser. Target device is a Fire TV Stick 4K Max (Fire OS 7, Android 9, API 28); nothing Fire-specific. Planned in [`docs/android-tv.md`](docs/android-tv.md).
+**What is left is milestone 10.**
+
+10. **The one that is left.** Android TV app: minimal native Kotlin WebView wrapper in `/androidtv`, leanback launcher entry, loads the host page remotely so it updates itself. Not Capacitor, not a browser. Target device is a Fire TV Stick 4K Max (Fire OS 7, Android 9, API 28); nothing Fire-specific. Planned in [`docs/android-tv.md`](docs/android-tv.md).
 11. Objectives: something to actually do. Zones, then carryables; one task
     running at all times, procedurally parameterised and levelled up as the
     room gets good at them. Never rounds — no phone ever waits its turn.
