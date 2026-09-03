@@ -28,7 +28,7 @@ function room(count: number, seed = 1): GameState {
  * else puts down pads for a couple, or somewhere to bring a parcel, and is not
  * being asked to fit six blobs inside one circle.
  */
-const GATHERS_EVERYBODY = new Set<string>(['followTheChain'])
+const GATHERS_EVERYBODY = new Set<string>(['followTheChain', 'movingPad'])
 
 function generate(template: ObjectiveTemplate, state: GameState, level: number, seed: number) {
   return template.generate({

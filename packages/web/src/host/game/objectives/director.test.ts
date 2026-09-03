@@ -17,6 +17,7 @@ import { createGame, type GameState } from '../state.js'
 import { tick } from '../tick.js'
 import { contains } from '../zones.js'
 import { askFor, banner, briefFor, setLevel, stepObjectives } from './director.js'
+import { eligibleTemplates, unlockedAt } from './registry.js'
 import type { ColourHuntObjective } from './colourHunt.js'
 import type { KeepTheCrownObjective } from './keepTheCrown.js'
 import type { DrawItObjective } from './drawIt.js'
@@ -248,8 +249,12 @@ describe('a ladder of tasks', () => {
   it('asks for something else once the room has levelled up', () => {
     const state = room(['Wilf', 'Ida', 'Ted'], 3)
     state.objectives.level = 2
+    const allowed = new Set(eligibleTemplates(2, 3).map((template) => template.kind))
 
-    expect(new Set(kindsOverTime(state, 6))).toEqual(new Set(['onTheSpot', 'hotPotato']))
+    const played = new Set(kindsOverTime(state, 8))
+
+    expect(played.size).toBeGreaterThan(1)
+    for (const kind of played) expect(allowed.has(kind)).toBe(true)
   })
 
   it('never asks for the same thing twice running', () => {
@@ -803,14 +808,14 @@ describe('going up a level', () => {
   it('asks for whatever that level just unlocked, before anything else', () => {
     const state = room(['Wilf', 'Ida', 'Ted'])
     climb(state)
-    expect(state.objectives.pending).toEqual(['hotPotato'])
+    expect(state.objectives.pending).toEqual(unlockedAt(2))
 
     stepObjectives(state, LEVEL_UP_INTERLUDE_MS + 1)
     stepObjectives(state, 16)
 
-    expect(state.objectives.current?.kind).toBe('hotPotato')
-    // Taken off the queue: the next one after it is the director's own choice.
-    expect(state.objectives.pending).toEqual([])
+    expect(state.objectives.current?.kind).toBe(unlockedAt(2)[0])
+    // Taken off the queue: what is left is whatever that rung also unlocked.
+    expect(state.objectives.pending).toEqual(unlockedAt(2).slice(1))
   })
 
   /** The level message belongs to the breather, not to the task behind it. */
@@ -834,7 +839,9 @@ describe('going up a level', () => {
     stepObjectives(state, LEVEL_UP_INTERLUDE_MS + 1)
     const instead = started(state)
 
-    expect(instead.kind).toBe('onTheSpot')
+    // Whatever that rung unlocked that a room of two *can* play goes first;
+    // hot potato wants three, so it waits rather than being thrown away.
+    expect(instead.kind).not.toBe('hotPotato')
     expect(state.objectives.pending).toEqual(['hotPotato'])
 
     // A third blob turns up, and the moment there is room for it, it is next.

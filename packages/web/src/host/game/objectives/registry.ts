@@ -5,6 +5,7 @@ import { findYourColour } from './findYourColour.js'
 import { followTheChain } from './followTheChain.js'
 import { hotPotato } from './hotPotato.js'
 import { inOrder } from './inOrder.js'
+import { movingPad } from './movingPad.js'
 import { keepTheCrown } from './keepTheCrown.js'
 import { onTheSpot } from './onTheSpot.js'
 import { pairs } from './pairs.js'
@@ -23,6 +24,7 @@ import type { Objective, ObjectiveTemplate } from './types.js'
  */
 export const TEMPLATES: readonly ObjectiveTemplate<Objective>[] = [
   onTheSpot,
+  movingPad,
   hotPotato,
   pairs,
   followTheChain,

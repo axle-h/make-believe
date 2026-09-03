@@ -10,6 +10,7 @@ import type { FetchObjective } from './fetch.js'
 import type { FindYourColourObjective } from './findYourColour.js'
 import type { FollowTheChainObjective } from './followTheChain.js'
 import type { HotPotatoObjective } from './hotPotato.js'
+import type { MovingPadObjective } from './movingPad.js'
 import type { InOrderObjective } from './inOrder.js'
 import type { KeepTheCrownObjective } from './keepTheCrown.js'
 import type { OnTheSpotObjective } from './onTheSpot.js'
@@ -96,6 +97,7 @@ export interface ObjectiveBase {
 /** Every kind of objective there is. One file each, listed in the registry. */
 export type Objective =
   | OnTheSpotObjective
+  | MovingPadObjective
   | HotPotatoObjective
   | PairsObjective
   | FollowTheChainObjective

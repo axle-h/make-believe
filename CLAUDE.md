@@ -287,11 +287,11 @@ code obeys everywhere but states nowhere.
 11. Objectives: something to actually do. Zones, then carryables; one task
     running at all times, procedurally parameterised and levelled up as the
     room gets good at them. Never rounds — no phone ever waits its turn.
-    **All of it is built.** Thirteen tasks, in `src/host/game/objectives/`,
-    each a file and a line in `registry.ts`: stand on the spot, hot potato, two
-    to a pad, follow the lights, find your own pad, colour hunt, draw it,
-    fetch, sorting, in order, a crate too heavy for one, sumo, and keep the
-    crown. Underneath
+    **All of it is built.** Fourteen tasks, in `src/host/game/objectives/`,
+    each a file and a line in `registry.ts`: stand on the spot, the spot that
+    runs away, hot potato, two to a pad, follow the lights, find your own pad,
+    colour hunt, draw it, fetch, sorting, in order, a crate too heavy for one,
+    sumo, and keep the crown. Underneath
     them: the seeded RNG, zones and pads, carryables, obstacles (walls a blob
     cannot drive through, which only hot potato uses — anybody standing where
     one appears is slid out over a few frames rather than teleported), the
@@ -341,7 +341,7 @@ code obeys everywhere but states nowhere.
       with six bowed heads.
 
     `registry.test.ts` asserts what has to be true of every task; adding the
-    fourteenth inherits it. The e2e for the two at the top of the ladder is
+    fifteenth inherits it. The e2e for the two at the top of the ladder is
     described under Testing.
 
 ## Phaser notes (host)
