@@ -9,6 +9,13 @@ export const WORLD_HEIGHT = 720
 /** A blob is a square of this side length, centred on its position. */
 export const BLOB_SIZE = 72
 
+/**
+ * How rounded its corners are. It is the blob's outline as far as anything
+ * else is concerned: a drawing is cropped to this shape before it is worn, so
+ * a child who scribbles past the edge gets a blob rather than a square.
+ */
+export const BLOB_CORNER = 14
+
 /** Pixels per second at full deflection of a joystick. */
 export const SPEED = 420
 
@@ -25,17 +32,26 @@ export const AWAY_TIMEOUT_MS = 30_000
  */
 export const BUBBLE_MS = 6_000
 
-/** One colour per slot, in slot order. */
-export const PALETTE = [
-  '#ff5d5d',
-  '#4ea8ff',
-  '#5ddf7f',
-  '#ffd23f',
-  '#c07bff',
-  '#ff8f3f',
-  '#3fe0d0',
-  '#ff6fc1',
+/**
+ * One colour per slot, in slot order — and what to call each of them.
+ *
+ * The names are not decoration: a pad the colour of somebody's blob has to be
+ * sayable out loud on a phone ("yours is the orange one") and by whoever is
+ * sitting next to a four-year-old who cannot read it.
+ */
+export const BLOB_COLOURS = [
+  { name: 'red', hex: '#ff5d5d' },
+  { name: 'blue', hex: '#4ea8ff' },
+  { name: 'green', hex: '#5ddf7f' },
+  { name: 'yellow', hex: '#ffd23f' },
+  { name: 'purple', hex: '#c07bff' },
+  { name: 'orange', hex: '#ff8f3f' },
+  { name: 'teal', hex: '#3fe0d0' },
+  { name: 'pink', hex: '#ff6fc1' },
 ] as const
+
+/** Just the colours, which is all most of the model cares about. */
+export const PALETTE: readonly string[] = BLOB_COLOURS.map((colour) => colour.hex)
 
 /**
  * The floor is dark, so a zone is drawn in something the blob palette does not
@@ -60,10 +76,29 @@ export const SCORE_PER_OBJECTIVE = 10
 
 /**
  * How long a finished objective stays on screen, cheering or shrugging, before
- * the next one appears. It is not a gap in play: every phone can still drive,
- * talk and draw right through it.
+ * the next one appears.
+ *
+ * It is not a gap in play — every phone can still drive, talk and draw right
+ * through it — it is a breather, which six children going flat out for half a
+ * minute at a time turn out to need. Long enough to read what happened, say
+ * something about it, and see the next one coming.
  */
-export const INTERLUDE_MS = 4_000
+export const INTERLUDE_MS = 8_000
+
+/**
+ * And how long when the room has just gone up a level. The extra is for the
+ * level itself, which gets the screen to itself before the countdown starts:
+ * it is the only thing all evening that is about the children rather than
+ * about the game, and it is worth a few seconds of everybody looking up.
+ */
+export const LEVEL_UP_INTERLUDE_MS = 13_000
+
+/**
+ * How much of a breather is spent counting down to the next task. A number
+ * going 5, 4, 3 is a thing to say out loud together, and it means nobody is
+ * left wondering whether the game has stopped.
+ */
+export const COUNTDOWN_MS = 5_000
 
 /** The hardest the ladder goes. Beyond this the parameters stop tightening. */
 export const MAX_LEVEL = 8

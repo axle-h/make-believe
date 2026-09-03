@@ -55,6 +55,7 @@ const TIME_LIMIT = { easy: 40_000, hard: 34_000 }
 
 export const keepTheCrown: ObjectiveTemplate<KeepTheCrownObjective> = {
   kind: 'keepTheCrown',
+  title: 'Keep the crown',
   /** Two: one to wear it and one to come and take it. */
   minPlayers: 2,
   /**
@@ -77,6 +78,7 @@ export const keepTheCrown: ObjectiveTemplate<KeepTheCrownObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [],
+      obstacles: [],
       marks: marksFor(start.playerId),
       carryables: [],
       outcome: 'running',

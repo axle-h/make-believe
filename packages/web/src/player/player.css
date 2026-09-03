@@ -165,7 +165,13 @@ h1 {
   width: min(80vw, 60dvh);
   aspect-ratio: 1;
   height: auto;
-  border-radius: 14%;
+  /*
+    Barely rounded on purpose. The blob's own outline is painted *inside* the
+    canvas in the player's colour, so the dark square around it is the bit that
+    gets trimmed on the way to the TV — and a finger that carries on past the
+    edge of the blob has to be able to see where it went.
+  */
+  border-radius: 6px;
   background: #1b1f2e;
   box-shadow: 0 0 0 2px #2c3350;
   /* A finger on the canvas draws; it never scrolls the page. */
@@ -237,6 +243,20 @@ h1 {
 
 .brief[data-tone='miss'] {
   --brief: #ffd23f;
+}
+
+/*
+ * The room has gone up a level. It is the only line all evening that is about
+ * the children rather than about the game, so it is the only one the phone
+ * makes bigger — and the TV does the same, because heads should be up for it.
+ */
+.brief[data-tone='level'] {
+  --brief: #ffd23f;
+  border-width: 2px;
+}
+
+.brief[data-tone='level'] .brief-headline {
+  font-size: 1.6rem;
 }
 
 .brief-headline {

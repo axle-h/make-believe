@@ -38,7 +38,29 @@ export interface RectZone extends ZoneBase {
   height: number
 }
 
-export type Zone = CircleZone | RectZone
+/**
+ * A rectangle with a roof drawn on top of it — somewhere to bring things back
+ * to. It is a house because "take it home" is a sentence a three-year-old
+ * already understands and a circle on the floor is not; the roof is the whole
+ * of the difference, and nothing about the shape is playable.
+ *
+ * The house *is* its body: the roof sits above it and standing under the eaves
+ * is standing outside. Anything else would need the model to explain a shape.
+ */
+export interface HouseZone extends ZoneBase {
+  shape: 'house'
+  width: number
+  height: number
+}
+
+export type Zone = CircleZone | RectZone | HouseZone
+
+/** How far a roof rises above the body, as a share of the body's width. */
+export const ROOF_RATIO = 0.42
+
+export function roofHeight(zone: HouseZone): number {
+  return zone.width * ROOF_RATIO
+}
 
 export function contains(zone: Zone, x: number, y: number): boolean {
   if (zone.shape === 'circle') {
@@ -59,7 +81,11 @@ export function blobsIn(zone: Zone, blobs: readonly Player[]): Player[] {
 /** How far from a zone's centre to its furthest edge, for keeping zones apart. */
 export function zoneReach(zone: Zone): number {
   if (zone.shape === 'circle') return zone.radius
-  return Math.hypot(zone.width, zone.height) / 2
+  // A house's roof only goes one way, but a reach is a radius: counting it all
+  // round places the house a little further off the walls than it strictly
+  // needs to be, which is the harmless direction to be wrong in.
+  const height = zone.shape === 'house' ? zone.height + roofHeight(zone) : zone.height
+  return Math.hypot(zone.width, height) / 2
 }
 
 /**

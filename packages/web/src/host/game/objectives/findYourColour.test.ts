@@ -4,12 +4,12 @@ import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { findYourColour, type FindYourColourObjective } from './findYourColour.js'
-import { MAX_NAMED_PADS, nameOfColour } from './pads.js'
+import { nameOfColour } from './pads.js'
 
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `Blob ${index}` })
+    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
   }
   return state
 }
@@ -40,24 +40,41 @@ function lineTo(objective: FindYourColourObjective, state: GameState, playerId: 
 }
 
 describe('handing out the pads', () => {
-  it('gives everybody a pad, and never more pads than have names', () => {
+  it('gives everybody a pad painted their own colour', () => {
     const state = room(6)
     const objective = make(state)
 
-    expect(objective.zones).toHaveLength(MAX_NAMED_PADS)
-    expect(Object.keys(objective.homes)).toHaveLength(6)
-    for (const home of Object.values(objective.homes)) {
-      expect(objective.zones.some((pad) => pad.id === home)).toBe(true)
+    expect(objective.zones).toHaveLength(6)
+    for (const player of activePlayers(state)) {
+      const pad = objective.zones.find((zone) => zone.id === objective.homes[player.playerId])
+      expect(pad?.colour).toBe(player.colour)
     }
   })
 
-  it('spreads a big room evenly rather than piling onto one pad', () => {
-    const objective = make(room(8))
-    const counts = objective.zones.map(
-      (pad) => Object.values(objective.homes).filter((home) => home === pad.id).length,
-    )
+  it('puts two blobs of the same colour on one pad between them', () => {
+    const state = room(3)
+    // More blobs than there are colours is the only way this happens for real,
+    // and eight of them is a slow test; wearing somebody else's is the same
+    // thing as far as the floor is concerned.
+    state.players.get('p2')!.colour = state.players.get('p1')!.colour
+    const objective = make(state)
 
-    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1)
+    expect(objective.zones).toHaveLength(2)
+    expect(objective.homes['p2']).toBe(objective.homes['p1'])
+  })
+
+  it('sends a blob wearing a colour no pad has to the nearest one going', () => {
+    const state = room(2)
+    const objective = make(state)
+    applyMessage(state, { type: 'join', playerId: 'p3', name: 'Ted' })
+    const latecomer = state.players.get('p3')!
+    latecomer.colour = '#4fa9fe'
+
+    findYourColour.step(objective, state, 16)
+
+    const pad = objective.zones.find((zone) => zone.id === objective.homes['p3'])
+    // Practically the blue one, which is the pad it should have been sent to.
+    expect(pad?.colour).toBe('#4ea8ff')
   })
 
   it('makes the same world twice from the same seed', () => {

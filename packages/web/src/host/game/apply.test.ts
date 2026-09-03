@@ -101,7 +101,7 @@ describe('join', () => {
 
   it('goes round the palette rather than running out of colours', () => {
     const state = createGame()
-    for (let i = 0; i < PALETTE.length; i++) join(state, `p${i}`, `Blob ${i}`)
+    for (let i = 0; i < PALETTE.length; i++) join(state, `p${i}`, `B${i}`)
     const worn = [...state.players.values()].map((player) => player.colour)
 
     expect(new Set(worn).size).toBe(PALETTE.length)

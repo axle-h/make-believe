@@ -176,6 +176,18 @@ describe('brief', () => {
     ).toBe(true)
   })
 
+  /** Going up a rung is the one line either screen makes bigger than the rest. */
+  it('accepts the level tone', () => {
+    expect(
+      BriefMessageSchema.safeParse({
+        type: 'brief',
+        headline: 'Level 3!',
+        detail: 'Next game in 5s',
+        tone: 'level',
+      }).success,
+    ).toBe(true)
+  })
+
   /** An empty headline is how the strip is taken down, so it must be allowed. */
   it('accepts an empty headline, which clears the strip', () => {
     expect(BriefMessageSchema.safeParse({ type: 'brief', headline: '', tone: 'task' }).success).toBe(

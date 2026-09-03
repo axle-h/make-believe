@@ -10,7 +10,7 @@ import { sumo, type SumoObjective } from './sumo.js'
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `Blob ${index}` })
+    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
   }
   return state
 }
@@ -204,7 +204,7 @@ describe('sumo: ending', () => {
     play(state, objective, objective.totalMs + 100)
 
     expect(objective.outcome).toBe('done')
-    expect(objective.note).toContain('Blob 1')
+    expect(objective.note).toContain('B1')
   })
 
   it('is cheerful even when the last of them slid off', () => {
@@ -234,8 +234,8 @@ describe('sumo: ending', () => {
 
     play(state, objective, objective.totalMs + 100)
 
-    expect(objective.note).toContain('Blob 2')
-    expect(objective.note).not.toContain('Blob 1')
+    expect(objective.note).toContain('B2')
+    expect(objective.note).not.toContain('B1')
   })
 })
 

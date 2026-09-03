@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from '../apply.js'
-import { BLOB_SIZE } from '../constants.js'
+import { BLOB_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from '../constants.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
@@ -9,7 +9,7 @@ import { hotPotato, type HotPotatoObjective } from './hotPotato.js'
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `Blob ${index}` })
+    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
   }
   // Spread out, so nobody is touching anybody until a test says so.
   let x = 100
@@ -75,10 +75,37 @@ describe('hot potato: generating', () => {
     expect(hard.graceMs).toBeLessThan(easy.graceMs)
   })
 
-  /** One blob has nobody to pass it to, which is not a game. */
-  it('needs two blobs, and joins the ladder after the simplest task', () => {
-    expect(hotPotato.minPlayers).toBe(2)
+  /**
+   * Two blobs is a tag-back rather than a chase: the potato has nowhere to go
+   * but back where it came from, and the joke needs somebody to run *to*.
+   */
+  it('needs three blobs, and joins the ladder after the simplest task', () => {
+    expect(hotPotato.minPlayers).toBe(3)
     expect(hotPotato.minLevel).toBeGreaterThan(1)
+  })
+
+  /**
+   * A chase across an empty floor is whoever is quickest; a chase round a
+   * corner is a game. Every wall leaves a lane round it — a floor cut in two
+   * is a floor half the blobs cannot get out of.
+   */
+  it('puts something on the floor to run round, and never a wall across it', () => {
+    for (let seed = 0; seed < 40; seed++) {
+      const objective = make(room(3), 5, seed)
+      expect(objective.obstacles.length).toBeGreaterThan(0)
+      for (const wall of objective.obstacles) {
+        // Room for two blobs to pass either side of it, whichever way it runs.
+        expect(WORLD_WIDTH - wall.width).toBeGreaterThan(BLOB_SIZE * 2)
+        expect(WORLD_HEIGHT - wall.height).toBeGreaterThan(BLOB_SIZE * 2)
+      }
+    }
+  })
+
+  it('builds bigger walls the higher the level', () => {
+    const area = (level: number): number =>
+      make(room(3), level, 3).obstacles.reduce((sum, wall) => sum + wall.width * wall.height, 0)
+
+    expect(area(8)).toBeGreaterThan(area(1))
   })
 })
 

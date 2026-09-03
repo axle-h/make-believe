@@ -1,5 +1,6 @@
 import type { Carryable } from './carryables.js'
 import type { Mark, Outcome } from './objectives/types.js'
+import type { Obstacle } from './obstacles.js'
 import type { GameState, Player } from './state.js'
 import type { Zone } from './zones.js'
 
@@ -53,6 +54,8 @@ export interface ObjectiveSnapshot {
   /** What the TV says once it is over, or `null` while it is running. */
   note: string | null
   zones: Zone[]
+  /** The walls this task has put on the floor, if any. */
+  obstacles: Obstacle[]
   /** What the world has pinned to particular blobs — the potato, and later a crown. */
   marks: Mark[]
   /** The parcels and crates on the floor, if this task has any. */
@@ -97,6 +100,7 @@ export function objectives(state: GameState): DirectorSnapshot {
             outcome: objective.outcome,
             note: objective.note,
             zones: objective.zones,
+            obstacles: objective.obstacles,
             marks: objective.marks,
             carryables: objective.carryables,
           },
@@ -141,6 +145,7 @@ function copyObjectives(director: DirectorSnapshot): DirectorSnapshot {
         : {
             ...objective,
             zones: structuredClone(objective.zones),
+            obstacles: structuredClone(objective.obstacles),
             marks: structuredClone(objective.marks),
             carryables: structuredClone(objective.carryables),
           },

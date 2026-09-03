@@ -3,14 +3,15 @@ import { applyMessage } from '../apply.js'
 import { stillOut, type Parcel } from '../carryables.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../constants.js'
 import { createGame, type GameState } from '../state.js'
-import { contains } from '../zones.js'
+import { contains, roofHeight } from '../zones.js'
 import { fetch, type FetchObjective } from './fetch.js'
 
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `Blob ${index}` })
+    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
   }
   return state
 }
@@ -42,6 +43,34 @@ function fetchOne(state: GameState, objective: FetchObjective, playerId: string,
   player.y = depot.y
   fetch.step(objective, state, 16)
 }
+
+describe('the depot', () => {
+  /**
+   * "Take it home" is a sentence a three-year-old already has, and a roof is
+   * how the floor says it without anybody reading the brief.
+   */
+  it('is a house, and stays wholly on the floor with its roof on', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const depot = make(room(3), 4, seed).zones[0]!
+      expect(depot.shape).toBe('house')
+      if (depot.shape !== 'house') continue
+
+      expect(depot.x - depot.width / 2).toBeGreaterThan(0)
+      expect(depot.x + depot.width / 2).toBeLessThan(WORLD_WIDTH)
+      expect(depot.y - depot.height / 2 - roofHeight(depot)).toBeGreaterThan(0)
+      expect(depot.y + depot.height / 2).toBeLessThan(WORLD_HEIGHT)
+    }
+  })
+
+  /** A parcel is home when it is in the house, not when it is under the eaves. */
+  it('takes a parcel in its body and not in its roof', () => {
+    const depot = make(room(3)).zones[0]!
+    if (depot.shape !== 'house') throw new Error('the depot should be a house')
+
+    expect(contains(depot, depot.x, depot.y)).toBe(true)
+    expect(contains(depot, depot.x, depot.y - depot.height / 2 - roofHeight(depot) / 2)).toBe(false)
+  })
+})
 
 describe('scattering the parcels', () => {
   it('puts them on the floor, and never already in the depot', () => {

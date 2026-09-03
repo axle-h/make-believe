@@ -40,6 +40,7 @@ const TIME_LIMIT = { easy: 60_000, hard: 45_000 }
 
 export const tooHeavyForOne: ObjectiveTemplate<TooHeavyObjective> = {
   kind: 'tooHeavyForOne',
+  title: 'Too heavy for one',
   /** Two, and it means two: the crate is built not to move for one. */
   minPlayers: 2,
   minLevel: 7,
@@ -87,6 +88,7 @@ export const tooHeavyForOne: ObjectiveTemplate<TooHeavyObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [spot],
+      obstacles: [],
       marks: [],
       carryables: [crate as Carryable],
       outcome: 'running',

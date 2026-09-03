@@ -42,6 +42,20 @@ export function templateFor(kind: Objective['kind']): ObjectiveTemplate<Objectiv
 }
 
 /**
+ * The tasks that appear for the first time at this level — usually one, twice
+ * two, and nothing at all at the levels that only make the old ones harder.
+ *
+ * The room plays whatever is on this list before anything else, because a
+ * level that unlocks something and then asks for the same old spot is a level
+ * that has not visibly done anything.
+ */
+export function unlockedAt(level: number): Objective['kind'][] {
+  return TEMPLATES.filter((template) => template.minLevel === level).map(
+    (template) => template.kind,
+  )
+}
+
+/**
  * The tasks that could run right now: unlocked by the level, and with enough
  * blobs present to mean anything. An empty list is the world quietly waiting
  * for another blob, which is not a failure of any kind.

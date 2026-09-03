@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import {
+  BLOB_CORNER,
   BLOB_SIZE,
   MAX_STEP_MS,
   banner,
@@ -7,7 +8,6 @@ import {
   noteSkinColour,
   PARCEL_SIZE,
   objectives,
-  playerById,
   players,
   tick,
   type Brief,
@@ -15,10 +15,13 @@ import {
   type DirectorSnapshot,
   type GameState,
   type ObjectiveSnapshot,
+  type Obstacle,
   type Player,
   type Zone,
+  roofHeight,
 } from '../game/index.js'
 import { WORLD_SCENE_KEY } from './sceneKey.js'
+import { cropToBlob } from './skin.js'
 import { colourOfImage } from './skinColour.js'
 
 /**
@@ -28,7 +31,6 @@ import { colourOfImage } from './skinColour.js'
 
 /** A white rounded square, generated once and tinted per blob. */
 const BLOB_TEXTURE = 'blob'
-const BLOB_CORNER = 14
 /** Pixels between the top of a blob and its name. */
 const NAME_GAP = 14
 /** Pixels between a name and the bubble above it. */
@@ -51,6 +53,15 @@ const TIMER_HEIGHT = 8
 const TIMER_GAP = 12
 /** How see-through a zone's fill is. Enough to read, never enough to hide a blob. */
 const ZONE_FILL_ALPHA = 0.14
+/**
+ * A wall is solid, which is the opposite of a zone: a zone is a place to stand
+ * and a wall is a place you cannot. It is drawn opaque and a shade lighter than
+ * the floor so that it reads as furniture rather than as a spot to aim at.
+ */
+const WALL_FILL = 0x2c_33_50
+const WALL_EDGE = 0x4a_54_7d
+const WALL_EDGE_WIDTH = 4
+const WALL_CORNER = 10
 const ZONE_EDGE_WIDTH = 6
 /** How much of itself a zone keeps while it is waiting its turn to light up. */
 const ZONE_DIM = 0.35
@@ -62,6 +73,8 @@ const THING_CORNER = 8
 const THING_EDGE_WIDTH = 4
 /** The name written on a depot, for whoever in the room can read it. */
 const ZONE_LABEL_ALPHA = 0.5
+/** How far under a labelled zone its tally sits, when it cannot go in the middle. */
+const TALLY_GAP = 10
 
 /** The floor is under everything; blobs, names and bubbles stack over it. */
 const DEPTH_ZONE = -10
@@ -89,9 +102,17 @@ const WAITING_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   color: 'rgba(244, 241, 234, 0.45)',
 }
 
+/**
+ * How big the banner's first line is: the usual size, and the size a new level
+ * gets. Going up a rung is the only thing all evening that is about the
+ * children rather than the game, so it is the only thing that grows.
+ */
+const HEADLINE_SIZE = 44
+const LEVEL_SIZE = 96
+
 const BANNER_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'system-ui, sans-serif',
-  fontSize: '44px',
+  fontSize: `${HEADLINE_SIZE}px`,
   fontStyle: 'bold',
   color: '#f4f1ea',
   align: 'center',
@@ -115,14 +136,9 @@ const TONE_COLOURS: Record<Brief['tone'], string> = {
   task: '#f4f1ea',
   win: '#5ddf7f',
   miss: '#ffd23f',
+  level: '#ffd23f',
 }
 
-/** What the world has pinned to a blob, worn in the middle of it. */
-const MARK_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
-  fontFamily: 'system-ui, sans-serif',
-  fontSize: '46px',
-  align: 'center',
-}
 
 /**
  * How well the room is doing. It is deliberately the quietest thing on screen:
@@ -136,6 +152,21 @@ const ZONE_LABEL_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontStyle: 'bold',
   color: '#10121a',
   align: 'center',
+}
+
+/**
+ * How many things have been brought to a depot: one number, big, in the middle
+ * of it. The parcels themselves used to stay where they landed and pile up
+ * into a heap nobody could count, which told a room less than a numeral does
+ * and looked like a mess on the floor.
+ */
+const TALLY_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
+  fontFamily: 'system-ui, sans-serif',
+  fontSize: '52px',
+  fontStyle: 'bold',
+  align: 'center',
+  stroke: '#10121a',
+  strokeThickness: 6,
 }
 
 const SCORE_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
@@ -183,8 +214,6 @@ export class WorldScene extends Phaser.Scene {
   private readonly state: GameState
   private readonly options: SceneOptions
   private readonly views = new Map<string, BlobView>()
-  /** Whatever the task has pinned to a blob, by `playerId`. */
-  private readonly marks = new Map<string, Phaser.GameObjects.Text>()
   private waiting: Phaser.GameObjects.Text | null = null
   /** The floor markings, redrawn only when the zones themselves change. */
   private floor: Phaser.GameObjects.Graphics | null = null
@@ -192,6 +221,8 @@ export class WorldScene extends Phaser.Scene {
   private floorFor = ''
   /** What each zone is called, written on it. Kept by zone id. */
   private readonly zoneLabels = new Map<string, Phaser.GameObjects.Text>()
+  /** How many parcels each depot is holding, written on it. Kept by zone id. */
+  private readonly tallies = new Map<string, Phaser.GameObjects.Text>()
   /** Parcels and crates: on the floor, and in somebody's arms. */
   private thingsDown: Phaser.GameObjects.Graphics | null = null
   private thingsHeld: Phaser.GameObjects.Graphics | null = null
@@ -261,6 +292,11 @@ export class WorldScene extends Phaser.Scene {
     const director = objectives(this.state)
     const seen = new Set<string>()
 
+    // Whatever the task has pinned to particular blobs, ready to be read out of
+    // in the loop below: a badge is part of a blob's name, not a thing sitting
+    // on top of it.
+    const badges = badgesByPlayer(director.objective)
+
     for (const player of list) {
       seen.add(player.playerId)
       const view = this.views.get(player.playerId) ?? this.createView(player)
@@ -268,7 +304,8 @@ export class WorldScene extends Phaser.Scene {
 
       view.image.setPosition(player.x, player.y).setAlpha(alpha)
       view.label.setPosition(player.x, player.y - BLOB_SIZE / 2 - NAME_GAP).setAlpha(alpha)
-      if (view.label.text !== player.name) view.label.setText(player.name)
+      const named = nameWithBadges(player.name, badges.get(player.playerId))
+      if (view.label.text !== named) view.label.setText(named)
 
       this.renderBubble(view, player)
       this.renderSkin(view, player)
@@ -286,38 +323,9 @@ export class WorldScene extends Phaser.Scene {
     this.waiting?.setVisible(list.length === 0)
     this.renderFloor(director.objective)
     this.renderThings(director.objective)
-    this.renderMarks(director.objective)
+    this.renderTallies(director.objective)
     this.renderBanner(director.objective)
     this.renderScore(director)
-  }
-
-  /**
-   * Whatever the task has pinned to particular blobs — the potato, and one day
-   * a crown. It is worn in the middle of the blob rather than above it: the
-   * space over their heads is already names and speech bubbles, and a child
-   * working out who has it should not have to read anything to find out.
-   */
-  private renderMarks(objective: ObjectiveSnapshot | null): void {
-    const worn = new Set<string>()
-    for (const mark of objective?.marks ?? []) {
-      const player = playerById(this.state, mark.playerId)
-      if (!player) continue
-      worn.add(mark.playerId)
-      const badge = this.marks.get(mark.playerId) ?? this.createMark(mark.playerId)
-      if (badge.text !== mark.badge) badge.setText(mark.badge)
-      badge.setPosition(player.x, player.y).setAlpha(player.away ? AWAY_ALPHA : 1)
-    }
-    for (const [playerId, badge] of this.marks) {
-      if (worn.has(playerId)) continue
-      badge.destroy()
-      this.marks.delete(playerId)
-    }
-  }
-
-  private createMark(playerId: string): Phaser.GameObjects.Text {
-    const badge = this.add.text(0, 0, '', MARK_STYLE).setOrigin(0.5, 0.5).setDepth(DEPTH_NAME)
-    this.marks.set(playerId, badge)
-    return badge
   }
 
   /** How the room is doing, in the corner, for whoever cares to look. */
@@ -335,7 +343,8 @@ export class WorldScene extends Phaser.Scene {
    */
   private renderFloor(objective: ObjectiveSnapshot | null): void {
     const zones = objective?.zones ?? []
-    const signature = zones.map(zoneSignature).join('|')
+    const walls = objective?.obstacles ?? []
+    const signature = [...zones.map(zoneSignature), ...walls.map(wallSignature)].join('|')
     if (signature === this.floorFor) return
     this.floorFor = signature
 
@@ -343,6 +352,7 @@ export class WorldScene extends Phaser.Scene {
     if (!floor) return
     floor.clear()
     for (const zone of zones) this.drawZone(floor, zone)
+    for (const wall of objective?.obstacles ?? []) drawWall(floor, wall)
     this.renderZoneLabels(zones)
   }
 
@@ -392,9 +402,54 @@ export class WorldScene extends Phaser.Scene {
     held.clear()
 
     for (const thing of objective?.carryables ?? []) {
+      // A delivered parcel is counted rather than drawn: a dozen of them
+      // landing on one spot used to stack into a heap that said less about how
+      // far the room had got than the number written over it does.
+      if (thing.kind === 'parcel' && thing.home !== null) continue
       const carried = thing.kind === 'parcel' && thing.carriedBy !== null
       this.drawThing(carried ? held : down, thing)
     }
+  }
+
+  /**
+   * The number on each depot. It changes as things arrive rather than when the
+   * floor does, so unlike the labels it is placed every frame — there are never
+   * more than a handful of depots.
+   *
+   * It goes in the middle of a depot that has nothing written on it, and just
+   * under one that has, so a word and a number never sit on top of each other.
+   */
+  private renderTallies(objective: ObjectiveSnapshot | null): void {
+    const parcels = (objective?.carryables ?? []).filter((thing) => thing.kind === 'parcel')
+    const counted = new Set<string>()
+
+    if (parcels.length > 0) {
+      for (const zone of objective?.zones ?? []) {
+        const home = parcels.filter((parcel) => parcel.home === zone.id).length
+        if (home === 0) continue
+        counted.add(zone.id)
+        const tally = this.tallies.get(zone.id) ?? this.createTally(zone.id)
+        const said = String(home)
+        if (tally.text !== said) tally.setText(said)
+        const under = zone.label !== undefined
+        tally
+          .setOrigin(0.5, under ? 0 : 0.5)
+          .setPosition(zone.x, under ? zone.y + zoneFoot(zone) + TALLY_GAP : zone.y)
+          .setColor(zone.colour)
+      }
+    }
+
+    for (const [id, tally] of this.tallies) {
+      if (counted.has(id)) continue
+      tally.destroy()
+      this.tallies.delete(id)
+    }
+  }
+
+  private createTally(id: string): Phaser.GameObjects.Text {
+    const tally = this.add.text(0, 0, '', TALLY_STYLE).setOrigin(0.5, 0.5).setDepth(DEPTH_NAME)
+    this.tallies.set(id, tally)
+    return tally
   }
 
   private drawThing(into: Phaser.GameObjects.Graphics, thing: Carryable): void {
@@ -433,6 +488,15 @@ export class WorldScene extends Phaser.Scene {
     const top = zone.y - zone.height / 2
     floor.fillRoundedRect(left, top, zone.width, zone.height, 18)
     floor.strokeRoundedRect(left, top, zone.width, zone.height, 18)
+    // A roof, and nothing else: the body is the whole of where a parcel counts
+    // as home, and the triangle over it is what makes that legible without a
+    // word of the brief being read.
+    if (zone.shape !== 'house') return
+    const roof = roofHeight(zone)
+    // Overhanging eaves, so it reads as a house rather than as a hat.
+    const eaves = zone.width * 0.08
+    floor.fillTriangle(left - eaves, top, zone.x + zone.width / 2 + eaves, top, zone.x, top - roof)
+    floor.strokeTriangle(left - eaves, top, zone.x + zone.width / 2 + eaves, top, zone.x, top - roof)
   }
 
   /**
@@ -446,9 +510,14 @@ export class WorldScene extends Phaser.Scene {
     if (!headline || !detail) return
 
     const line = banner(this.state)
+    const tone = line?.tone ?? 'task'
     const text = line?.headline ?? ''
+    // Setting the size re-wraps and re-measures the text, so it is only ever
+    // touched when it has actually changed.
+    const size = tone === 'level' ? LEVEL_SIZE : HEADLINE_SIZE
+    if (headline.style.fontSize !== `${size}px`) headline.setFontSize(size)
     if (headline.text !== text) headline.setText(text)
-    headline.setVisible(text.length > 0).setColor(TONE_COLOURS[line?.tone ?? 'task'])
+    headline.setVisible(text.length > 0).setColor(TONE_COLOURS[tone])
 
     const under = line?.detail ?? ''
     if (detail.text !== under) detail.setText(under)
@@ -499,9 +568,10 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * A drawing from a phone becomes this blob's texture. `addBase64` decodes the
-   * PNG in the background, so the swap waits for the texture manager to say the
-   * key is ready.
+   * A drawing from a phone becomes this blob's texture. It is cut to the
+   * blob's rounded outline on the way — the phone lets a child draw right out
+   * to the corners of a square, and the shape is put back on here — which
+   * needs the PNG decoded first, so the swap waits on that.
    */
   private renderSkin(view: BlobView, player: Player): void {
     const skin = player.skin
@@ -509,15 +579,30 @@ export class WorldScene extends Phaser.Scene {
 
     const previous = view.skinKey
     const { playerId } = player
-    view.skinKey = skin.key
-    if (this.textures.exists(skin.key)) {
-      this.wearSkin(view, playerId, skin.key, previous)
+    const { key } = skin
+    view.skinKey = key
+    if (this.textures.exists(key)) {
+      this.wearSkin(view, playerId, key, previous)
       return
     }
-    this.textures.once(`addtexture-${skin.key}`, () =>
-      this.wearSkin(view, playerId, skin.key, previous),
-    )
-    this.textures.addBase64(skin.key, skin.png)
+    void cropToBlob(skin.png).then((cropped) => {
+      // A quick second drawing can land while the first is still decoding, and
+      // a blob can leave altogether; either way this one is no longer wanted.
+      if (view.skinKey !== key || this.textures.exists(key)) return
+      if (cropped) {
+        this.textures.addCanvas(key, cropped)
+        this.wearSkin(view, playerId, key, previous)
+        return
+      }
+      // A picture that would not decode into a canvas is handed to Phaser as
+      // it arrived rather than dropped: an uncropped blob is a great deal
+      // better than a blank one. That decodes in the background too, so the
+      // swap waits for the texture manager to say the key is ready.
+      this.textures.once(`addtexture-${key}`, () =>
+        this.wearSkin(view, playerId, key, previous),
+      )
+      this.textures.addBase64(key, skin.png)
+    })
   }
 
   private wearSkin(
@@ -602,6 +687,54 @@ export class WorldScene extends Phaser.Scene {
     view.bubble?.container.destroy()
     view.bubble = null
   }
+}
+
+/**
+ * Whatever the task has pinned to each blob, by `playerId`. Usually empty and
+ * never more than one each, but the shape allows for two so that a task which
+ * wants to hand out a second badge does not have to change this.
+ */
+function badgesByPlayer(objective: ObjectiveSnapshot | null): Map<string, string> {
+  const badges = new Map<string, string>()
+  for (const mark of objective?.marks ?? []) {
+    badges.set(mark.playerId, (badges.get(mark.playerId) ?? '') + mark.badge)
+  }
+  return badges
+}
+
+/**
+ * A blob's name with its badge on the front of it: "🥔 Wilf".
+ *
+ * The badge used to be drawn over the middle of the blob, which put it on top
+ * of the one thing a child had made themselves — the drawing they are wearing.
+ * Above their head it sits beside the name, where the room is already looking
+ * to find out who is who, and the picture underneath stays theirs.
+ */
+function nameWithBadges(name: string, badges: string | undefined): string {
+  return badges ? `${badges} ${name}` : name
+}
+
+/** How far it is from a zone's middle to its bottom edge. */
+function zoneFoot(zone: Zone): number {
+  return zone.shape === 'circle' ? zone.radius : zone.height / 2
+}
+
+/**
+ * A wall. Solid and plainly not a zone: the floor markings are places to go
+ * and this is a place to go round.
+ */
+function drawWall(floor: Phaser.GameObjects.Graphics, wall: Obstacle): void {
+  const left = wall.x - wall.width / 2
+  const top = wall.y - wall.height / 2
+  floor.fillStyle(WALL_FILL, 1)
+  floor.lineStyle(WALL_EDGE_WIDTH, WALL_EDGE, 1)
+  floor.fillRoundedRect(left, top, wall.width, wall.height, WALL_CORNER)
+  floor.strokeRoundedRect(left, top, wall.width, wall.height, WALL_CORNER)
+}
+
+/** Walls never move, so their signature is only about which ones there are. */
+function wallSignature(wall: Obstacle): string {
+  return `${wall.id}:${Math.round(wall.x)}:${Math.round(wall.y)}:${wall.width}x${wall.height}`
 }
 
 /** Enough of a zone to tell whether the floor needs redrawing. */

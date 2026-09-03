@@ -51,6 +51,7 @@ const TIME_LIMIT = { easy: 30_000, hard: 22_000 }
 
 export const sumo: ObjectiveTemplate<SumoObjective> = {
   kind: 'sumo',
+  title: 'Sumo',
   /** One blob alone on an island has nobody to shove and nobody to shove them. */
   minPlayers: 2,
   /**
@@ -91,6 +92,7 @@ export const sumo: ObjectiveTemplate<SumoObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [island],
+      obstacles: [],
       marks: [],
       carryables: [],
       outcome: 'running',

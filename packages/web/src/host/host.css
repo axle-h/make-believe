@@ -90,3 +90,65 @@ body {
 .status:empty {
   display: none;
 }
+
+/*
+ * The debug menu. It is not part of the game and no child ever sees it: it
+ * lives behind the `d` key so that a grown-up can look at a task without a
+ * room of children first climbing the ladder to it. See `debug.ts`.
+ */
+.debug {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  min-width: 26rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 16px;
+  background: rgba(16, 18, 26, 0.94);
+  border: 2px solid #2c3350;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  font-size: 1rem;
+}
+
+.debug[hidden] {
+  display: none;
+}
+
+.debug-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.debug-level {
+  margin: 0.15rem 0 0.75rem;
+  opacity: 0.6;
+}
+
+.debug-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.debug-row {
+  padding: 0.3rem 0.6rem;
+  border-radius: 8px;
+  border-left: 4px solid transparent;
+}
+
+.debug-row.is-on {
+  background: #1b1f2e;
+  border-left-color: #4ea8ff;
+}
+
+/* Not enough blobs in the room for this one; it is listed, and it is refused. */
+.debug-row.is-out {
+  opacity: 0.4;
+}
+
+.debug-help {
+  margin: 0.9rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.5;
+}

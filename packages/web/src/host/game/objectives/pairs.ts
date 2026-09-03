@@ -36,6 +36,7 @@ const TIME_LIMIT = { easy: 50_000, hard: 30_000 }
 
 export const pairs: ObjectiveTemplate<PairsObjective> = {
   kind: 'pairs',
+  title: 'Two to a pad',
   /** Two blobs and two pads is not a negotiation; three is. */
   minPlayers: 3,
   minLevel: 3,
@@ -54,6 +55,7 @@ export const pairs: ObjectiveTemplate<PairsObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones,
+      obstacles: [],
       marks: [],
       carryables: [],
       outcome: 'running',

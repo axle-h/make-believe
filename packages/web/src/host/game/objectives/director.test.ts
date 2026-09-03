@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { applyMessage } from '../apply.js'
 import {
   BLOB_SIZE,
+  COUNTDOWN_MS,
   INTERLUDE_MS,
   LEVEL_UP_AFTER,
+  LEVEL_UP_INTERLUDE_MS,
   MAX_LEVEL,
   SCORE_PER_OBJECTIVE,
 } from '../constants.js'
@@ -11,7 +13,7 @@ import { activePlayers, objectives } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { tick } from '../tick.js'
 import { contains } from '../zones.js'
-import { banner, briefFor, stepObjectives } from './director.js'
+import { askFor, banner, briefFor, setLevel, stepObjectives } from './director.js'
 import type { DrawItObjective } from './drawIt.js'
 import type { Brief, Objective } from './types.js'
 
@@ -261,7 +263,7 @@ describe('a ladder of tasks', () => {
    * say. Who was left holding the potato is better, so the task's own words win.
    */
   it('lets a task say for itself how it ended', () => {
-    const state = room(['Wilf', 'Ida'], 5)
+    const state = room(['Wilf', 'Ida', 'Ted'], 5)
     state.objectives.level = 2
     state.objectives.lastKind = 'onTheSpot'
     const objective = started(state)
@@ -276,7 +278,7 @@ describe('a ladder of tasks', () => {
 
   /** The potato has to reach the screen, and it rides on the blob wearing it. */
   it('puts what the task has pinned to a blob into the snapshot', () => {
-    const state = room(['Wilf', 'Ida'], 5)
+    const state = room(['Wilf', 'Ida', 'Ted'], 5)
     state.objectives.level = 2
     state.objectives.lastKind = 'onTheSpot'
     const objective = started(state)
@@ -553,5 +555,249 @@ describe('through the world', () => {
 
     expect(activePlayers(state).every((player) => contains(zone, player.x, player.y))).toBe(true)
     expect(state.objectives.score).toBe(SCORE_PER_OBJECTIVE)
+  })
+})
+
+/**
+ * The hidden debug menu on the TV. It is a grown-up with a keyboard wanting to
+ * look at the twelfth task without a room of children climbing to it first,
+ * and it does nothing the director does not already do to itself.
+ */
+describe('asking for one task in particular', () => {
+  it('puts that one up, whatever the ladder would have picked', () => {
+    const state = room(['Wilf', 'Ida'])
+    started(state)
+
+    expect(askFor(state, 'sumo')).toBe(true)
+
+    expect(state.objectives.current?.kind).toBe('sumo')
+    expect(state.objectives.current?.outcome).toBe('running')
+  })
+
+  it('does it at whatever level the world is on, gate or no gate', () => {
+    const state = room(['Wilf', 'Ida'])
+    // The crown is the top of the ladder and the world has climbed nothing.
+    expect(state.objectives.level).toBe(1)
+
+    expect(askFor(state, 'keepTheCrown')).toBe(true)
+    expect(state.objectives.current?.kind).toBe('keepTheCrown')
+  })
+
+  /**
+   * The one thing it will not do. A task judged against two children when it
+   * needs three is a task nobody in the room can finish, and the point of the
+   * menu is to look at a task working.
+   */
+  it('refuses one the room is too small for, and leaves what is running alone', () => {
+    const state = room(['Wilf', 'Ida'])
+    const running = started(state)
+
+    expect(askFor(state, 'hotPotato')).toBe(false)
+
+    expect(state.objectives.current).toBe(running)
+  })
+
+  it('gives each one a fresh id, so the renderer knows it is new', () => {
+    const state = room(['Wilf', 'Ida'])
+    askFor(state, 'sumo')
+    const first = state.objectives.current?.id
+    askFor(state, 'sumo')
+
+    expect(state.objectives.current?.id).not.toBe(first)
+  })
+
+  it('will not ask for the same thing again straight afterwards', () => {
+    const state = room(['Wilf', 'Ida'])
+    askFor(state, 'sumo')
+
+    expect(state.objectives.lastKind).toBe('sumo')
+  })
+})
+
+describe('moving the ladder by hand', () => {
+  it('goes up and down, unlike anything the game itself does', () => {
+    const state = room(['Wilf', 'Ida'])
+
+    expect(setLevel(state, 6)).toBe(6)
+    expect(setLevel(state, 2)).toBe(2)
+    expect(state.objectives.level).toBe(2)
+  })
+
+  it('stays on the ladder at both ends', () => {
+    const state = room(['Wilf', 'Ida'])
+
+    expect(setLevel(state, 0)).toBe(1)
+    expect(setLevel(state, MAX_LEVEL + 5)).toBe(MAX_LEVEL)
+  })
+})
+
+/**
+ * Going up a rung. It is the one thing all evening that is about the children
+ * rather than about the game, so it is the one thing the world stops to say —
+ * and it says it by asking them for whatever it has just unlocked.
+ */
+describe('going up a level', () => {
+  /** Solve the simple spot until the room climbs a rung. */
+  function climb(state: GameState): void {
+    for (let round = 0; round < LEVEL_UP_AFTER; round++) {
+      const objective = startedOnTheSpot(state)
+      standOnIt(state, objective)
+      runUntilFinished(state)
+      if (round < LEVEL_UP_AFTER - 1) stepObjectives(state, INTERLUDE_MS + 1)
+    }
+  }
+
+  it('says which level, in the big line, and not as a win or a miss', () => {
+    const state = room(['Wilf', 'Ida', 'Ted'])
+    climb(state)
+
+    const line = banner(state)
+    expect(line?.headline).toBe('Level 2!')
+    expect(line?.tone).toBe('level')
+    // What the task itself had to say drops to the second line rather than
+    // being lost: both are worth reading.
+    expect(line?.detail).toBeTruthy()
+  })
+
+  it('gives the room longer to look at it than an ordinary breather', () => {
+    const state = room(['Wilf', 'Ida', 'Ted'])
+    climb(state)
+
+    expect(state.objectives.interludeMs).toBe(LEVEL_UP_INTERLUDE_MS)
+    expect(LEVEL_UP_INTERLUDE_MS).toBeGreaterThan(INTERLUDE_MS)
+  })
+
+  /** A level that unlocks something and then asks for the same old spot has not visibly done anything. */
+  it('asks for whatever that level just unlocked, before anything else', () => {
+    const state = room(['Wilf', 'Ida', 'Ted'])
+    climb(state)
+    expect(state.objectives.pending).toEqual(['hotPotato'])
+
+    stepObjectives(state, LEVEL_UP_INTERLUDE_MS + 1)
+    stepObjectives(state, 16)
+
+    expect(state.objectives.current?.kind).toBe('hotPotato')
+    // Taken off the queue: the next one after it is the director's own choice.
+    expect(state.objectives.pending).toEqual([])
+  })
+
+  /** The level message belongs to the breather, not to the task behind it. */
+  it('stops saying it once the next task is up', () => {
+    const state = room(['Wilf', 'Ida', 'Ted'])
+    climb(state)
+    stepObjectives(state, LEVEL_UP_INTERLUDE_MS + 1)
+    stepObjectives(state, 16)
+
+    expect(state.objectives.levelledUpTo).toBeNull()
+    expect(banner(state)?.tone).toBe('task')
+  })
+
+  /**
+   * A room of two cannot play hot potato, and a new task nobody ever saw is a
+   * level that did nothing. It waits on the queue instead of being thrown away.
+   */
+  it('holds a newly unlocked task back until there are blobs enough for it', () => {
+    const state = room(['Wilf', 'Ida'])
+    climb(state)
+    stepObjectives(state, LEVEL_UP_INTERLUDE_MS + 1)
+    const instead = started(state)
+
+    expect(instead.kind).toBe('onTheSpot')
+    expect(state.objectives.pending).toEqual(['hotPotato'])
+
+    // A third blob turns up, and the moment there is room for it, it is next.
+    applyMessage(state, { type: 'join', playerId: 'p3', name: 'Ted' })
+    standOnIt(state, instead)
+    runUntilFinished(state)
+    stepObjectives(state, INTERLUDE_MS + 1)
+    stepObjectives(state, 16)
+
+    expect(state.objectives.current?.kind).toBe('hotPotato')
+  })
+
+  /** Two unlock together at some rungs; both go first, one after the other. */
+  it('queues everything a rung unlocks, not just the first of them', () => {
+    const state = room(['Wilf', 'Ida', 'Ted'])
+    state.objectives.level = 2
+    state.objectives.streak = LEVEL_UP_AFTER - 1
+    const objective = startedOnTheSpot(state)
+    standOnIt(state, objective)
+    runUntilFinished(state)
+
+    expect(state.objectives.level).toBe(3)
+    expect(state.objectives.pending).toEqual(['pairs', 'followTheChain'])
+  })
+
+  /** At the top there is nothing left to unlock and nothing to announce. */
+  it('says nothing at the top of the ladder, where the level stops moving', () => {
+    const state = room(['Wilf', 'Ida', 'Ted'])
+    state.objectives.level = MAX_LEVEL
+    state.objectives.streak = LEVEL_UP_AFTER - 1
+    const objective = startedOnTheSpot(state)
+    standOnIt(state, objective)
+    runUntilFinished(state)
+
+    expect(state.objectives.level).toBe(MAX_LEVEL)
+    expect(state.objectives.levelledUpTo).toBeNull()
+    expect(state.objectives.pending).toEqual([])
+    expect(banner(state)?.tone).toBe('win')
+  })
+})
+
+/**
+ * The breather between one task and the next. It is not a gap in play — every
+ * phone can still drive, talk and draw right through it — but it is long
+ * enough that the room has to be told the game has not stopped.
+ */
+describe('counting down to the next task', () => {
+  function finishOne(state: GameState): void {
+    const objective = startedOnTheSpot(state)
+    standOnIt(state, objective)
+    runUntilFinished(state)
+  }
+
+  it('says nothing about the clock until the last few seconds', () => {
+    const state = room(['Wilf', 'Ida'])
+    finishOne(state)
+
+    expect(state.objectives.interludeMs).toBeGreaterThan(COUNTDOWN_MS)
+    expect(banner(state)?.detail).toBeUndefined()
+  })
+
+  it('counts the last seconds down, one message a second', () => {
+    const state = room(['Wilf', 'Ida'])
+    finishOne(state)
+    stepObjectives(state, INTERLUDE_MS - COUNTDOWN_MS)
+
+    expect(banner(state)?.detail).toBe('Next game in 5s')
+
+    const said: (string | undefined)[] = []
+    for (let frame = 0; frame < 5_000 / 100; frame++) {
+      stepObjectives(state, 100)
+      said.push(banner(state)?.detail)
+    }
+
+    // Every whole second is said once, in order, and never a nought.
+    expect([...new Set(said)]).toEqual([
+      'Next game in 5s',
+      'Next game in 4s',
+      'Next game in 3s',
+      'Next game in 2s',
+      'Next game in 1s',
+      undefined,
+    ])
+  })
+
+  it('only puts the changed line on the wire, so a countdown is five messages', () => {
+    const state = room(['Wilf', 'Ida'])
+    finishOne(state)
+    stepObjectives(state, INTERLUDE_MS - COUNTDOWN_MS - 1)
+
+    let sent = 0
+    for (let frame = 0; frame < COUNTDOWN_MS / 100; frame++) {
+      sent += stepObjectives(state, 100).length
+    }
+
+    expect(sent).toBe(5)
   })
 })

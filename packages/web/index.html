@@ -20,7 +20,7 @@
           The whole of getting in. There is one world, this page came from it,
           and which session of it this is gets settled on the socket.
         -->
-        <p class="hint">Name your blob.</p>
+        <p class="hint">Name your blob — 5 letters.</p>
         <form id="join-form" class="join-form">
           <input
             id="name-input"
@@ -31,8 +31,8 @@
             autocomplete="off"
             autocapitalize="words"
             spellcheck="false"
-            maxlength="16"
-            placeholder="Your name"
+            maxlength="5"
+            placeholder="Name"
             aria-label="Blob name"
           />
           <button id="join-button" class="button" type="submit" disabled>Join</button>
@@ -123,6 +123,7 @@
         <button id="draw-close" class="close" type="button" aria-label="Back to the joystick">✕</button>
       </header>
       <canvas id="draw-canvas" class="draw-canvas" width="256" height="256"></canvas>
+      <p class="hint sheet-hint">Draw anywhere — the dark corners get trimmed off.</p>
       <div id="draw-crayons" class="crayons" role="group" aria-label="Colours"></div>
       <div class="sheet-buttons">
         <button id="draw-clear" class="button button-quiet" type="button">Start again</button>

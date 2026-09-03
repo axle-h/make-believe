@@ -1,5 +1,6 @@
 import type { Recipient, ServerToHostMessage } from '@make-believe/shared'
 import type { Carryable } from '../carryables.js'
+import type { Obstacle } from '../obstacles.js'
 import type { Rng } from '../rng.js'
 import type { GameState, Player, World } from '../state.js'
 import type { Zone } from '../zones.js'
@@ -37,7 +38,13 @@ export interface Brief {
   /** The quieter second line: a count, a hint, or the half only you are told. */
   detail?: string
   colour?: string
-  tone: 'task' | 'win' | 'miss'
+  /**
+   * How it should read. `task` is what the world wants, `win` and `miss` are
+   * how the last one ended, and `level` is the room getting better — the one
+   * line all evening that is about the children rather than the game, and the
+   * only one either screen makes bigger than the rest.
+   */
+  tone: 'task' | 'win' | 'miss' | 'level'
 }
 
 /**
@@ -60,6 +67,11 @@ export interface ObjectiveBase {
   remainingMs: number
   totalMs: number
   zones: Zone[]
+  /**
+   * The walls this task has put on the floor, if any. Blobs cannot drive
+   * through them, and anybody standing where one appears is slid out of it.
+   */
+  obstacles: Obstacle[]
   /** Whatever the world has pinned to particular blobs, if anything. */
   marks: Mark[]
   /** The parcels and crates this task has put on the floor, if any. */
@@ -107,6 +119,12 @@ export interface GenerateContext {
  */
 export interface ObjectiveTemplate<T extends Objective = Objective> {
   kind: T['kind']
+  /**
+   * What to call it to a grown-up. It is never shown to a child — the banner
+   * says what the world wants, not what the task is called — and exists so
+   * that the TV's debug menu has something to list.
+   */
+  title: string
   /** Fewest present blobs for it to mean anything. */
   minPlayers: number
   /** The level at which it starts appearing. */

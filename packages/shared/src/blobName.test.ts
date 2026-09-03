@@ -27,10 +27,14 @@ describe('normaliseName', () => {
 })
 
 describe('isValidName', () => {
+  it('caps a name at five characters, so it never outgrows the blob under it', () => {
+    expect(MAX_NAME_LENGTH).toBe(5)
+  })
+
   it('accepts a name from one character up to the cap', () => {
     expect(isValidName('W')).toBe(true)
     expect(isValidName('x'.repeat(MAX_NAME_LENGTH))).toBe(true)
-    expect(isValidName('  Big Ted  ')).toBe(true)
+    expect(isValidName('  Ted  ')).toBe(true)
   })
 
   it('rejects empty, whitespace-only, control-only, oversize and non-strings', () => {

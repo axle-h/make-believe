@@ -15,8 +15,12 @@ Initial feature list:
 **One continuous session, no rounds.** Everything above is available to every
 phone the whole time: drive, say something, redraw your blob, in any order,
 whenever — plus finishing with a blob, which is the one thing that undoes
-anything and hands the phone back to the name screen. **The TV takes no input at all** — no keyboard, no
-remote, nothing to click. It is a window onto the world; the phones run it.
+anything and hands the phone back to the name screen. **The TV takes no input
+during play** — no remote, nothing to click. It is a window onto the world; the
+phones run it. The single exception is a debug menu hidden behind the `d` key
+(`src/host/debug.ts`), which lists every task so a grown-up can look at one out
+of order; it is not part of the game, no phone can reach it, and no other key
+on the TV does anything at all.
 Rounds may arrive one day with an actual game idea (milestone 11); until then
 nothing may put a phone into a mode or make it wait its turn.
 
@@ -111,7 +115,7 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 //                                                              // hasDrawing false = "I haven't got your picture";
 //                                                              // the phone keeps the last one it sent and re-sends it.
 { type: 'brief', headline: string, detail?: string, colour?: string,
-  tone: 'task' | 'win' | 'miss' }                               // what the world is asking for, echoed above the
+  tone: 'task' | 'win' | 'miss' | 'level' }                     // what the world is asking for, echoed above the
 //                                                              // joystick. Information, never an instruction: it
 //                                                              // changes no screen and takes no tool away.
 //                                                              // headline '' takes the strip down.
@@ -173,7 +177,7 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 **`web` — host game model** (`src/host/game/`). This is the important one.
 - The game model is **pure TypeScript with no Phaser imports**: `createGame()`, `applyMessage(state, msg)`, `tick(state, dtMs)`, plus selectors. Phaser scenes only read from it and push messages into it.
 - Vitest (node environment, no jsdom needed): join spawns a player at a sane position; input then `tick` moves them by `velocity * dt`; world bounds clamp; `text` creates a bubble that expires after N ms of ticks; `drawing` sets a skin key and a fresh key on every redraw; a second `join` from a known `playerId` keeps everything it had; `finish` deletes the player, its drawing and its colour outright, and the next blob gets a colour nobody just gave up; `left` marks the player away.
-- **Phaser itself is not unit-tested.** It needs a canvas/WebGL and jsdom can't provide one. Keep the Phaser layer thin enough that it doesn't need to be.
+- **Phaser itself is not unit-tested.** It needs a canvas/WebGL and jsdom can't provide one. Keep the Phaser layer thin enough that it doesn't need to be. The same goes for the debug menu's DOM: the keyboard is a pure function in `src/host/debugMenu.ts` and that is what has tests.
 
 **`web` — player**
 - Joystick maths (pointer position → normalised `{dx,dy}`, dead zone, clamp to unit circle) as pure functions, unit-tested.
@@ -223,11 +227,34 @@ code obeys everywhere but states nowhere.
     a file and a line in `registry.ts`: stand on the spot, hot potato, two to a
     pad, follow the lights, find your own pad, colour hunt, draw it, fetch,
     sorting, a crate too heavy for one, sumo, and keep the crown. Underneath
-    them: the seeded RNG, zones and pads, carryables, the director and the
-    ladder (`minLevel` gates what a room may be asked for, and it never asks
-    for the same thing twice running), marks worn on a blob, `barge` for the
-    one task that is about shoving, the `brief` message with per-phone lines,
-    and the banner, timer, floor and score on the TV.
+    them: the seeded RNG, zones and pads, carryables, obstacles (walls a blob
+    cannot drive through, which only hot potato uses — anybody standing where
+    one appears is slid out over a few frames rather than teleported), the
+    director and the ladder (`minLevel` gates what a room may be asked for, it
+    never asks for the same thing twice running, and going up a rung queues
+    whatever that rung unlocked to be played next — a level that unlocks
+    something and then asks for the same old spot has not visibly done
+    anything; a queued task the room is too small for waits for another blob
+    rather than being dropped), marks worn beside a blob's
+    name — never over its middle, which is where the child's own drawing is —
+    `barge` for the one task that is about shoving, the `brief` message with
+    per-phone lines, and the banner, timer, floor and score on the TV.
+
+    Two of them are shaped by the floor rather than by a rule: **find your own
+    pad** paints one pad per colour of blob in the room, so the answer is on the
+    floor for anybody who cannot read the brief (blobs sharing a colour share a
+    pad), and **fetch** brings things back to a house rather than a spot, with a
+    number written on it instead of the delivered parcels — a heap of blocks on
+    one spot said less than a numeral does.
+
+    Between one task and the next there is a **breather** (`INTERLUDE_MS`, and
+    a longer `LEVEL_UP_INTERLUDE_MS` when a rung has just been climbed). It is
+    not a gap in play — every phone can still drive, talk and draw right
+    through it — but it is long enough that the room is told what is coming:
+    the last `COUNTDOWN_MS` of it reads "Next game in 5s", counted in whole
+    seconds so it costs one message a second and a child can say it along.
+    A level takes the headline for itself with a `tone: 'level'` brief, which
+    is the only line either screen ever draws bigger than the rest.
 
     Five rules hold across all of them and must keep holding. The code obeys
     them everywhere and says so nowhere, which is why they are here:
@@ -264,7 +291,12 @@ code obeys everywhere but states nowhere.
 ## Player notes
 
 - Touch joystick: `nipplejs` or ~50 lines of pointer-event code. Send normalised `{dx, dy}`, throttled.
+- A blob's name is **five characters at most** (`MAX_NAME_LENGTH` in `shared`), so that it never grows wider than the blob under it and a four-year-old finishes typing it. The join screen says so and the box will not take a sixth.
 - Drawing: fixed-size canvas (256×256) that starts as the blob itself — the player's own colour, in the same rounded-square shape — so the guide is the shape rather than an outline on top of it. "Done" → `toDataURL('image/png')` → send.
+  The **whole square** is drawable: a finger that carries on past the edge of
+  the blob can see where it went, and the TV cuts the picture to the blob's
+  rounded outline on the way in (`src/host/phaser/skin.ts`). Nothing on the
+  phone clips the canvas, and nothing about the crop belongs on the phone.
   The phone keeps the last PNG it sent in localStorage and puts it back
   whenever an `assigned` arrives with `hasDrawing: false` — a world that has
   just been created has forgotten every picture, and the phones hold the only

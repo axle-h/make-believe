@@ -44,6 +44,7 @@ const TIME_LIMIT = { easy: 75_000, hard: 55_000 }
 
 export const drawIt: ObjectiveTemplate<DrawItObjective> = {
   kind: 'drawIt',
+  title: 'Draw it',
   /** One to draw and at least one to guess. */
   minPlayers: 2,
   /**
@@ -67,6 +68,7 @@ export const drawIt: ObjectiveTemplate<DrawItObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [],
+      obstacles: [],
       marks: [{ playerId: artist.playerId, badge: PENCIL }] satisfies Mark[],
       carryables: [],
       outcome: 'running',

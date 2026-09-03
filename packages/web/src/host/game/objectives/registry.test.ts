@@ -1,12 +1,12 @@
 import { MAX_DETAIL_LENGTH, MAX_HEADLINE_LENGTH } from '@make-believe/shared'
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from '../apply.js'
-import { MAX_LEVEL } from '../constants.js'
+import { BLOB_SIZE, MAX_LEVEL } from '../constants.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { contains } from '../zones.js'
-import { eligibleTemplates, templateFor, TEMPLATES } from './registry.js'
+import { eligibleTemplates, templateFor, TEMPLATES, unlockedAt } from './registry.js'
 import type { ObjectiveTemplate } from './types.js'
 
 /**
@@ -18,7 +18,7 @@ import type { ObjectiveTemplate } from './types.js'
 function room(count: number, seed = 1): GameState {
   const state = createGame(seed)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `Blob ${index}` })
+    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
   }
   return state
 }
@@ -48,6 +48,14 @@ describe('the catalogue', () => {
     for (const template of first) expect(template.minPlayers).toBeLessThanOrEqual(2)
   })
 
+  /** The debug menu lists them by name, and an unnamed task is a blank row. */
+  it('gives every one of them a name a grown-up can pick out of a list', () => {
+    const titles = TEMPLATES.map((template) => template.title)
+
+    for (const title of titles) expect(title.length).toBeGreaterThan(0)
+    expect(new Set(titles).size).toBe(titles.length)
+  })
+
   it('unlocks every one of them somewhere on the ladder', () => {
     for (const template of TEMPLATES) {
       expect(template.minLevel).toBeGreaterThanOrEqual(1)
@@ -55,6 +63,28 @@ describe('the catalogue', () => {
       // Nothing is for one blob on its own: this is a game for a room.
       expect(template.minPlayers).toBeGreaterThanOrEqual(2)
     }
+  })
+})
+
+/**
+ * Going up a rung asks the room for whatever that rung unlocked, before
+ * anything else. That only works if every task is on exactly one rung.
+ */
+describe('what each rung of the ladder unlocks', () => {
+  it('hands every task out exactly once, across the whole ladder', () => {
+    const unlocked = Array.from({ length: MAX_LEVEL }, (_, at) => unlockedAt(at + 1)).flat()
+
+    expect(new Set(unlocked).size).toBe(unlocked.length)
+    expect(new Set(unlocked)).toEqual(new Set(TEMPLATES.map((template) => template.kind)))
+  })
+
+  it('has something new on the first rung, so a new room is never stuck', () => {
+    expect(unlockedAt(1).length).toBeGreaterThan(0)
+  })
+
+  it('says nothing about a rung nobody can reach', () => {
+    expect(unlockedAt(0)).toEqual([])
+    expect(unlockedAt(MAX_LEVEL + 1)).toEqual([])
   })
 })
 
@@ -74,6 +104,20 @@ describe('every task, at every level, in every size of room', () => {
               expect(zone.y + reach).toBeLessThanOrEqual(state.world.height)
             }
             expect(new Set(objective.zones.map((zone) => zone.id)).size).toBe(objective.zones.length)
+
+            // Walls too, and never one that shuts half the floor off: a blob
+            // that cannot drive round it is a blob out of the game.
+            for (const wall of objective.obstacles) {
+              expect(wall.x - wall.width / 2).toBeGreaterThanOrEqual(0)
+              expect(wall.y - wall.height / 2).toBeGreaterThanOrEqual(0)
+              expect(wall.x + wall.width / 2).toBeLessThanOrEqual(state.world.width)
+              expect(wall.y + wall.height / 2).toBeLessThanOrEqual(state.world.height)
+              expect(state.world.width - wall.width).toBeGreaterThan(BLOB_SIZE * 2)
+              expect(state.world.height - wall.height).toBeGreaterThan(BLOB_SIZE * 2)
+            }
+            expect(new Set(objective.obstacles.map((wall) => wall.id)).size).toBe(
+              objective.obstacles.length,
+            )
 
             // Whatever it has put on the floor has to be reachable too: a
             // parcel half off the screen is one nobody can be driven into.

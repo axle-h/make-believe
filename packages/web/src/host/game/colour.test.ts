@@ -1,6 +1,6 @@
 import { PAINTS } from '@make-believe/shared'
 import { describe, expect, it } from 'vitest'
-import { averageColour, distance, nearestPaint, toRgb } from './colour.js'
+import { averageColour, blend, distance, looksLikePaint, nearestPaint, toRgb } from './colour.js'
 
 describe('reading a colour', () => {
   it('turns a hex string into numbers', () => {
@@ -72,5 +72,44 @@ describe('averaging a drawing', () => {
   it('says nothing at all about an empty drawing', () => {
     expect(averageColour(pixels([0, 0, 0, 0], [255, 255, 255, 0]))).toBeNull()
     expect(averageColour([])).toBeNull()
+  })
+})
+
+describe('mixing two colours', () => {
+  it('takes none, half and all of the way', () => {
+    const black = { r: 0, g: 0, b: 0 }
+    const white = { r: 200, g: 100, b: 50 }
+
+    expect(blend(black, white, 0)).toEqual(black)
+    expect(blend(black, white, 1)).toEqual(white)
+    expect(blend(black, white, 0.5)).toEqual({ r: 100, g: 50, b: 25 })
+  })
+})
+
+/**
+ * What a blob may fairly be called. The blob's own colour counts as well as
+ * what has been drawn on it, because the drawing arrives pre-filled in that
+ * colour and a face drawn over the top should not undo it.
+ */
+describe('what a blob looks like', () => {
+  const blue = PAINTS.find((paint) => paint.name === 'blue')!
+  const green = PAINTS.find((paint) => paint.name === 'green')!
+  const black = PAINTS.find((paint) => paint.name === 'black')!
+
+  it('takes a drawing that is plainly the colour, whatever the blob was', () => {
+    expect(looksLikePaint('green', toRgb(green.hex), '#ff5d5d')).toBe(true)
+  })
+
+  it('counts a blue blob scribbled over in black as blue after all', () => {
+    // Blue underneath, a proper face's worth of black on top: the average
+    // lands nearer black than blue, and the blob is still a blue one.
+    const scribbled = blend(toRgb(blue.hex), toRgb(black.hex), 0.55)
+    expect(nearestPaint(scribbled).name).not.toBe('blue')
+
+    expect(looksLikePaint('blue', scribbled, blue.hex)).toBe(true)
+  })
+
+  it('does not turn a red blob green just for being asked', () => {
+    expect(looksLikePaint('green', toRgb('#ff5d5d'), '#ff5d5d')).toBe(false)
   })
 })

@@ -1,10 +1,17 @@
 import type { ServerToHostMessage } from '@make-believe/shared'
-import { INTERLUDE_MS, LEVEL_UP_AFTER, MAX_LEVEL, SCORE_PER_OBJECTIVE } from '../constants.js'
+import {
+  COUNTDOWN_MS,
+  INTERLUDE_MS,
+  LEVEL_UP_AFTER,
+  LEVEL_UP_INTERLUDE_MS,
+  MAX_LEVEL,
+  SCORE_PER_OBJECTIVE,
+} from '../constants.js'
 import { createRng, pick, randomSeed, type Rng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
-import type { GameState } from '../state.js'
-import { eligibleTemplates, templateFor } from './registry.js'
-import type { Brief, Objective } from './types.js'
+import type { GameState, Player } from '../state.js'
+import { eligibleTemplates, templateFor, unlockedAt } from './registry.js'
+import type { Brief, Objective, ObjectiveTemplate } from './types.js'
 
 /**
  * What the world is asking for, and who has been told. There is always exactly
@@ -34,16 +41,92 @@ export interface Director {
    * broken game long before it reads as bad luck.
    */
   lastKind: Objective['kind'] | null
+  /**
+   * The level the room has just reached, while the cheer for it is still up,
+   * and `null` the rest of the time. It is the one thing the TV says all
+   * evening that is about the children rather than about the game.
+   */
+  levelledUpTo: number | null
+  /**
+   * Tasks that have only just been unlocked and have not been played yet. The
+   * next thing the world asks for comes off here first, because a level that
+   * unlocks something and then asks for the same old spot is a level that has
+   * not visibly done anything.
+   *
+   * One that the room is currently too small for waits its turn rather than
+   * being thrown away: it gets played the moment another blob turns up.
+   */
+  pending: Objective['kind'][]
   /** The last thing each phone was told, so only changes go on the wire. */
   announced: Brief[]
 }
 
-/** Cheerful either way: the youngest player is three and nobody is ever losing. */
-const WELL_DONE = ['Brilliant!', 'You did it!', 'Nice one!', 'Beautiful.', 'Team blob!'] as const
+/**
+ * Cheerful either way: the youngest player is three and nobody is ever losing.
+ *
+ * There are a lot of them because the room hears one every half a minute all
+ * evening, and the joke is in the ones that only come round now and again.
+ * They are all short, all sayable out loud, and not one of them is about how
+ * well anybody did.
+ */
+const WELL_DONE = [
+  'Brilliant!',
+  'You did it!',
+  'Nice one!',
+  'Beautiful.',
+  'Team blob!',
+  'Blobtastic!',
+  'Textbook.',
+  'Look at you go!',
+  'Absolutely blobulous.',
+  'That was the good one.',
+  'Smashing.',
+  'Blobs of the year.',
+  'Round of applause for the blobs.',
+  'Ten out of blob.',
+  'Marvellous stuff.',
+  'You lot are unstoppable.',
+  'Somebody write that down.',
+  'Perfectly wobbled.',
+  'Magnificent.',
+  'The crowd goes mild.',
+  'Very professional.',
+  'A masterpiece.',
+  'Blob squad, assemble!',
+  'Nailed it.',
+  'Squelchy perfection.',
+  'Historic scenes.',
+  'Give yourselves a wobble.',
+  'Top blobbing.',
+  'Frankly incredible.',
+  'That is how it is done.',
+] as const
+
+/**
+ * And when the clock beats them. Not one of these says anybody failed — the
+ * time ran out, which is a thing that happens to a clock, not to a child.
+ */
 const NEVER_MIND = [
   'Never mind — here comes another.',
   'Nearly! Try this one.',
   'That one got away. Next!',
+  'Ooh, so close.',
+  'The clock was cheating.',
+  'Blobs need a rest. Here is another.',
+  'We will say that one was practice.',
+  'Almost! Try this instead.',
+  'That one was too wriggly.',
+  'Time flies when you are a blob.',
+  'Nobody saw that. Next!',
+  'Right, forget that ever happened.',
+  'The floor was slippery.',
+  'Bad luck, blobs.',
+  'Not this time! Have another.',
+  'Wobbled at the last moment.',
+  'That one escaped. After it!',
+  'Shall we pretend that counted?',
+  'Whoops. Here comes the next.',
+  'The clock won that one.',
 ] as const
 
 /** What the phones are told while the room is too empty for anything to run. */
@@ -59,6 +142,8 @@ export function createDirector(seed: number = randomSeed()): Director {
     interludeMs: 0,
     made: 0,
     lastKind: null,
+    levelledUpTo: null,
+    pending: [],
     announced: [],
   }
 }
@@ -119,10 +204,43 @@ function startNext(state: GameState): void {
   // not a failure and nobody is told off for it.
   if (eligible.length === 0) return
 
+  // Whatever has just been unlocked goes first, so that going up a level is
+  // something the room can see rather than a number in the corner.
+  const unlocked = takePending(director, eligible)
+  if (unlocked) {
+    begin(state, unlocked, present)
+    return
+  }
+
   // Anything but the one they have just done, unless that is all there is.
   const fresh = eligible.filter((template) => template.kind !== director.lastKind)
-  const template = pick(director.rng, fresh.length > 0 ? fresh : eligible)
+  begin(state, pick(director.rng, fresh.length > 0 ? fresh : eligible), present)
+}
 
+/**
+ * The first newly-unlocked task the room can actually do, taken off the queue.
+ * One that needs more blobs than are here stays on it and gets its turn when
+ * somebody else arrives — a new task nobody ever saw is a level that did
+ * nothing.
+ */
+function takePending(
+  director: Director,
+  eligible: ObjectiveTemplate<Objective>[],
+): ObjectiveTemplate<Objective> | null {
+  const at = director.pending.findIndex((kind) =>
+    eligible.some((template) => template.kind === kind),
+  )
+  if (at === -1) return null
+  const [kind] = director.pending.splice(at, 1)
+  return eligible.find((template) => template.kind === kind) ?? null
+}
+
+/** Put one particular task up, now. */
+function begin(state: GameState, template: ObjectiveTemplate<Objective>, present: Player[]): void {
+  const director = state.objectives
+  // Whatever the last one had to say has been said; the screen is the new
+  // task's from here.
+  director.levelledUpTo = null
   director.made += 1
   director.lastKind = template.kind
   director.current = template.generate({
@@ -133,6 +251,35 @@ function startNext(state: GameState): void {
     players: present,
   })
   director.interludeMs = 0
+}
+
+/**
+ * Ask the world for one particular task, whatever the ladder would have
+ * picked. Nothing in the game calls this and no phone can reach it: it is
+ * there for the debug menu on the TV, which is a grown-up holding a keyboard
+ * and wanting to see the twelfth task without playing up to it first.
+ *
+ * `false` means there are not enough blobs in the room for that one, which is
+ * a thing to say rather than a thing to force: a task judged against two
+ * children when it needs three is a task nobody can finish.
+ */
+export function askFor(state: GameState, kind: Objective['kind']): boolean {
+  const template = templateFor(kind)
+  const present = activePlayers(state)
+  if (present.length < template.minPlayers) return false
+  begin(state, template, present)
+  return true
+}
+
+/**
+ * Move the ladder by hand, for the same debug menu. It is clamped to the ladder
+ * the room could have climbed to, and — unlike everything the game itself does
+ * — it is allowed to go down, because somebody checking what a task looks like
+ * at level 1 should not have to restart the TV to get back.
+ */
+export function setLevel(state: GameState, level: number): number {
+  state.objectives.level = Math.min(MAX_LEVEL, Math.max(1, Math.round(level)))
+  return state.objectives.level
 }
 
 function run(state: GameState, objective: Objective, dtMs: number): void {
@@ -170,12 +317,28 @@ function complete(director: Director, objective: Objective): void {
   director.streak += 1
   if (director.streak >= LEVEL_UP_AFTER) {
     director.streak = 0
-    director.level = Math.min(MAX_LEVEL, director.level + 1)
+    levelUp(director)
   }
   // A task with something of its own to say about how it ended has already
   // said it — who was left holding the potato is better than "Brilliant!".
   objective.note ??= pick(director.rng, WELL_DONE)
-  director.interludeMs = INTERLUDE_MS
+  director.interludeMs = breather(director)
+}
+
+/**
+ * Up a rung. The room is told so in as many words, and whatever that rung has
+ * just unlocked is queued up to be the very next thing they are asked for.
+ *
+ * At the top of the ladder the level stops moving, so there is nothing to
+ * announce and nothing new to queue: the world simply carries on being as hard
+ * as it gets.
+ */
+function levelUp(director: Director): void {
+  const before = director.level
+  director.level = Math.min(MAX_LEVEL, director.level + 1)
+  if (director.level === before) return
+  director.levelledUpTo = director.level
+  director.pending.push(...unlockedAt(director.level))
 }
 
 /**
@@ -184,7 +347,12 @@ function complete(director: Director, objective: Objective): void {
  */
 function expire(director: Director, objective: Objective): void {
   objective.note ??= pick(director.rng, NEVER_MIND)
-  director.interludeMs = INTERLUDE_MS
+  director.interludeMs = breather(director)
+}
+
+/** How long the room gets between tasks. A new level is worth a longer one. */
+function breather(director: Director): number {
+  return director.levelledUpTo === null ? INTERLUDE_MS : LEVEL_UP_INTERLUDE_MS
 }
 
 /** A finished task stays up a moment, then makes way for the next. */
@@ -205,16 +373,50 @@ function currentBriefs(state: GameState): Brief[] {
     if (eligible.length > 0) return [{ to: '*', headline: '', tone: 'task' }]
     return [{ to: '*', headline: WAITING_HEADLINE, tone: 'task' }]
   }
-  if (objective.outcome !== 'running') {
-    return [
-      {
-        to: '*',
-        headline: objective.note ?? '',
-        tone: objective.outcome === 'done' ? 'win' : 'miss',
-      },
-    ]
-  }
+  if (objective.outcome !== 'running') return [breatherBrief(director, objective)]
   return templateFor(objective.kind).briefs(objective, state)
+}
+
+/**
+ * What the room is told between one task and the next: how the last one went,
+ * the level if they have just reached one, and — for the last few seconds — how
+ * long until the next.
+ *
+ * A level takes the headline, because it is the bigger news and it is the one
+ * line all evening that is about the children rather than about the game. What
+ * the task had to say about itself drops to the second line and gives that up
+ * in turn when the counting starts.
+ */
+function breatherBrief(director: Director, objective: Objective): Brief {
+  const said = objective.note ?? ''
+  const counting = countdown(director)
+
+  if (director.levelledUpTo !== null) {
+    return {
+      to: '*',
+      headline: `Level ${director.levelledUpTo}!`,
+      detail: counting ?? said,
+      tone: 'level',
+    }
+  }
+  const brief: Brief = {
+    to: '*',
+    headline: said,
+    tone: objective.outcome === 'done' ? 'win' : 'miss',
+  }
+  if (counting) brief.detail = counting
+  return brief
+}
+
+/**
+ * How long until the next one, for the last few seconds of the breather and
+ * not before. It counts in whole seconds, which is both what a child can say
+ * along with and what keeps this to one message a second on the wire.
+ */
+function countdown(director: Director): string | undefined {
+  if (director.interludeMs > COUNTDOWN_MS) return undefined
+  const seconds = Math.max(1, Math.ceil(director.interludeMs / 1000))
+  return `Next game in ${seconds}s`
 }
 
 /**

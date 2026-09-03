@@ -2,6 +2,7 @@ import { resolveCollisions } from './collisions.js'
 import { AWAY_TIMEOUT_MS, SPEED } from './constants.js'
 import { stepObjectives } from './objectives/director.js'
 import type { Brief } from './objectives/types.js'
+import { pushOutOfObstacles } from './obstacles.js'
 import { clampToWorld, type GameState } from './state.js'
 
 /**
@@ -52,7 +53,10 @@ export function tick(state: GameState, dtMs: number): TickResult {
     player.y = moved.y
   }
 
-  // Everybody has moved; now stop anyone standing inside anyone else.
+  // Everybody has moved; now out of the walls, and then out of each other.
+  // The walls come first because a blob squeezed out of one has to end up
+  // beside its neighbours rather than inside them.
+  pushOutOfObstacles(state, state.objectives.current?.obstacles ?? [], step)
   resolveCollisions(state)
 
   // And last, with everybody where they have ended up, ask whether the world

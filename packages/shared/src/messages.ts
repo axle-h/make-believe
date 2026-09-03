@@ -115,7 +115,13 @@ export const BriefMessageSchema = z.object({
   detail: z.string().max(MAX_DETAIL_LENGTH).optional(),
   /** Tints the strip when the task is about a particular colour. */
   colour: z.string().min(1).max(32).optional(),
-  tone: z.enum(['task', 'win', 'miss']),
+  /**
+   * How it should read. `task` is what the world wants, `win` and `miss` are
+   * how the last one ended, and `level` is the room getting better at this —
+   * the one line all evening that is about the children rather than the game,
+   * and the only one either screen makes bigger than the rest.
+   */
+  tone: z.enum(['task', 'win', 'miss', 'level']),
 })
 
 /**

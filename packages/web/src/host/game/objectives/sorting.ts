@@ -41,6 +41,7 @@ const TIME_LIMIT = { easy: 70_000, hard: 55_000 }
 
 export const sorting: ObjectiveTemplate<SortingObjective> = {
   kind: 'sorting',
+  title: 'Sorting',
   minPlayers: 2,
   /** Everything about it is fetch, so a room meets it having already done that. */
   minLevel: 6,
@@ -86,6 +87,7 @@ export const sorting: ObjectiveTemplate<SortingObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: depots,
+      obstacles: [],
       marks: [],
       carryables,
       outcome: 'running',

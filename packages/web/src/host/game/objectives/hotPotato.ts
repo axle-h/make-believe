@@ -1,8 +1,9 @@
 import { nearestTouching } from '../collisions.js'
-import { MAX_LEVEL } from '../constants.js'
+import { BLOB_SIZE, MAX_LEVEL } from '../constants.js'
+import type { Obstacle } from '../obstacles.js'
 import { pick, range } from '../rng.js'
 import { activePlayers } from '../selectors.js'
-import type { GameState } from '../state.js'
+import type { GameState, World } from '../state.js'
 import {
   difficulty,
   scale,
@@ -17,11 +18,14 @@ import {
  * Hot potato. One blob has it, touching somebody else passes it on, and
  * whoever is holding it when the buzzer goes is the one everybody laughs at.
  *
- * It needs no new primitive at all: blobs are already solid and already shove
- * each other, so "touching" is the overlap the collision pass has just finished
- * undoing. It is also the first task that is not cooperative, which is what
- * proves the director is not shaped only around everybody wanting the same
- * thing.
+ * It is the first task that is not cooperative, which is what proves the
+ * director is not shaped only around everybody wanting the same thing.
+ *
+ * It is also the one task with walls on the floor. A chase across an empty
+ * room is a straight line and whoever is quickest wins it; a chase around a
+ * block is a game, because the blob being chased can turn a corner. The walls
+ * appear with the task, and anybody standing where one lands is slid out of
+ * the way over a few frames rather than jumped somewhere else.
  *
  * Nobody is eliminated, nothing is taken away, and the score still goes up at
  * the end — being caught with it is the joke, not a punishment. The youngest
@@ -48,8 +52,13 @@ const TIME_LIMIT = { easy: 30_000, hard: 18_000 }
 
 export const hotPotato: ObjectiveTemplate<HotPotatoObjective> = {
   kind: 'hotPotato',
-  /** Two is a chase, which is a game. One blob has nobody to pass it to. */
-  minPlayers: 2,
+  title: 'Hot potato',
+  /**
+   * Three. Two blobs is not a chase but a tag-back: touch, be touched, touch
+   * again, and the potato does nothing but flicker between the only two blobs
+   * there are. It wants somebody to run *to* as well as somebody to run from.
+   */
+  minPlayers: 3,
   /**
    * Not the first thing a room is ever asked to do. Everybody stands on a spot
    * together for a while first, which teaches the joystick; being chased is
@@ -70,6 +79,7 @@ export const hotPotato: ObjectiveTemplate<HotPotatoObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [],
+      obstacles: walls(context, hard),
       marks: marksFor(start.playerId),
       carryables: [],
       outcome: 'running',
@@ -127,6 +137,77 @@ export const hotPotato: ObjectiveTemplate<HotPotatoObjective> = {
     if (holder) brief.colour = holder.colour
     return [brief]
   },
+}
+
+/**
+ * Something to run round. One layout is picked at random and grows a little as
+ * the world gets harder; every one of them leaves lanes wide enough for two
+ * blobs to pass, because a wall that traps somebody is a wall that ends the
+ * chase rather than shaping it.
+ */
+function walls(context: GenerateContext, hard: number): Obstacle[] {
+  const { world, rng } = context
+  // A comfortable lane is two blobs wide: one being chased, one chasing, and
+  // room to be wrong about it.
+  const lane = BLOB_SIZE * 2
+  const thickness = Math.round(scale(BAR.thin, BAR.thick, hard))
+  const layouts: (() => Unnamed[])[] = [
+    () => [bar(world, 'across', thickness, hard)],
+    () => [bar(world, 'down', thickness, hard)],
+    () => [block(world, hard)],
+    () => [bar(world, 'across', thickness, hard), bar(world, 'down', thickness, hard)],
+    () => pillars(world, hard, lane),
+  ]
+  // Named here rather than by each builder: a layout should be a shape, and
+  // the shapes are put together out of the same two or three pieces.
+  const built: Obstacle[] = []
+  for (const [index, wall] of pick(rng, layouts)().entries()) {
+    built.push(Object.assign(wall, { id: `${context.id}-wall-${index}` }))
+  }
+  return built
+}
+
+/** A wall before it has been given its id, which `walls` hands out. */
+type Unnamed = Omit<Obstacle, 'id'>
+
+/** How thick a bar is, and how much of the floor it reaches across. */
+const BAR = { thin: 28, thick: 44 }
+const BAR_REACH = { easy: 0.45, hard: 0.62 }
+/** How big the block in the middle is, as a share of the shorter wall. */
+const BLOCK = { easy: 0.22, hard: 0.34 }
+
+/**
+ * A bar across the middle, stopping well short of both walls. It is never the
+ * full width: a floor cut in two is a floor half the blobs cannot get out of.
+ */
+function bar(world: World, way: 'across' | 'down', thickness: number, hard: number): Unnamed {
+  const reach = scale(BAR_REACH.easy, BAR_REACH.hard, hard)
+  const long = Math.round((way === 'across' ? world.width : world.height) * reach)
+  return {
+    x: world.width / 2,
+    y: world.height / 2,
+    width: way === 'across' ? long : thickness,
+    height: way === 'across' ? thickness : long,
+  }
+}
+
+/** A square in the middle, to go round one way or the other. */
+function block(world: World, hard: number): Unnamed {
+  const side = Math.round(world.height * scale(BLOCK.easy, BLOCK.hard, hard))
+  return { x: world.width / 2, y: world.height / 2, width: side, height: side }
+}
+
+/** Two of them, a third of the way in each side, with a lane between. */
+function pillars(world: World, hard: number, lane: number): Unnamed[] {
+  const side = Math.round(world.height * scale(BLOCK.easy, BLOCK.hard, hard))
+  // Never so tall that the gap above and below them closes up.
+  const height = Math.min(side, world.height / 2 - lane)
+  return [world.width / 3, (world.width * 2) / 3].map((x) => ({
+    x,
+    y: world.height / 2,
+    width: side,
+    height,
+  }))
 }
 
 /** Give it to somebody, and start their few seconds of safety again. */

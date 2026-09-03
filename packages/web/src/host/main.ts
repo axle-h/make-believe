@@ -13,6 +13,7 @@ import {
   type GameSnapshot,
   type GameState,
 } from './game/index.js'
+import { startDebugMenu } from './debug.js'
 import { startPhaser, wornTextures } from './phaser/game.js'
 import { joinUrl, qrSvg } from './qr.js'
 import './host.css'
@@ -22,8 +23,10 @@ import './host.css'
  * The state itself lives in `game/`, Phaser draws it, and this file is the
  * socket and the wiring between the two.
  *
- * The TV takes no input of its own — no keys, no buttons, nothing to click. It
- * is a window onto the world and the phones run everything.
+ * The TV takes no input of its own — no buttons, nothing to click. It is a
+ * window onto the world and the phones run everything. The single exception is
+ * a debug menu hidden behind the `d` key, which is for a grown-up looking at a
+ * task out of order and is no part of playing.
  */
 
 const state: GameState = createGame()
@@ -137,6 +140,13 @@ function handleMessage(message: HostInboundMessage): void {
 }
 
 const phaser = startPhaser(world, state, { onBriefs: sendBriefs })
+
+/**
+ * The one thing on the TV that answers a key. It is hidden behind `d`, it is
+ * for a grown-up with a keyboard, and it is not part of the game: see
+ * `debug.ts` for why the "no input at all" rule makes an exception of it.
+ */
+startDebugMenu(document.body, state)
 window.__game = {
   state,
   snapshot: () => snapshot(state),

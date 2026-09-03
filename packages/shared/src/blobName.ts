@@ -4,8 +4,12 @@
  * message schemas and the host all agree on what a usable name is.
  */
 
-/** Longest blob name a player may pick; it has to fit above a blob on the TV. */
-export const MAX_NAME_LENGTH = 16
+/**
+ * Longest blob name a player may pick. Five characters is short on purpose:
+ * it sits above a blob without ever being wider than the blob itself, and a
+ * name that short is one a four-year-old finishes typing.
+ */
+export const MAX_NAME_LENGTH = 5
 
 /** Control characters (C0 and C1) have no business being drawn on the TV. */
 function isPrintable(character: string): boolean {

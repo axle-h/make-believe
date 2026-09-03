@@ -42,7 +42,8 @@ export interface PlayerSnapshot {
 /** A patch of floor the objective has put down. */
 export interface ZoneSnapshot {
   id: string
-  shape: 'circle' | 'rect'
+  /** A house is a rectangle with a roof drawn on it; the body is what counts. */
+  shape: 'circle' | 'rect' | 'house'
   x: number
   y: number
   radius?: number
@@ -51,7 +52,16 @@ export interface ZoneSnapshot {
   colour: string
 }
 
-/** Something the world has pinned to one blob: the potato, and later a crown. */
+/** A wall on the floor. Blobs cannot drive through one. */
+export interface ObstacleSnapshot {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** Something the world has pinned to one blob: the potato, and the crown. */
 export interface MarkSnapshot {
   playerId: string
   badge: string
@@ -80,6 +90,7 @@ export interface ObjectiveSnapshot {
   outcome: 'running' | 'done' | 'expired'
   note: string | null
   zones: ZoneSnapshot[]
+  obstacles: ObstacleSnapshot[]
   marks: MarkSnapshot[]
   carryables: CarryableSnapshot[]
 }

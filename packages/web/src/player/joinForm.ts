@@ -1,4 +1,4 @@
-import { isValidName, normaliseName } from '@make-believe/shared'
+import { MAX_NAME_LENGTH, isValidName, normaliseName } from '@make-believe/shared'
 
 /**
  * What the join screen thinks of what has been typed so far, as a pure
@@ -23,8 +23,14 @@ export function evaluateJoinForm(rawName: string): JoinFormState {
   return { name, nameValid, canJoin: nameValid }
 }
 
-/** What to tell a player who pressed Join with something not quite right. */
+/**
+ * What to tell a player who pressed Join with something not quite right. The
+ * box will not let five characters be typed past, but a name can still arrive
+ * pasted, so the cap is worth a sentence of its own rather than the blanket
+ * "needs a name" — which would read as nonsense to somebody looking at one.
+ */
 export function joinFormError(state: JoinFormState): string {
+  if (state.name.length > MAX_NAME_LENGTH) return `${MAX_NAME_LENGTH} letters at most.`
   if (!state.nameValid) return 'Your blob needs a name.'
   return ''
 }

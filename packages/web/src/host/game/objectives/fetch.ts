@@ -9,7 +9,7 @@ import {
 } from '../carryables.js'
 import { MAX_LEVEL, ZONE_COLOURS } from '../constants.js'
 import { pick } from '../rng.js'
-import { placeZone, radiusFor, type CircleZone } from '../zones.js'
+import { placeZone, radiusFor, zoneReach, type HouseZone } from '../zones.js'
 import {
   difficulty,
   scale,
@@ -41,6 +41,7 @@ const TIME_LIMIT = { easy: 60_000, hard: 45_000 }
 
 export const fetch: ObjectiveTemplate<FetchObjective> = {
   kind: 'fetch',
+  title: 'Bring it home',
   /** Carrying things back one at a time is a chore alone and a job shared. */
   minPlayers: 2,
   minLevel: 4,
@@ -48,17 +49,21 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
   generate(context: GenerateContext): FetchObjective {
     const hard = difficulty(context.level, MAX_LEVEL)
     const { rng } = context
-    const depot: CircleZone = {
+    // A house rather than a spot on the floor: "take it home" is a sentence a
+    // three-year-old already has, and a roof says it without a word of the
+    // brief being read. It is squarish and wide enough for the whole room to
+    // crowd into at once, because they will.
+    const across = radiusFor(Math.max(2, context.players.length), 1.4) * 2
+    const depot: HouseZone = {
       id: `${context.id}-depot`,
-      shape: 'circle',
-      // Room for the whole room to crowd into it at once, because they will.
-      radius: radiusFor(Math.max(2, context.players.length), 1.4),
+      shape: 'house',
+      width: across,
+      height: across * 0.8,
       x: 0,
       y: 0,
       colour: pick(rng, ZONE_COLOURS).hex,
-      label: 'HOME',
     }
-    const at = placeZone(rng, context.world, depot.radius, [])
+    const at = placeZone(rng, context.world, zoneReach(depot), [])
     depot.x = at.x
     depot.y = at.y
 
@@ -82,6 +87,7 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [depot],
+      obstacles: [],
       marks: [],
       carryables,
       outcome: 'running',

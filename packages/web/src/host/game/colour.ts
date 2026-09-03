@@ -71,6 +71,38 @@ export function averageColour(pixels: ArrayLike<number>): Rgb | null {
 }
 
 /**
+ * How much of a blob's own colour counts towards what it looks like, on top of
+ * whatever has been drawn on it.
+ *
+ * A drawing arrives as a rounded square already filled in with the blob's
+ * colour, so it is in the average once — but a four-year-old asked for blue
+ * scribbles enthusiastically, and a face's worth of black lines drags the
+ * average off blue and onto nothing in particular. Counting the colour they
+ * were given a second time is what puts it back.
+ */
+const BLOB_SHARE = 0.4
+
+/**
+ * Whether a blob can fairly be called this colour: either the drawing reads as
+ * it, or the drawing over the blob's own colour does.
+ *
+ * It is *either* rather than a single blended answer on purpose. A red blob
+ * that has painted itself flat green is green, and no amount of red underneath
+ * is allowed to take that away — "not green enough" is the one thing this game
+ * must never say.
+ */
+export function looksLikePaint(paint: string, average: Rgb, blobColour: string): boolean {
+  if (nearestPaint(average).name === paint) return true
+  return nearestPaint(blend(average, toRgb(blobColour), BLOB_SHARE)).name === paint
+}
+
+/** Two colours mixed, `share` of the way from the first to the second. */
+export function blend(one: Rgb, other: Rgb, share: number): Rgb {
+  const mix = (from: number, to: number): number => Math.round(from + (to - from) * share)
+  return { r: mix(one.r, other.r), g: mix(one.g, other.g), b: mix(one.b, other.b) }
+}
+
+/**
  * How far apart two colours look, roughly. The green channel counts for most
  * and the blue for least, which is about how an eye weighs them — near enough
  * for telling a red blob from a blue one, and no cause for a colour space.

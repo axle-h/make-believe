@@ -9,7 +9,7 @@ import { keepTheCrown, type KeepTheCrownObjective } from './keepTheCrown.js'
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `Blob ${index}` })
+    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
   }
   // Spread out, so nobody is touching anybody until a test says so.
   let x = 100

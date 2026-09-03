@@ -1,4 +1,4 @@
-import { ZONE_COLOURS } from '../constants.js'
+import { BLOB_COLOURS, ZONE_COLOURS } from '../constants.js'
 import { intRange, range, type Rng } from '../rng.js'
 import type { World } from '../state.js'
 import { radiusFor, type CircleZone } from '../zones.js'
@@ -30,6 +30,7 @@ export function makePads(
   count: number,
   capacity: number,
   roominess: number,
+  colours?: readonly string[],
 ): CircleZone[] {
   const { rng } = context
   const cell = cellsAcross(context.world, count)
@@ -48,7 +49,10 @@ export function makePads(
       x: spot.x,
       y: spot.y,
       radius,
-      colour: colourOfPad(index),
+      // A task that identifies a pad by something other than the pad palette —
+      // find your own pad colours them like the blobs — says so; everything
+      // else takes the floor colours, which are chosen not to be blobs.
+      colour: colours?.[index] ?? colourOfPad(index),
     }
   })
 }
@@ -59,12 +63,17 @@ export function colourOfPad(index: number): string {
 }
 
 /**
- * What to call a pad when a phone is being told which one is theirs. Colours
- * off the palette always have a name; anything else is described rather than
- * named, which is better than a hex code arriving on a six-year-old's phone.
+ * What to call a pad when a phone is being told which one is theirs. Both
+ * palettes have a name for every colour in them — the floor's and the blobs' —
+ * and anything else is described rather than named, which is better than a hex
+ * code arriving on a six-year-old's phone.
  */
 export function nameOfColour(hex: string): string {
-  return ZONE_COLOURS.find((colour) => colour.hex === hex)?.name ?? 'shiny'
+  return (
+    ZONE_COLOURS.find((colour) => colour.hex === hex)?.name ??
+    BLOB_COLOURS.find((colour) => colour.hex === hex)?.name ??
+    'shiny'
+  )
 }
 
 /** How much of its square of floor a pad may fill, leaving a lane between them. */

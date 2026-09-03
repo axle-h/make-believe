@@ -1,5 +1,5 @@
 import { ASKABLE_PAINTS } from '@make-believe/shared'
-import { nearestPaint } from '../colour.js'
+import { looksLikePaint } from '../colour.js'
 import { MAX_LEVEL } from '../constants.js'
 import { pick, range } from '../rng.js'
 import { activePlayers } from '../selectors.js'
@@ -44,6 +44,7 @@ const TIME_LIMIT = { easy: 90_000, hard: 60_000 }
 
 export const colourHunt: ObjectiveTemplate<ColourHuntObjective> = {
   kind: 'colourHunt',
+  title: 'Colour hunt',
   /** One blob painting itself green is not something a room did together. */
   minPlayers: 2,
   /**
@@ -65,6 +66,7 @@ export const colourHunt: ObjectiveTemplate<ColourHuntObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [],
+      obstacles: [],
       marks: [],
       carryables: [],
       outcome: 'running',
@@ -107,10 +109,17 @@ export const colourHunt: ObjectiveTemplate<ColourHuntObjective> = {
   },
 }
 
-/** Has this blob sent a new drawing, and does it look like the right crayon? */
+/**
+ * Has this blob sent a new drawing, and does it look like the right crayon?
+ *
+ * "Looks like" counts the colour the blob started as well as what has been
+ * drawn on it: the canvas arrives pre-filled in that colour, and a blob that
+ * was blue to begin with and has had blue put on it should not be undone by a
+ * black face drawn over the top.
+ */
 function painted(objective: ColourHuntObjective, player: Player): boolean {
   const skin = player.skin
   if (!skin || skin.average === null) return false
   if (player.skinCount <= (objective.before[player.playerId] ?? 0)) return false
-  return nearestPaint(skin.average).name === objective.paint
+  return looksLikePaint(objective.paint, skin.average, player.colour)
 }

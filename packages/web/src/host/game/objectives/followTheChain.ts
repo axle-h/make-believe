@@ -43,6 +43,7 @@ const TIME_LIMIT = { easy: 60_000, hard: 45_000 }
 
 export const followTheChain: ObjectiveTemplate<FollowTheChainObjective> = {
   kind: 'followTheChain',
+  title: 'Follow the lights',
   /** One blob following lights around is a chore; a room doing it is a game. */
   minPlayers: 2,
   minLevel: 3,
@@ -76,6 +77,7 @@ export const followTheChain: ObjectiveTemplate<FollowTheChainObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones,
+      obstacles: [],
       marks: [],
       carryables: [],
       outcome: 'running',

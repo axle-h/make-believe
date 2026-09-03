@@ -39,6 +39,7 @@ const TIME_LIMIT = { easy: 45_000, hard: 25_000 }
 
 export const onTheSpot: ObjectiveTemplate<OnTheSpotObjective> = {
   kind: 'onTheSpot',
+  title: 'Stand on the spot',
   /** One blob standing on a spot is not a thing anybody has to solve together. */
   minPlayers: 2,
   minLevel: 1,
@@ -65,6 +66,7 @@ export const onTheSpot: ObjectiveTemplate<OnTheSpotObjective> = {
       remainingMs: Math.round(scale(TIME_LIMIT.easy, TIME_LIMIT.hard, hard)),
       totalMs: Math.round(scale(TIME_LIMIT.easy, TIME_LIMIT.hard, hard)),
       zones: [zone],
+      obstacles: [],
       marks: [],
       carryables: [],
       outcome: 'running',

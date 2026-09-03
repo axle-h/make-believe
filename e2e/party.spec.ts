@@ -439,7 +439,10 @@ test.describe('an objective', () => {
     const host = await party.openHost()
     const wilf = await party.joinAs('Wilf')
     const ida = await party.joinAs('Ida')
-    const crowd = [wilf, ida]
+    // Three of them, because the potato is a chase: two blobs can only hand it
+    // back and forth, so the task will not run for fewer.
+    const ted = await party.joinAs('Ted')
+    const crowd = [wilf, ida, ted]
 
     // Everything it is asked for at first is the one thing it can already do.
     // Each one has to be finished before the next appears, so the queue here
@@ -452,11 +455,33 @@ test.describe('an objective', () => {
     /* oxlint-enable no-await-in-loop */
     expect((await snapshot(host)).objectives.level).toBe(2)
 
-    // ...and now there is something else, with nobody having chosen it.
+    // The room is told so, in the one line all evening that is about them
+    // rather than about the game — and every phone gets it too.
+    await Promise.all(
+      crowd.map(async (phone) => {
+        await expect(phone.page.locator('#brief-headline')).toHaveText('Level 2!')
+        await expect(phone.page.locator('#brief')).toHaveAttribute('data-tone', 'level')
+      }),
+    )
+
+    // Then a breather with the next one visibly coming, so that nobody has to
+    // wonder whether the game has stopped.
+    await expect
+      .poll(async () => wilf.page.locator('#brief-detail').textContent(), { timeout: 20_000 })
+      .toMatch(/^Next game in [1-5]s$/)
+    // Every tool still works right through it: a breather is not a round.
+    await expect(wilf.page.locator('#pad')).toBeVisible()
+    await expect(wilf.page.locator('#tool-draw')).toBeEnabled()
+
+    // ...and now there is something else, with nobody having chosen it: the
+    // one thing level 2 just unlocked, which is the point of a level.
     const potato = await runningObjective(host)
     expect(potato.kind).toBe('hotPotato')
-    // Nothing on the floor: this one is entirely about who is touching whom.
+    // No spot to stand on: this one is entirely about who is touching whom.
     expect(potato.zones).toEqual([])
+    // Something to run round, though. A chase across an empty floor is whoever
+    // is quickest; a chase round a corner is a game.
+    expect(potato.obstacles.length).toBeGreaterThan(0)
 
     // Somebody is holding it, and every phone is told who.
     const holder = whoIsMarked(potato, crowd)
@@ -504,11 +529,15 @@ test.describe('an objective', () => {
 
     const ended = await objectiveNow(host)
     expect(ended?.outcome).toBe('done')
-    expect(ended?.note).toMatch(/Wilf|Ida/)
+    expect(ended?.note).toMatch(/Wilf|Ida|Ted/)
     expect((await snapshot(host)).objectives.score).toBeGreaterThan(before)
 
     // ...and something else again behind it, without anybody touching anything.
-    expect((await runningObjective(host)).kind).toBe('onTheSpot')
+    // Which one is the director's business and not the test's: three blobs
+    // standing still where the chase left them can finish a spot between two
+    // polls, and the room may have climbed another rung by the time we look.
+    // What has to be true is that a task is up and it is not this one again.
+    expect((await runningObjective(host)).kind).not.toBe('hotPotato')
 
     // The joystick drives exactly as it did before any of that.
     const settled = await playerNamed(host, chased.name)
@@ -705,7 +734,7 @@ test.describe('an objective', () => {
 
     const ended = await objectiveNow(host)
     expect(ended?.outcome).toBe('done')
-    expect(ended?.note).toMatch(/Wilf|Ida/)
+    expect(ended?.note).toMatch(/Wilf|Ida|Ted/)
     expect((await snapshot(host)).objectives.score).toBeGreaterThan(before)
 
     // The joystick drives exactly as it did before any of that.
