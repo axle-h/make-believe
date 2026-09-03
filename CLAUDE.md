@@ -150,6 +150,12 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 //                                                              // changes — an away blob keeps its colour, so
 //                                                              // only joining, quitting and being forgotten
 //                                                              // move it.
+{ type: 'sound', cue: SoundCue }                                // make a noise. A closed set in `shared`:
+//                                                              // pickup, deliver, mine, win, miss, level,
+//                                                              // count, go, hit. Information exactly as a
+//                                                              // brief is — a phone with its sound off plays
+//                                                              // the same game — and the one signal that can
+//                                                              // be private without bowing six heads.
 { type: 'grownup', tasks: [{ kind, title, playable }],
   level: number, maxLevel: number, score: number }              // the grown-up's sheet, and only ever to the one
 //                                                              // blob the host decided was Daddy. `playable` is
@@ -236,6 +242,7 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 - **Phaser itself is not unit-tested.** It needs a canvas/WebGL and jsdom can't provide one. Keep the Phaser layer thin enough that it doesn't need to be. The same goes for the debug menu's DOM: the keyboard is a pure function in `src/host/debugMenu.ts` and that is what has tests.
 
 **`web` — player**
+- The cue → oscillator spec as a pure lookup. The `AudioContext` itself is not unit-tested, for the same reason Phaser is not.
 - Joystick maths (pointer position → normalised `{dx,dy}`, dead zone, clamp to unit circle) as pure functions, unit-tested.
 - Message send throttling (only on change, max ~30/sec) as a pure function over a fake clock, unit-tested.
 - DOM wiring is covered by e2e, not unit tests.
@@ -361,6 +368,7 @@ code obeys everywhere but states nowhere.
 - Wake Lock API to stop phones sleeping (may be unavailable without HTTPS — degrade gracefully).
 - Mobile keyboards shift layout — test the Say sheet on a real phone early.
 - The player page is an installable PWA: `public/manifest.webmanifest`, `public/sw.js` (hand-written, ~60 lines, network-first, no Workbox and no build plugin), icons generated from `public/icons/blob.svg` by `scripts/icons.mjs` and committed. **Only the player page** — the host page links no manifest and the worker never touches `/host/`.
+- **The phone makes the noises, never the TV.** Cues come out of the model — `stepObjectives` returns `Sound[]` beside its briefs — and are worked out by looking at what *changed*, so a task earns its cues without reporting anything and nothing can repeat every frame. They are rate-limited to about one per phone per 250ms. The synth is `src/player/sounds.ts`: sixty lines of WebAudio, no files and no dependency, and it lives under `src/player/` because an `AudioContext` is a `window` and `purity.test.ts` would say so. A context must be woken inside a gesture, and the Join tap is that gesture; if it is still asleep the cues are dropped in silence, because nothing depends on being heard. There is a **mute switch in the ☰ menu**, remembered in storage.
 - Over the joystick, on **one** phone in the room, the ☰ menu holds one dull extra line built at runtime when a `grownup` message arrives: pick any task, or start the ladder again (which asks first, exactly as Quit does). Nothing else about that phone changes — it drives, says things and draws like every other phone.
 - There are three screens: `waiting` (no TV yet), `join` (a name and a row of ten swatches) and `play`. The socket opens on load, before anybody has typed anything, because the join screen is made of the palette and only the TV knows it — so the order is waiting → join → play. A phone that has played before has its name and its colour in storage and gets in with one tap; a phone that is already in *this* world walks straight back into its blob without being asked anything, which is what makes a reload, a wifi blip and a TV coming back all non-events. There is no scan screen and no QR reader on the phone — the code in the URL was the only thing one was ever for.
 - **A blob cannot be renamed.** Over the joystick are Say, Draw and a **menu** (☰), and in the menu is **Quit**: quitting sends `finish` (the message keeps its name; the child reads "Quit"), and the phone then clears its name, its colour, its drawing and its `playerId` and goes back to the join screen, so starting again is a new blob picked from scratch rather than a new label on the old one. It is behind the menu because it is the one thing that undoes anything and no thumb should find it by accident. Nothing else on the phone ever throws anything away, and it asks before it does.

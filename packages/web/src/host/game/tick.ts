@@ -1,6 +1,7 @@
 import { resolveCollisions } from './collisions.js'
 import { AWAY_TIMEOUT_MS, SPEED } from './constants.js'
 import { forgetPlayer, stepObjectives } from './objectives/director.js'
+import type { Sound } from './objectives/cues.js'
 import type { Brief } from './objectives/types.js'
 import { pushOutOfObstacles } from './obstacles.js'
 import { clampToWorld, type GameState } from './state.js'
@@ -24,6 +25,11 @@ export interface TickResult {
    * changed — the wording, not every frame of it.
    */
   briefs: Brief[]
+  /**
+   * And what they should make a noise about: a parcel landing, a badge
+   * arriving, a rung climbed. Also only what is new.
+   */
+  sounds: Sound[]
 }
 
 export function tick(state: GameState, dtMs: number): TickResult {
@@ -62,7 +68,7 @@ export function tick(state: GameState, dtMs: number): TickResult {
 
   // And last, with everybody where they have ended up, ask whether the world
   // has got what it wanted.
-  const briefs = stepObjectives(state, step)
+  const { briefs, sounds } = stepObjectives(state, step)
 
-  return { removed, briefs }
+  return { removed, briefs, sounds }
 }

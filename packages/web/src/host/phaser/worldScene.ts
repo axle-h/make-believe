@@ -18,6 +18,7 @@ import {
   type ObjectiveSnapshot,
   type Obstacle,
   type Player,
+  type Sound,
   type Zone,
   roofHeight,
 } from '../game/index.js'
@@ -229,6 +230,12 @@ export interface SceneOptions {
    * nothing about the socket.
    */
   onForgotten?: (playerIds: string[]) => void
+  /**
+   * Noises for the phones, handed over as `tick` produces them. The TV makes
+   * none of them itself: the sound is in six hands rather than in one speaker,
+   * which is the only way a private signal costs nobody a bowed head.
+   */
+  onSounds?: (sounds: Sound[]) => void
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -324,6 +331,7 @@ export class WorldScene extends Phaser.Scene {
     const result = tick(this.state, step)
     if (result.briefs.length > 0) this.options.onBriefs?.(result.briefs)
     if (result.removed.length > 0) this.options.onForgotten?.(result.removed)
+    if (result.sounds.length > 0) this.options.onSounds?.(result.sounds)
     this.render(step)
   }
 

@@ -11,6 +11,14 @@ import {
 import { createRng, pick, randomSeed, type Rng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import type { GameState, Player } from '../state.js'
+import {
+  createCueLimiter,
+  cueSnapshot,
+  cuesFrom,
+  rateLimit,
+  type CueLimiter,
+  type Sound,
+} from './cues.js'
 import { eligibleTemplates, suitsRoom, templateFor, unlockedAt } from './registry.js'
 import type { Brief, Objective, ObjectiveTemplate } from './types.js'
 
@@ -76,6 +84,14 @@ export interface Director {
   crown: string | null
   /** The last thing each phone was told, so only changes go on the wire. */
   announced: Brief[]
+  /** How long this world has been running, which is the clock the cues use. */
+  elapsedMs: number
+  /** Who was last told to make a noise, so no phone is a fire alarm. */
+  cues: CueLimiter
+  /** The last whole second counted out loud, so it is counted once. */
+  counted: number | null
+  /** Noises made by whatever happened this step, drained by `stepObjectives`. */
+  sounds: Sound[]
 }
 
 /**
@@ -164,23 +180,40 @@ export function createDirector(seed: number = randomSeed()): Director {
     pending: [],
     crown: null,
     announced: [],
+    elapsedMs: 0,
+    cues: createCueLimiter(),
+    counted: null,
+    sounds: [],
   }
 }
 
 /**
- * One step of whatever the world is asking for, after everyone has moved.
- * Returns only the briefs whose wording has actually changed, which is what
- * keeps a countdown from becoming thirty messages a second.
+ * What the phones are told after a step: the briefs whose wording has actually
+ * changed, and any noises worth making. Both are only ever what is *new* —
+ * which is what keeps a countdown from becoming thirty messages a second, and
+ * a blob in a heap of parcels from sounding like a fire alarm.
  */
-export function stepObjectives(state: GameState, dtMs: number): Brief[] {
+export interface Announcements {
+  briefs: Brief[]
+  sounds: Sound[]
+}
+
+/** One step of whatever the world is asking for, after everyone has moved. */
+export function stepObjectives(state: GameState, dtMs: number): Announcements {
   const director = state.objectives
   const objective = director.current
+  director.elapsedMs += Math.max(0, dtMs)
+  // What there was to make a noise about, before anything happened.
+  const before = cueSnapshot(objective)
 
   if (objective === null) startNext(state)
   else if (objective.outcome === 'running') run(state, objective, dtMs)
   else waitOutInterlude(director, dtMs)
 
-  return takeChangedBriefs(state)
+  director.sounds.push(...cuesFrom(before, director.current))
+  const sounds = rateLimit(director.cues, director.sounds, director.elapsedMs)
+  director.sounds = []
+  return { briefs: takeChangedBriefs(state), sounds }
 }
 
 /**
@@ -273,6 +306,7 @@ function begin(state: GameState, template: ObjectiveTemplate<Objective>, present
   director.made += 1
   director.lastKind = template.kind
   director.unsuitableMs = 0
+  director.counted = null
   director.current = template.generate({
     id: `obj-${director.made}`,
     world: state.world,
@@ -375,6 +409,7 @@ function settle(director: Director, objective: Objective): void {
 
 /** They did it. Score goes up, and three in a row makes the world harder. */
 function complete(director: Director, objective: Objective): void {
+  director.sounds.push({ to: '*', cue: 'win' })
   director.score += SCORE_PER_OBJECTIVE
   director.streak += 1
   if (director.streak >= LEVEL_UP_AFTER) {
@@ -400,6 +435,10 @@ function levelUp(director: Director): void {
   director.level = Math.min(MAX_LEVEL, director.level + 1)
   if (director.level === before) return
   director.levelledUpTo = director.level
+  // A rung takes the noise as well as the headline: it is the bigger news, and
+  // a cheer and a fanfare in the same frame is one of them wasted.
+  director.sounds = director.sounds.filter((sound) => !(sound.to === '*' && sound.cue === 'win'))
+  director.sounds.push({ to: '*', cue: 'level' })
   director.pending.push(...unlockedAt(director.level))
 }
 
@@ -408,6 +447,7 @@ function levelUp(director: Director): void {
  * streak towards the next one. It simply ends and another appears.
  */
 function expire(director: Director, objective: Objective): void {
+  director.sounds.push({ to: '*', cue: 'miss' })
   objective.note ??= pick(director.rng, NEVER_MIND)
   director.interludeMs = breather(director)
 }
@@ -478,6 +518,12 @@ function breatherBrief(director: Director, objective: Objective): Brief {
 function countdown(director: Director): string | undefined {
   if (director.interludeMs > COUNTDOWN_MS) return undefined
   const seconds = Math.max(1, Math.ceil(director.interludeMs / 1000))
+  // A number to say out loud together, and a blip to say it with. Once each,
+  // because this is only asked while the wording is being worked out.
+  if (director.counted !== seconds) {
+    director.counted = seconds
+    director.sounds.push({ to: '*', cue: 'count' })
+  }
   return `Next game in ${seconds}s`
 }
 

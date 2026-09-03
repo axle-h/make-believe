@@ -8,6 +8,7 @@ import {
   type HostToPlayerMessage,
   type PaletteEntry,
   type PlayerToHostMessage,
+  type SoundCue,
 } from '@make-believe/shared'
 import { connect, type WsClient } from '../lib/ws.js'
 import {
@@ -29,6 +30,7 @@ import {
   type Swatch,
 } from './joinForm.js'
 import { ZERO, createInputThrottle, vectorFromPointer, type Vector } from './joystick.js'
+import { play } from './sounds.js'
 import { isDifferentBuild, shouldReload, type Screen } from './updates.js'
 import './player.css'
 
@@ -62,6 +64,8 @@ const SESSION_KEY = 'make-believe.session'
  * either.
  */
 const DRAWING_KEY = 'make-believe.drawing'
+/** Whether this phone makes a noise. Remembered, because it is a preference. */
+const SOUND_KEY = 'make-believe.sound'
 
 /** How long to wait before trying the TV again while it is away. */
 const FIRST_WAIT_RETRY_MS = 800
@@ -243,6 +247,9 @@ function submitJoin(): void {
   }
   joinError.textContent = ''
   store(NAME_KEY, state.name)
+  // The tap that got us here is the gesture a browser wants before it will
+  // make a noise, so this is the one moment all evening that can wake it.
+  wakeAudio()
   joined = { name: state.name, colour: state.colour as string }
   waitingName.textContent = state.name
   // The socket has been open since the page loaded — the palette came down it
@@ -386,6 +393,12 @@ function applyMessage(message: HostToPlayerMessage): void {
   // The grown-up's sheet. It only ever arrives on one phone in the room, and
   // building it is the whole of what this phone knows about it: it has no
   // opinion about who gets one and never asks for it.
+  // A noise, which is information exactly as a brief is: no screen changes on
+  // it and no tool goes away. A phone with its sound off plays the same game.
+  if (message.type === 'sound') {
+    makeNoise(message.cue)
+    return
+  }
   if (message.type === 'grownup') {
     showOptions(message)
     return
@@ -462,6 +475,54 @@ function retryLater(): void {
   if (retryTimer !== null) clearTimeout(retryTimer)
   retryTimer = setTimeout(openSocket, retryMs)
   retryMs = Math.min(retryMs * 2, MAX_WAIT_RETRY_MS)
+}
+
+// --- the noises ----------------------------------------------------------
+
+/**
+ * A blip in your own hand is the cheapest feedback in the game, and the one
+ * signal that can be private without bowing six heads — you hear your own
+ * without looking down.
+ *
+ * An `AudioContext` has to be woken inside a gesture, and the Join tap is that
+ * gesture. If it is still asleep the cues are dropped in silence, which is
+ * always an acceptable outcome: nothing in the game depends on being heard.
+ */
+let audio: AudioContext | null = null
+let sound = loadStored(SOUND_KEY) !== 'off'
+
+const soundButton = requireElement<HTMLButtonElement>('#menu-sound')
+soundButton.addEventListener('click', () => {
+  sound = !sound
+  store(SOUND_KEY, sound ? 'on' : 'off')
+  showSoundSwitch()
+  // Turning it on is a tap, which is the moment a context may be woken.
+  if (sound) wakeAudio()
+})
+
+function showSoundSwitch(): void {
+  soundButton.textContent = sound ? 'Sound: on' : 'Sound: off'
+  soundButton.setAttribute('aria-pressed', String(sound))
+}
+
+/** Wake the sound up, inside whatever tap we are already inside. */
+function wakeAudio(): void {
+  if (!sound) return
+  try {
+    audio ??= new AudioContext()
+    if (audio.state === 'suspended') void audio.resume()
+  } catch {
+    // No WebAudio here. The game is played in silence, and plays the same.
+  }
+}
+
+function makeNoise(cue: SoundCue): void {
+  if (!sound || !audio) return
+  try {
+    play(audio, cue)
+  } catch {
+    // A context that has been closed or refused. Silence is fine.
+  }
 }
 
 // --- keeping the screen on -----------------------------------------------
@@ -1093,6 +1154,7 @@ async function checkForNewBuild(): Promise<void> {
 // without being asked anything at all.
 //
 // Last, so every handler above is wired before it can fire.
+showSoundSwitch()
 showScreen('waiting')
 waitingName.textContent = loadStored(NAME_KEY) ?? 'Your blob'
 openSocket()

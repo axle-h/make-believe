@@ -17,6 +17,7 @@ import {
   snapshot,
   type Brief,
   type GameSnapshot,
+  type Sound,
   type GameState,
 } from './game/index.js'
 import { startDebugMenu } from './debug.js'
@@ -225,8 +226,19 @@ function refreshGrownup(): void {
   send({ type: 'grownup', tasks, ...ladder, to: daddy.playerId })
 }
 
+/**
+ * And the noises. A cue is information exactly as a brief is: it changes no
+ * screen, takes no tool away, and a phone with its sound off plays the game
+ * identically. It is the one signal that can be private without bowing six
+ * heads, because you hear your own without looking down.
+ */
+function sendSounds(sounds: Sound[]): void {
+  for (const sound of sounds) send({ type: 'sound', cue: sound.cue, to: sound.to })
+}
+
 const phaser = startPhaser(world, state, {
   onBriefs: sendBriefs,
+  onSounds: sendSounds,
   // A blob the world has waited long enough for is gone, and its colour with
   // it. Anybody on a join screen should see that swatch go live.
   onForgotten: () => {

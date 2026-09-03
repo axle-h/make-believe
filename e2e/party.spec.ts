@@ -236,10 +236,11 @@ test.describe('a party', () => {
     const wilf = await party.joinAs('Wilf')
     const daddy = await party.joinAs('Daddy')
 
-    // Nothing about the other phone's menu changed: one item, and it is Quit.
+    // Nothing about the other phone's menu changed: the sound switch and Quit.
     await openTool(wilf, 'menu')
-    await expect(wilf.page.locator('#sheet-menu .menu-items button')).toHaveCount(1)
+    await expect(wilf.page.locator('#sheet-menu .menu-items button')).toHaveCount(2)
     await expect(wilf.page.locator('#menu-quit')).toBeVisible()
+    await expect(wilf.page.locator('#menu-sound')).toBeVisible()
     // Not hidden, not greyed — not there. A disabled item is an advertisement.
     await expect(wilf.page.locator('#sheet-options')).toHaveCount(0)
     await expect(wilf.page.locator('#menu-options')).toHaveCount(0)
@@ -248,6 +249,7 @@ test.describe('a party', () => {
 
     // And on the grown-up's phone, the same menu holds one more thing.
     await openTool(daddy, 'menu')
+    await expect(daddy.page.locator('#sheet-menu .menu-items button')).toHaveCount(3)
     await daddy.page.click('#menu-options')
     await expect(daddy.page.locator('#sheet-options')).toBeVisible()
 

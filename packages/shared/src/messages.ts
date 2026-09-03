@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { MAX_NAME_LENGTH, isValidName } from './blobName.js'
 import { isValidSessionCode } from './sessionCode.js'
+import { SOUND_CUES } from './sounds.js'
 
 /**
  * Every message on the wire, as zod schemas with the TypeScript types derived
@@ -178,6 +179,18 @@ export const RefusedMessageSchema = z.object({
 })
 
 /**
+ * A noise for one phone, or for all of them.
+ *
+ * It is information exactly as a brief is: it changes no screen, takes no tool
+ * away and puts no phone into a mode. A phone with its sound off, or one whose
+ * `AudioContext` never woke up, plays the game identically.
+ */
+export const SoundMessageSchema = z.object({
+  type: z.literal('sound'),
+  cue: z.enum(SOUND_CUES),
+})
+
+/**
  * The grown-up's sheet, as the TV describes it: every task there is, whether
  * this room is big enough for each, and where the ladder has got to.
  *
@@ -270,6 +283,7 @@ export const HostToPlayerMessageSchema = z.discriminatedUnion('type', [
   PaletteMessageSchema,
   RefusedMessageSchema,
   GrownupMessageSchema,
+  SoundMessageSchema,
   BriefMessageSchema,
   WaitingMessageSchema,
   SessionMessageSchema,
@@ -288,6 +302,7 @@ export const HostOutboundMessageSchema = z.discriminatedUnion('type', [
   PaletteMessageSchema.extend({ to: RecipientSchema }),
   RefusedMessageSchema.extend({ to: RecipientSchema }),
   GrownupMessageSchema.extend({ to: RecipientSchema }),
+  SoundMessageSchema.extend({ to: RecipientSchema }),
   BriefMessageSchema.extend({ to: RecipientSchema }),
 ])
 
@@ -359,6 +374,7 @@ export type RefusedMessage = z.infer<typeof RefusedMessageSchema>
 export type RefusedReason = RefusedMessage['reason']
 export type ArrivedMessage = z.infer<typeof ArrivedMessageSchema>
 export type GrownupMessage = z.infer<typeof GrownupMessageSchema>
+export type SoundMessage = z.infer<typeof SoundMessageSchema>
 export type CommandMessage = z.infer<typeof CommandMessageSchema>
 export type BriefMessage = z.infer<typeof BriefMessageSchema>
 export type BriefTone = BriefMessage['tone']

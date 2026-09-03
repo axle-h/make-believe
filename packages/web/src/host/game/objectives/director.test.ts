@@ -37,6 +37,11 @@ function room(names: string[], seed = 1): GameState {
   return state
 }
 
+/** The briefs one step produced, which is what most of these are about. */
+function briefsFrom(state: GameState, dtMs: number): Brief[] {
+  return stepObjectives(state, dtMs).briefs
+}
+
 /** Make an objective appear, and hand it over. */
 function started(state: GameState): Objective {
   stepObjectives(state, 16)
@@ -341,7 +346,7 @@ describe('a line for one phone only', () => {
 
     let last: Brief[] = []
     for (let elapsed = 0; elapsed < 120_000; elapsed += 1_000) {
-      last = stepObjectives(state, 1_000)
+      last = stepObjectives(state, 1_000).briefs
       if (state.objectives.current?.outcome !== 'running') break
     }
 
@@ -372,7 +377,7 @@ describe('a line for one phone only', () => {
 
     let last: Brief[] = []
     for (let elapsed = 0; elapsed < 60_000 && wearing() === wearer; elapsed += 50) {
-      last = stepObjectives(state, 50)
+      last = stepObjectives(state, 50).briefs
     }
     expect(wearing()).not.toBe(wearer)
     expect(state.objectives.current?.outcome).toBe('running')
@@ -583,8 +588,8 @@ describe('the crown', () => {
 describe('what the phones are told', () => {
   it('says it once, not once a frame', () => {
     const state = room(['Wilf', 'Ida'])
-    const first = stepObjectives(state, 16)
-    const second = stepObjectives(state, 16)
+    const first = briefsFrom(state, 16)
+    const second = briefsFrom(state, 16)
 
     expect(first).toHaveLength(1)
     expect(first[0]?.to).toBe('*')
@@ -599,12 +604,12 @@ describe('what the phones are told', () => {
     const state = room(['Wilf', 'Ida'])
     askFor(state, 'colourHunt')
     stepObjectives(state, 16)
-    expect(stepObjectives(state, 16)).toEqual([])
+    expect(briefsFrom(state, 16)).toEqual([])
 
     const hunt = state.objectives.current as ColourHuntObjective
     hunt.paint = 'indigo'
 
-    expect(stepObjectives(state, 16)).toHaveLength(1)
+    expect(briefsFrom(state, 16)).toHaveLength(1)
   })
 
   it('says it again when the wording changes', () => {
@@ -612,7 +617,7 @@ describe('what the phones are told', () => {
     const objective = started(state)
     stepObjectives(state, 16)
     standOnIt(state, objective)
-    const briefs = stepObjectives(state, 16)
+    const briefs = briefsFrom(state, 16)
 
     expect(briefs).toHaveLength(1)
     expect(briefs[0]?.detail).toBe('Hold it… 2')
@@ -624,7 +629,7 @@ describe('what the phones are told', () => {
    */
   it('never carries anything that could put a phone into a mode', () => {
     const state = room(['Wilf', 'Ida'])
-    const briefs = stepObjectives(state, 16)
+    const briefs = briefsFrom(state, 16)
 
     for (const brief of briefs) {
       // `Object.keys` is already a fresh array, so sorting it mutates nothing.
@@ -922,7 +927,7 @@ describe('counting down to the next task', () => {
 
     let sent = 0
     for (let frame = 0; frame < COUNTDOWN_MS / 100; frame++) {
-      sent += stepObjectives(state, 100).length
+      sent += briefsFrom(state, 100).length
     }
 
     expect(sent).toBe(5)
