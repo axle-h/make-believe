@@ -99,3 +99,93 @@ function shove(state: GameState, player: Player, horizontal: boolean, by: number
   player.y = moved.y
   return Math.abs((horizontal ? player.x : player.y) - before)
 }
+
+/**
+ * How close two blobs have to be to count as touching. The separation pass
+ * leaves a pair sitting exactly edge to edge, so a test for real overlap would
+ * only ever catch them on the one frame they collided; a few pixels of slack
+ * makes a brush past enough.
+ */
+export const TOUCH_REACH = BLOB_SIZE + 4
+
+/** Whether these two are close enough to be leaning on one another. */
+export function touching(a: Player, b: Player): boolean {
+  return Math.abs(a.x - b.x) <= TOUCH_REACH && Math.abs(a.y - b.y) <= TOUCH_REACH
+}
+
+/**
+ * Who this blob is touching, if anybody: the nearest of them, so driving into
+ * a huddle finds the blob actually run into rather than whichever happens to
+ * come first in the list.
+ */
+export function nearestTouching(blob: Player, others: readonly Player[]): Player | null {
+  let nearest: Player | null = null
+  let shortest = Number.POSITIVE_INFINITY
+  for (const other of others) {
+    if (other.playerId === blob.playerId) continue
+    if (!touching(blob, other)) continue
+    const distance = Math.hypot(other.x - blob.x, other.y - blob.y)
+    if (distance >= shortest) continue
+    shortest = distance
+    nearest = other
+  }
+  return nearest
+}
+
+/**
+ * A proper shove. Driving into a blob already moves it, but only by however
+ * much it was in the way, which is a nudge; a task that is *about* shoving
+ * wants more than that. This gives whoever is driving into somebody a push of
+ * their own, on top of the separation that has already happened.
+ *
+ * Two blobs leaning into each other equally cancel out and neither moves,
+ * which is the same bargain the crate strikes and reads the same way from the
+ * sofa: shoving somebody who is shoving back gets you nowhere.
+ *
+ * Nothing in `tick` calls it. It is opt-in, and it belongs to the one task
+ * built out of it — a world where every touch sends a three-year-old skidding
+ * across the floor is a world where nobody can stand still on a pad.
+ */
+export function barge(state: GameState, speed: number, dtMs: number): void {
+  const seconds = dtMs / 1000
+  if (seconds <= 0) return
+  const solid = players(state).filter((player) => !player.away)
+
+  for (let i = 0; i < solid.length; i++) {
+    for (let j = i + 1; j < solid.length; j++) {
+      const a = solid[i]
+      const b = solid[j]
+      if (!a || !b) continue
+      lean(state, a, b, speed * seconds)
+    }
+  }
+}
+
+/** One pair leaning on each other: whoever is driving harder moves the other. */
+function lean(state: GameState, a: Player, b: Player, by: number): void {
+  if (!touching(a, b)) return
+  const gapX = b.x - a.x
+  const gapY = b.y - a.y
+  const distance = Math.hypot(gapX, gapY)
+  // Dead on top of one another there is no direction to shove in; the
+  // separation pass is already dealing with them and will have them apart.
+  if (distance === 0) return
+
+  const towardsB = { x: gapX / distance, y: gapY / distance }
+  // How much each of them is actually driving at the other, and who wins.
+  const push = driving(a, towardsB.x, towardsB.y) - driving(b, -towardsB.x, -towardsB.y)
+  if (push === 0) return
+
+  // A positive push sends `b` away from `a`; a negative one does the reverse,
+  // which the sign of the vector takes care of on its own.
+  const shoved = push > 0 ? b : a
+  const step = push * by
+  const moved = clampToWorld(state, shoved.x + towardsB.x * step, shoved.y + towardsB.y * step)
+  shoved.x = moved.x
+  shoved.y = moved.y
+}
+
+/** How hard a blob is driving in a given direction, from 0 to 1. */
+function driving(player: Player, x: number, y: number): number {
+  return Math.max(0, player.dx * x + player.dy * y)
+}

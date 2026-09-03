@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from '../apply.js'
-import { INTERLUDE_MS, LEVEL_UP_AFTER, SCORE_PER_OBJECTIVE } from '../constants.js'
+import {
+  BLOB_SIZE,
+  INTERLUDE_MS,
+  LEVEL_UP_AFTER,
+  MAX_LEVEL,
+  SCORE_PER_OBJECTIVE,
+} from '../constants.js'
 import { activePlayers, objectives } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { tick } from '../tick.js'
@@ -38,7 +44,9 @@ function started(state: GameState): Objective {
  * it never asks for the same thing twice running.
  */
 function startedKind(state: GameState, kind: Objective['kind']): Objective {
-  for (let attempt = 0; attempt < 40; attempt++) {
+  // Patient enough for the top of the ladder, where a dozen tasks are eligible
+  // and the one wanted comes round about one roll in eleven.
+  for (let attempt = 0; attempt < 200; attempt++) {
     const objective = started(state)
     if (objective.kind === kind) return objective
     state.objectives.current = null
@@ -316,10 +324,10 @@ describe('a line for one phone only', () => {
 
   /**
    * A phone left holding a private line about a task that is over would be the
-   * one bit of the game that remembers a mode. When it ends, the strip comes
-   * down of its own accord.
+   * one bit of the game that remembers a mode. When it ends, that phone is
+   * given the line the room has, so it reads the cheer with everybody else.
    */
-  it('takes the private line down as soon as the task is over', () => {
+  it('puts the private line back to the room\'s as soon as the task is over', () => {
     const state = room(['Wilf', 'Ida'], 12)
     findingColours(state)
 
@@ -329,8 +337,43 @@ describe('a line for one phone only', () => {
       if (state.objectives.current?.outcome !== 'running') break
     }
 
-    expect(last.some((brief) => brief.to === 'p1' && brief.headline === '')).toBe(true)
+    const mine = last.find((brief) => brief.to === 'p1')
+    expect(mine?.headline).toBe(state.objectives.current?.note)
+    expect(mine?.detail).toBeUndefined()
     expect(briefFor(state, 'p1')?.to).toBe('*')
+  })
+
+  /**
+   * The same thing, but in the middle of a task rather than at the end of one.
+   * The crown moves from blob to blob, so the phone wearing it has a private
+   * countdown one moment and not the next — and a child who has just had it
+   * taken off them must not be the one person in the room with a blank strip.
+   */
+  it('hands a phone the room\'s line when its private one moves on mid-task', () => {
+    const state = room(['Wilf', 'Ida'], 12)
+    state.objectives.level = MAX_LEVEL
+    const crown = startedKind(state, 'keepTheCrown')
+    const wearing = () => state.objectives.current?.marks[0]?.playerId
+    const wearer = wearing()
+
+    // Stood right up against each other, as driving into somebody leaves them.
+    const [first, second] = activePlayers(state)
+    if (!first || !second) throw new Error('expected two blobs')
+    second.x = first.x + BLOB_SIZE
+    second.y = first.y
+
+    let last: Brief[] = []
+    for (let elapsed = 0; elapsed < 60_000 && wearing() === wearer; elapsed += 50) {
+      last = stepObjectives(state, 50)
+    }
+    expect(wearing()).not.toBe(wearer)
+    expect(state.objectives.current?.outcome).toBe('running')
+
+    // The phone that has just lost it is told what everybody else is told.
+    const mine = last.find((brief) => brief.to === wearer)
+    expect(mine?.headline).toBe(crown.headline)
+    expect(mine?.detail).toBe(last.find((brief) => brief.to === '*')?.detail)
+    expect(mine?.detail).toContain('has it!')
   })
 })
 

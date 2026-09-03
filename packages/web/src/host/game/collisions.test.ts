@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from './apply.js'
-import { resolveCollisions } from './collisions.js'
-import { BLOB_SIZE, WORLD_WIDTH } from './constants.js'
+import { barge, nearestTouching, resolveCollisions, touching } from './collisions.js'
+import { BLOB_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from './constants.js'
 import { playerById } from './selectors.js'
 import { createGame, type GameState, type Player } from './state.js'
 import { tick } from './tick.js'
@@ -127,5 +127,119 @@ describe('driving into somebody', () => {
 
     expect(at(state, 'b').x).toBe(WORLD_WIDTH - BLOB_SIZE / 2)
     expect(overlapping(at(state, 'a'), at(state, 'b'))).toBe(false)
+  })
+})
+
+describe('touching', () => {
+  it('counts a blob sitting edge to edge, which is where separation leaves them', () => {
+    const state = world({ id: 'a', x: 300, y: 300 }, { id: 'b', x: 300 + BLOB_SIZE, y: 300 })
+
+    expect(touching(at(state, 'a'), at(state, 'b'))).toBe(true)
+  })
+
+  it('does not count a blob a blob and a half away', () => {
+    const state = world({ id: 'a', x: 300, y: 300 }, { id: 'b', x: 300 + BLOB_SIZE * 1.5, y: 300 })
+
+    expect(touching(at(state, 'a'), at(state, 'b'))).toBe(false)
+  })
+})
+
+describe('nearestTouching', () => {
+  it('finds the blob actually driven into, not whichever comes first', () => {
+    const state = world(
+      { id: 'a', x: 300, y: 300 },
+      { id: 'far', x: 300, y: 300 + BLOB_SIZE },
+      { id: 'near', x: 300 + BLOB_SIZE * 0.9, y: 300 },
+    )
+
+    expect(nearestTouching(at(state, 'a'), [at(state, 'far'), at(state, 'near')])?.playerId).toBe(
+      'near',
+    )
+  })
+
+  it('never finds itself, and finds nobody in an empty room', () => {
+    const state = world({ id: 'a', x: 300, y: 300 })
+
+    expect(nearestTouching(at(state, 'a'), [at(state, 'a')])).toBeNull()
+  })
+})
+
+/**
+ * The shove a task can ask for on top of separation. It is opt-in, so these
+ * call it directly: `tick` never does, and nothing outside sumo should.
+ */
+describe('barge', () => {
+  it('sends the blob being driven into skidding further than it was in the way', () => {
+    const state = world({ id: 'a', x: 300, y: 300 }, { id: 'b', x: 300 + BLOB_SIZE, y: 300 })
+    applyMessage(state, { type: 'input', playerId: 'a', dx: 1, dy: 0 })
+
+    barge(state, 200, 100)
+
+    expect(at(state, 'b').x).toBeCloseTo(300 + BLOB_SIZE + 20, 5)
+    // Whoever is doing the shoving stays exactly where their own driving put
+    // them: the push is something they give, not something they take.
+    expect(at(state, 'a').x).toBe(300)
+  })
+
+  it('does nothing at all for two blobs leaning on each other equally', () => {
+    const state = world({ id: 'a', x: 300, y: 300 }, { id: 'b', x: 300 + BLOB_SIZE, y: 300 })
+    applyMessage(state, { type: 'input', playerId: 'a', dx: 1, dy: 0 })
+    applyMessage(state, { type: 'input', playerId: 'b', dx: -1, dy: 0 })
+
+    barge(state, 200, 100)
+
+    expect(at(state, 'a').x).toBe(300)
+    expect(at(state, 'b').x).toBe(300 + BLOB_SIZE)
+  })
+
+  it('leaves blobs that are nowhere near each other alone', () => {
+    const state = world({ id: 'a', x: 300, y: 300 }, { id: 'b', x: 700, y: 300 })
+    applyMessage(state, { type: 'input', playerId: 'a', dx: 1, dy: 0 })
+
+    barge(state, 200, 100)
+
+    expect(at(state, 'b').x).toBe(700)
+  })
+
+  it('shoves along the line between them, so a corner nudge goes diagonally', () => {
+    const state = world(
+      { id: 'a', x: 300, y: 300 },
+      { id: 'b', x: 300 + BLOB_SIZE, y: 300 + BLOB_SIZE },
+    )
+    applyMessage(state, { type: 'input', playerId: 'a', dx: 1, dy: 1 })
+
+    barge(state, 200, 100)
+
+    const b = at(state, 'b')
+    expect(b.x).toBeGreaterThan(300 + BLOB_SIZE)
+    expect(b.y - (300 + BLOB_SIZE)).toBeCloseTo(b.x - (300 + BLOB_SIZE), 5)
+  })
+
+  it('cannot shove anybody off the floor', () => {
+    const state = world(
+      { id: 'a', x: WORLD_WIDTH - 200, y: WORLD_HEIGHT - 200 },
+      { id: 'b', x: WORLD_WIDTH - 200 + BLOB_SIZE, y: WORLD_HEIGHT - 200 },
+    )
+    applyMessage(state, { type: 'input', playerId: 'a', dx: 1, dy: 0 })
+
+    for (let frame = 0; frame < 200; frame++) {
+      // A shove is on top of driving, not instead of it: `tick` is what moves
+      // the blob doing the shoving, so this stands in for it.
+      const a = at(state, 'a')
+      a.x = Math.min(WORLD_WIDTH - BLOB_SIZE / 2, a.x + 8)
+      barge(state, 400, 16)
+    }
+
+    expect(at(state, 'b').x).toBe(WORLD_WIDTH - BLOB_SIZE / 2)
+  })
+
+  it('is not something a blob whose phone has gone can do or have done to it', () => {
+    const state = world({ id: 'a', x: 300, y: 300 }, { id: 'b', x: 300 + BLOB_SIZE, y: 300 })
+    applyMessage(state, { type: 'input', playerId: 'a', dx: 1, dy: 0 })
+    applyMessage(state, { type: 'left', playerId: 'b' })
+
+    barge(state, 200, 100)
+
+    expect(at(state, 'b').x).toBe(300 + BLOB_SIZE)
   })
 })

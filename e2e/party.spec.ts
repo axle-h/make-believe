@@ -2,11 +2,14 @@ import { expect } from '@playwright/test'
 import {
   BLOB_SIZE,
   LEVEL_UP_AFTER,
+  askFor,
   briefTint,
   driveTo,
   dropSocket,
   finishPlaying,
+  herdOnto,
   hostSession,
+  isOn,
   joinAgainAs,
   objectiveNow,
   openTool,
@@ -19,6 +22,7 @@ import {
   test,
   whoIsMarked,
   worn,
+  zoneNow,
 } from './world.js'
 
 /**
@@ -511,6 +515,204 @@ test.describe('an objective', () => {
     const away = settled.y < (await snapshot(host)).world.height / 2 ? 1 : -1
     await pushJoystick(chased, { dx: 0, dy: away }, 400)
     const moved = (await playerNamed(host, chased.name)).y
+    expect(away > 0 ? moved > settled.y + 20 : moved < settled.y - 20).toBe(true)
+  })
+
+  /**
+   * Sumo, which is the one task built out of shoving. The island shrinks the
+   * whole time, driving into somebody sends them skidding off it, and — the
+   * part that matters — being off it is not a state anybody has been put into.
+   * They drive straight back on.
+   *
+   * It unlocks at level 5, which is twelve solved tasks away, so `askFor` is
+   * what gets the room there. Everything after that is the game: the director
+   * generates it, the children solve it through their joysticks, and the TV
+   * decides what happened.
+   */
+  test('sumo shrinks its island, and a blob shoved off drives straight back on', async ({
+    party,
+  }) => {
+    test.setTimeout(180_000)
+    const host = await party.openHost()
+    const wilf = await party.joinAs('Wilf')
+    const ida = await party.joinAs('Ida')
+
+    const sumo = await askFor(host, 'sumo', 5)
+    const island = sumo.zones[0]
+    if (!island) throw new Error('expected an island on the floor')
+
+    // One circle and nothing else, and both phones told the same thing.
+    expect(sumo.zones).toHaveLength(1)
+    expect(sumo.carryables).toEqual([])
+    for (const phone of [wilf, ida]) {
+      // oxlint-disable-next-line no-await-in-loop
+      await expect(phone.page.locator('#brief-headline')).toHaveText('Stay on the island!')
+    }
+    // The strip is the colour of the island, which is the thing to look at.
+    expect(await briefTint(wilf.page)).toBe(island.colour)
+
+    // Being shoved about takes nothing away from anybody.
+    await expect(ida.page.locator('#pad')).toBeVisible()
+    for (const tool of ['say', 'draw', 'finish']) {
+      // oxlint-disable-next-line no-await-in-loop
+      await expect(ida.page.locator(`#tool-${tool}`)).toBeEnabled()
+    }
+
+    // Both of them drive on, and the TV says so on both phones.
+    await herdOnto(host, [wilf, ida], island)
+    await expect(wilf.page.locator('#brief-detail')).toContainText('2 of 2 still on')
+
+    // Wilf drives through Ida and out the far side, taking her with him.
+    const shoved = expect
+      .poll(
+        async () => isOn(await zoneNow(host, island.id), await playerNamed(host, 'Ida')),
+        { timeout: 20_000 },
+      )
+      .toBe(false)
+    await driveTo(host, wilf, { x: island.x + island.radius! + BLOB_SIZE, y: island.y }, 30)
+    await shoved
+
+    // ...and Ida drives back on, because nothing has taken anything from her.
+    const middle = await zoneNow(host, island.id)
+    await driveTo(host, ida, { x: middle.x, y: middle.y }, 20)
+    expect(isOn(await zoneNow(host, island.id), await playerNamed(host, 'Ida'))).toBe(true)
+
+    // The island has been getting smaller the whole time they were doing it.
+    expect((await zoneNow(host, island.id)).radius!).toBeLessThan(island.radius!)
+  })
+
+  /**
+   * The buzzer is how sumo *finishes*, the way hot potato does: the score goes
+   * up, the TV says who held on, and the next task appears behind it. Nobody
+   * has lost anything and nobody is sitting out.
+   */
+  test('sumo ends at the buzzer with whoever is left standing', async ({ party }) => {
+    test.setTimeout(180_000)
+    const host = await party.openHost()
+    const wilf = await party.joinAs('Wilf')
+    const ida = await party.joinAs('Ida')
+
+    const sumo = await askFor(host, 'sumo', 5)
+    const island = sumo.zones[0]
+    if (!island) throw new Error('expected an island on the floor')
+    await herdOnto(host, [wilf, ida], island)
+
+    // Start watching the phone first: the cheer is only up for a moment.
+    const cheered = expect(ida.page.locator('#brief')).toHaveAttribute('data-tone', 'win', {
+      timeout: 90_000,
+    })
+    const before = (await snapshot(host)).objectives.score
+    await expect
+      .poll(async () => (await objectiveNow(host))?.outcome, { timeout: 90_000 })
+      .not.toBe('running')
+    await cheered
+
+    const ended = await objectiveNow(host)
+    expect(ended?.outcome).toBe('done')
+    expect(ended?.note).toMatch(/held on|standing/)
+    expect((await snapshot(host)).objectives.score).toBeGreaterThan(before)
+
+    // ...and something else behind it, without anybody touching anything.
+    expect((await runningObjective(host)).outcome).toBe('running')
+  })
+
+  /**
+   * Keep the crown: hot potato inside out. Everybody runs *at* whoever has it
+   * rather than away, and it is the first task in this suite that tells one
+   * phone something different from the rest — the blob being chased gets its
+   * own countdown, and nobody else is told it.
+   *
+   * It is the last thing the ladder unlocks, twenty-one solved tasks up, so
+   * `askFor` is what gets the room there.
+   */
+  test('the crown is taken by driving into whoever has it, and counts them down privately', async ({
+    party,
+  }) => {
+    test.setTimeout(180_000)
+    const host = await party.openHost()
+    const wilf = await party.joinAs('Wilf')
+    const ida = await party.joinAs('Ida')
+    const crowd = [wilf, ida]
+
+    const crown = await askFor(host, 'keepTheCrown', 8)
+    // Nothing on the floor: the crown is worn, not carried about.
+    expect(crown.zones).toEqual([])
+    expect(crown.carryables).toEqual([])
+
+    const wearer = whoIsMarked(crown, crowd)
+    const chaser = crowd.find((one) => one !== wearer)
+    if (!chaser) throw new Error('expected somebody to give chase')
+
+    // Everybody is told who to go for, and how to go for them.
+    await expect(chaser.page.locator('#brief-headline')).toHaveText('Keep the crown!')
+    await expect(chaser.page.locator('#brief-detail')).toHaveText(
+      `${wearer.name} has it! Drive into them to take it.`,
+    )
+    // The strip goes the colour of whoever is wearing it, for a child who
+    // cannot read the name off it.
+    expect(await briefTint(chaser.page)).toBe((await playerNamed(host, wearer.name)).colour)
+
+    // ...and the one phone being chased is told something nobody else is.
+    await expect(wearer.page.locator('#brief-detail')).toContainText('Run!')
+
+    // Being chased takes nothing away from anybody.
+    await expect(wearer.page.locator('#pad')).toBeVisible()
+    for (const tool of ['say', 'draw', 'finish']) {
+      // oxlint-disable-next-line no-await-in-loop
+      await expect(wearer.page.locator(`#tool-${tool}`)).toBeEnabled()
+    }
+
+    // Driving into them is the whole of taking it. The watch starts before the
+    // drive: they are still touching afterwards, so it can go straight back
+    // once the new wearer's moment of safety is up.
+    const taken = expect
+      .poll(async () => (await objectiveNow(host))?.marks[0]?.playerId, { timeout: 60_000 })
+      .toBe(chaser.playerId)
+    const target = await playerNamed(host, wearer.name)
+    await driveTo(host, chaser, { x: target.x, y: target.y }, BLOB_SIZE + 2)
+    await taken
+
+    // The private countdown went with it: the phone that had it is now being
+    // told who to chase, like everybody else.
+    await expect(wearer.page.locator('#brief-detail')).toHaveText(
+      `${chaser.name} has it! Drive into them to take it.`,
+    )
+  })
+
+  /**
+   * However it ends — kept long enough, or the buzzer beating them to it — it
+   * ends cheerfully, somebody is named, and the score goes up. Nobody is
+   * eliminated and nobody sits out.
+   */
+  test('the crown ends with somebody named, whoever managed to keep it', async ({ party }) => {
+    test.setTimeout(180_000)
+    const host = await party.openHost()
+    const wilf = await party.joinAs('Wilf')
+    const ida = await party.joinAs('Ida')
+
+    await askFor(host, 'keepTheCrown', 8)
+    const cheered = expect(wilf.page.locator('#brief')).toHaveAttribute('data-tone', 'win', {
+      timeout: 90_000,
+    })
+    const before = (await snapshot(host)).objectives.score
+
+    // Nobody has to do anything for this one to finish: whoever it started on
+    // simply keeps it, which is the task being solved rather than abandoned.
+    await expect
+      .poll(async () => (await objectiveNow(host))?.outcome, { timeout: 90_000 })
+      .not.toBe('running')
+    await cheered
+
+    const ended = await objectiveNow(host)
+    expect(ended?.outcome).toBe('done')
+    expect(ended?.note).toMatch(/Wilf|Ida/)
+    expect((await snapshot(host)).objectives.score).toBeGreaterThan(before)
+
+    // The joystick drives exactly as it did before any of that.
+    const settled = await playerNamed(host, 'Ida')
+    const away = settled.y < (await snapshot(host)).world.height / 2 ? 1 : -1
+    await pushJoystick(ida, { dx: 0, dy: away }, 400)
+    const moved = (await playerNamed(host, 'Ida')).y
     expect(away > 0 ? moved > settled.y + 20 : moved < settled.y - 20).toBe(true)
   })
 

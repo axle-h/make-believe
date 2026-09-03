@@ -1,7 +1,8 @@
-import { BLOB_SIZE, MAX_LEVEL } from '../constants.js'
+import { nearestTouching } from '../collisions.js'
+import { MAX_LEVEL } from '../constants.js'
 import { pick, range } from '../rng.js'
 import { activePlayers } from '../selectors.js'
-import type { GameState, Player } from '../state.js'
+import type { GameState } from '../state.js'
 import {
   difficulty,
   scale,
@@ -39,13 +40,6 @@ export interface HotPotatoObjective extends ObjectiveBase {
 
 /** The potato itself, worn by whoever has it. */
 const POTATO = '🥔'
-
-/**
- * How close counts as a touch. The collision pass leaves two blobs exactly
- * edge to edge, so a test for real overlap would only ever catch them on the
- * frame they collided; a few pixels of slack makes a brush past enough.
- */
-const REACH = BLOB_SIZE + 4
 
 /** How long you are safe for after catching it. Long enough to get away. */
 const GRACE = { easy: 1_200, hard: 700 }
@@ -144,27 +138,6 @@ function handTo(objective: HotPotatoObjective, playerId: string): void {
 
 function marksFor(playerId: string): Mark[] {
   return [{ playerId, badge: POTATO }]
-}
-
-/**
- * Who the holder is touching, if anybody — the nearest of them, so running
- * into a huddle passes it to the blob actually run into rather than whichever
- * happens to be first in the list.
- */
-function nearestTouching(holder: Player, present: Player[]): Player | null {
-  let nearest: Player | null = null
-  let shortest = Number.POSITIVE_INFINITY
-  for (const other of present) {
-    if (other.playerId === holder.playerId) continue
-    const gapX = Math.abs(other.x - holder.x)
-    const gapY = Math.abs(other.y - holder.y)
-    if (gapX > REACH || gapY > REACH) continue
-    const distance = Math.hypot(gapX, gapY)
-    if (distance >= shortest) continue
-    shortest = distance
-    nearest = other
-  }
-  return nearest
 }
 
 function nameOf(state: GameState, playerId: string | null): string | null {

@@ -228,16 +228,25 @@ function takeChangedBriefs(state: GameState): Brief[] {
   const before = new Map(director.announced.map((brief) => [brief.to, wording(brief)]))
   const changed = briefs.filter((brief) => before.get(brief.to) !== wording(brief))
 
-  // A phone that was being told something privately and no longer is gets its
-  // strip taken down, rather than being left holding a line about a task that
-  // has finished.
+  // A phone that was being told something privately and no longer is gets the
+  // line everybody else has, rather than being left holding a private half of
+  // a task that has moved on without it. Taking its strip down instead would
+  // leave one child staring at nothing while the room reads the banner: the
+  // blob that has just had the crown taken off it is the case that found this.
+  const shared = briefs.find((brief) => brief.to === '*')
   const stillAddressed = new Set(briefs.map((brief) => brief.to))
   const cleared: Brief[] = director.announced
     .filter((brief) => brief.to !== '*' && !stillAddressed.has(brief.to))
-    .map((brief) => ({ to: brief.to, headline: '', tone: 'task' }))
+    .map((brief) => readdressed(shared, brief.to))
 
   director.announced = briefs
   return [...changed, ...cleared]
+}
+
+/** The room's line, said to one phone in particular. */
+function readdressed(shared: Brief | undefined, to: Brief['to']): Brief {
+  if (!shared) return { to, headline: '', tone: 'task' }
+  return { ...shared, to }
 }
 
 /** Two briefs are the same brief if they read the same. */

@@ -184,7 +184,9 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 - One browser context opens `/host/`. The session is read off the `window.__game` test hook when a test needs it; nothing on the TV shows it and no URL carries it.
 - Two more contexts open `/`, enter a name, and join. That is the whole of getting in.
 - A TV reload gives every phone a new identity under the same name, with nobody touching them.
-- Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round-trips a PNG; a blob is redrawn mid-game without losing its place; a blob that finishes is forgotten by the TV and its phone comes back as somebody new in a new colour; the room solves the simple task until the level rises and the world starts asking for a different one, which is played by driving into each other. That last one climbs the ladder for real rather than poking the model, so it takes about a minute — nothing in the e2e suite reaches past the UI to set up a world.
+- Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round-trips a PNG; a blob is redrawn mid-game without losing its place; a blob that finishes is forgotten by the TV and its phone comes back as somebody new in a new colour; the room solves the simple task until the level rises and the world starts asking for a different one, which is played by driving into each other. That one climbs the ladder for real rather than poking the model, so it takes about a minute, and nothing may replace it with a shortcut.
+
+  The tasks at the top of the ladder are covered too — sumo, and the crown taken by driving into whoever has it. Those unlock twelve and twenty-one solved tasks up, which is not a slow test but no test at all, so `askFor` in `e2e/world.ts` sets the level and puts tasks back until the director asks for the one wanted. It is the **only** thing in the suite that reaches past the UI, and everything after it is the real director, real joysticks and the real TV. Do not add a second such seam; do not use this one to skip the climb.
 - Uses Playwright's `webServer` option to start the built app. `pnpm test:e2e`. Not run on every `pnpm test` — it's slower and needs browsers installed.
 
 Conventions: `*.test.ts` next to the code. No mocking of `shared` — it's tiny and pure. No snapshot tests.
@@ -209,34 +211,46 @@ the QR code and reconnect handling with a Playwright suite, k3s, HTTPS at the
 edge, and the phone PWA. What they built is described by the code, the commit
 history and `k8s/README.md` — don't go looking for a plan document for any of it.
 
-What is left is milestone 10; milestone 11 is built and is described below
-rather than removed, because what it decided is worth keeping to hand.
+What is left is milestone 10. Milestone 11 is built and has no plan document
+either; its entry below is kept only for the rules it decided by, which the
+code obeys everywhere but states nowhere.
 
 10. Android TV app: minimal native Kotlin WebView wrapper in `/androidtv`, leanback launcher entry, loads the host page remotely so it updates itself. Not Capacitor, not a browser. Target device is a Fire TV Stick 4K Max (Fire OS 7, Android 9, API 28); nothing Fire-specific. Planned in [`docs/android-tv.md`](docs/android-tv.md).
 11. Objectives: something to actually do. Zones, then carryables; one task
     running at all times, procedurally parameterised and levelled up as the
     room gets good at them. Never rounds — no phone ever waits its turn.
-    Planned in [`docs/objectives.md`](docs/objectives.md).
-    **All of it is built.** Ten tasks, in `src/host/game/objectives/`, each a
-    file and a line in `registry.ts`: stand on the spot, hot potato, two to a
+    **All of it is built.** Twelve tasks, in `src/host/game/objectives/`, each
+    a file and a line in `registry.ts`: stand on the spot, hot potato, two to a
     pad, follow the lights, find your own pad, colour hunt, draw it, fetch,
-    sorting, and a crate too heavy for one. Underneath them: the seeded RNG,
-    zones and pads, carryables, the director and the ladder (`minLevel` gates
-    what a room may be asked for, and it never asks for the same thing twice
-    running), marks worn on a blob, the `brief` message with per-phone lines,
+    sorting, a crate too heavy for one, sumo, and keep the crown. Underneath
+    them: the seeded RNG, zones and pads, carryables, the director and the
+    ladder (`minLevel` gates what a room may be asked for, and it never asks
+    for the same thing twice running), marks worn on a blob, `barge` for the
+    one task that is about shoving, the `brief` message with per-phone lines,
     and the banner, timer, floor and score on the TV.
 
-    Two rules that hold across all of them and must keep holding: **a task can
-    only ever change what the world is asking for**, never what a phone offers
-    — drive, say, draw and finish are live in every task, for everybody,
-    throughout — and **a task is judged against whoever is present right now**,
-    so a child who wanders off never leaves the others with something they
-    cannot finish. `registry.test.ts` asserts what has to be true of every
-    task; adding the eleventh inherits it.
+    Five rules hold across all of them and must keep holding. The code obeys
+    them everywhere and says so nowhere, which is why they are here:
 
-    What is *not* built, deliberately: sumo, keep the crown, and any e2e for
-    the tasks above level 2 (the suite never reaches past the UI, so those
-    would have to be climbed to, at about a minute a rung).
+    - **A task can only ever change what the world is asking for**, never what
+      a phone offers. Drive, say, draw and finish are live in every task, for
+      everybody, throughout.
+    - **A task is judged against whoever is present right now**, so a child who
+      wanders off never leaves the others with something they cannot finish.
+    - **Nobody is ever eliminated**, and no task may put a child in a state
+      they cannot drive out of. Being shoved off the island is somewhere to
+      drive back from, not a punishment.
+    - **Failure barely exists.** Running out of time is not losing: the score
+      only ever goes up, the level never comes down, and the banner is
+      cheerful either way. The youngest player is three.
+    - **The TV is the primary signal**, so that heads are up. Telling one phone
+      something nobody else is told is a good trick and worth spending
+      sparingly — a task that can only be understood by looking down is played
+      with six bowed heads.
+
+    `registry.test.ts` asserts what has to be true of every task; adding the
+    thirteenth inherits it. The e2e for the two at the top of the ladder is
+    described under Testing.
 
 ## Phaser notes (host)
 

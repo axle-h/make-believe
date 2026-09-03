@@ -606,7 +606,11 @@ export class WorldScene extends Phaser.Scene {
 
 /** Enough of a zone to tell whether the floor needs redrawing. */
 function zoneSignature(zone: Zone): string {
-  const size = zone.shape === 'circle' ? zone.radius : `${zone.width}x${zone.height}`
+  // Rounded, like the position: a shrinking island changes its radius by a
+  // fraction of a pixel every frame, and redrawing the floor for a change
+  // nobody can see is a redraw for nothing.
+  const size =
+    zone.shape === 'circle' ? Math.round(zone.radius) : `${zone.width}x${zone.height}`
   // The dimming is in here because a chain of lights moves by nothing else
   // changing: leave it out and the floor never redraws as the light travels.
   const at = `${Math.round(zone.x)}:${Math.round(zone.y)}`

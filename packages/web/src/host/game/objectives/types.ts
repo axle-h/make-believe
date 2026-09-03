@@ -9,9 +9,11 @@ import type { FetchObjective } from './fetch.js'
 import type { FindYourColourObjective } from './findYourColour.js'
 import type { FollowTheChainObjective } from './followTheChain.js'
 import type { HotPotatoObjective } from './hotPotato.js'
+import type { KeepTheCrownObjective } from './keepTheCrown.js'
 import type { OnTheSpotObjective } from './onTheSpot.js'
 import type { PairsObjective } from './pairs.js'
 import type { SortingObjective } from './sorting.js'
+import type { SumoObjective } from './sumo.js'
 import type { TooHeavyObjective } from './tooHeavyForOne.js'
 
 /**
@@ -82,6 +84,8 @@ export type Objective =
   | FetchObjective
   | SortingObjective
   | TooHeavyObjective
+  | SumoObjective
+  | KeepTheCrownObjective
 
 export interface GenerateContext {
   /** Minted by the director, so ids are stable and predictable in a test. */

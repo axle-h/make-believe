@@ -105,6 +105,11 @@ declare global {
       worn: () => Record<string, string>
       /** The world the relay gave this TV. Nothing on screen ever shows it. */
       session: () => string
+      /**
+       * The live world. Nothing in this suite reads it — `snapshot()` is for
+       * that — and only `askFor` writes to it. See what that says about why.
+       */
+      state: { objectives: { level: number; current: unknown } }
     }
   }
 }
@@ -375,19 +380,26 @@ export async function solveTheSpot(host: Host, crowd: Player[], attempts = 8): P
   const before = (await snapshot(host)).objectives.score
   for (let attempt = 0; attempt < attempts; attempt++) {
     const spot = (await objectiveNow(host))?.zones[0]
-    if (spot) {
-      for (const [player, target] of await placesOn(host, spot, crowd)) {
-        const blob = await playerNamed(host, player.name)
-        if (Math.hypot(blob.x - target.x, blob.y - target.y) > 16) {
-          await driveTo(host, player, target, 16)
-        }
-      }
-    }
+    if (spot) await herdOnto(host, crowd, spot)
     // Standing still is the rest of it; the TV counts the hold.
     await host.page.waitForTimeout(2_000)
     if ((await snapshot(host)).objectives.score > before) return
   }
   throw new Error('the room never managed to stand on the spot together')
+}
+
+/**
+ * Drive every blob in the room onto one patch of floor, each to its own place
+ * on it so that arriving does not shove whoever got there first back off.
+ * Whoever is already standing where they are wanted is left alone.
+ */
+export async function herdOnto(host: Host, crowd: Player[], zone: ZoneSnapshot): Promise<void> {
+  for (const [player, target] of await placesOn(host, zone, crowd)) {
+    const blob = await playerNamed(host, player.name)
+    if (Math.hypot(blob.x - target.x, blob.y - target.y) > 16) {
+      await driveTo(host, player, target, 16)
+    }
+  }
 }
 
 /**
@@ -462,4 +474,53 @@ export async function joinAgainAs(player: Player, name: string): Promise<Player>
   const playerId = await playerIdNow(player.page)
   expect(playerId).toBeTruthy()
   return { ...player, playerId: playerId as string, name }
+}
+
+/**
+ * Ask the world for a particular task, at the level that unlocks it.
+ *
+ * This is the **only** thing in the suite that reaches past the UI, and it is
+ * here because the alternative is not a slower test but no test at all: sumo
+ * unlocks at level 5 and keep the crown at the top of the ladder, which is
+ * twelve and twenty-one solved tasks away, at up to a minute a rung and with a
+ * bespoke solver needed for every task in between.
+ *
+ * It sets the level and throws away whatever is running until the director
+ * makes the one wanted. That is the whole of it: the task itself is generated
+ * by the real director, solved through real joysticks, and judged by the real
+ * TV. Nothing here stands in for the ladder — that is climbed for real, three
+ * tasks at a time, in "the room levels up".
+ */
+export async function askFor(
+  host: Host,
+  kind: string,
+  level: number,
+  timeout = 60_000,
+): Promise<ObjectiveSnapshot> {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    await host.page.evaluate((wanted) => {
+      const game = window.__game
+      if (!game) throw new Error('the host page has no test seam')
+      game.state.objectives.level = wanted
+      // Hand back whatever is running, which is what the director itself does
+      // when a room empties out below what a task needs.
+      game.state.objectives.current = null
+    }, level)
+    const objective = await runningObjective(host, 15_000)
+    if (objective.kind === kind) return objective
+  }
+  throw new Error(`the world never got round to asking for ${kind}`)
+}
+
+/** Whether a blob is standing on a circular patch of floor, as the model judges it. */
+export function isOn(zone: ZoneSnapshot, blob: { x: number; y: number }): boolean {
+  return Math.hypot(blob.x - zone.x, blob.y - zone.y) <= (zone.radius ?? 0)
+}
+
+/** The zone a task has put down, freshly read: some of them move or shrink. */
+export async function zoneNow(host: Host, id: string): Promise<ZoneSnapshot> {
+  const zone = (await objectiveNow(host))?.zones.find((one) => one.id === id)
+  if (!zone) throw new Error(`no zone ${id} on the floor`)
+  return zone
 }
