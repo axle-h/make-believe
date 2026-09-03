@@ -89,12 +89,37 @@ export const FinishMessageSchema = z.object({
   playerId: PlayerIdSchema,
 })
 
+/**
+ * A grown-up reaching for the two functions the TV's `d` key already calls:
+ * put up any task, or put the ladder back to the start.
+ *
+ * The host grants the privilege and the phone never claims it — a command from
+ * a blob the host did not decide was the grown-up's is dropped, and the socket
+ * decides who is speaking rather than the payload. `kind` is a bounded string
+ * rather than an enum because `shared` knows nothing about objectives and must
+ * not start to: the host resolves it, and an unknown one does nothing.
+ */
+export const CommandMessageSchema = z.discriminatedUnion('command', [
+  z.object({
+    type: z.literal('command'),
+    playerId: PlayerIdSchema,
+    command: z.literal('task'),
+    kind: z.string().min(1).max(64),
+  }),
+  z.object({
+    type: z.literal('command'),
+    playerId: PlayerIdSchema,
+    command: z.literal('restart'),
+  }),
+])
+
 export const PlayerToHostMessageSchema = z.discriminatedUnion('type', [
   JoinMessageSchema,
   InputMessageSchema,
   DrawingMessageSchema,
   TextMessageSchema,
   FinishMessageSchema,
+  CommandMessageSchema,
 ])
 
 // --- host → player -------------------------------------------------------
@@ -150,6 +175,34 @@ export const PaletteMessageSchema = z.object({
 export const RefusedMessageSchema = z.object({
   type: z.literal('refused'),
   reason: z.enum(['colour', 'name', 'full']),
+})
+
+/**
+ * The grown-up's sheet, as the TV describes it: every task there is, whether
+ * this room is big enough for each, and where the ladder has got to.
+ *
+ * It is only ever sent to the one blob the host itself decided was the
+ * grown-up's, and a phone that never receives it builds nothing — the sheet
+ * does not exist in the markup, so there is nothing on any other phone to find.
+ *
+ * `playable` is exactly what `askFor` accepts, which is a headcount and not
+ * `suits`: a greyed row the host would have accepted, or a live row it refuses,
+ * is a menu that lies.
+ */
+export const GrownupMessageSchema = z.object({
+  type: z.literal('grownup'),
+  tasks: z
+    .array(
+      z.object({
+        kind: z.string().min(1).max(64),
+        title: z.string().min(1).max(64),
+        playable: z.boolean(),
+      }),
+    )
+    .max(64),
+  level: z.number().int().positive(),
+  maxLevel: z.number().int().positive(),
+  score: z.number().int().nonnegative(),
 })
 
 /**
@@ -216,6 +269,7 @@ export const HostToPlayerMessageSchema = z.discriminatedUnion('type', [
   AssignedMessageSchema,
   PaletteMessageSchema,
   RefusedMessageSchema,
+  GrownupMessageSchema,
   BriefMessageSchema,
   WaitingMessageSchema,
   SessionMessageSchema,
@@ -233,6 +287,7 @@ export const HostOutboundMessageSchema = z.discriminatedUnion('type', [
   AssignedMessageSchema.extend({ to: RecipientSchema }),
   PaletteMessageSchema.extend({ to: RecipientSchema }),
   RefusedMessageSchema.extend({ to: RecipientSchema }),
+  GrownupMessageSchema.extend({ to: RecipientSchema }),
   BriefMessageSchema.extend({ to: RecipientSchema }),
 ])
 
@@ -268,9 +323,12 @@ export const ServerToHostMessageSchema = z.discriminatedUnion('type', [
 ])
 
 /**
- * Everything the host *socket* can receive. `session` and `arrived` are kept
- * out of the union above on purpose: both are about connections rather than
- * about the world, and the game model must never have a case for either.
+ * Everything the host *socket* can receive. `session`, `arrived` and `command`
+ * are kept out of the union above on purpose. The first two are about
+ * connections rather than about the world; `command` is a grown-up reaching
+ * for `askFor` and `setLevel`, which `main.ts` calls directly, exactly as
+ * `debug.ts` does. None of the three is something the *world* hears, and
+ * `route()` in `apply.ts` switches exhaustively over what it does.
  */
 export const HostInboundMessageSchema = z.discriminatedUnion('type', [
   JoinMessageSchema,
@@ -278,6 +336,7 @@ export const HostInboundMessageSchema = z.discriminatedUnion('type', [
   DrawingMessageSchema,
   TextMessageSchema,
   FinishMessageSchema,
+  CommandMessageSchema,
   LeftMessageSchema,
   ArrivedMessageSchema,
   SessionMessageSchema,
@@ -299,6 +358,8 @@ export type PaletteEntry = PaletteMessage['colours'][number]
 export type RefusedMessage = z.infer<typeof RefusedMessageSchema>
 export type RefusedReason = RefusedMessage['reason']
 export type ArrivedMessage = z.infer<typeof ArrivedMessageSchema>
+export type GrownupMessage = z.infer<typeof GrownupMessageSchema>
+export type CommandMessage = z.infer<typeof CommandMessageSchema>
 export type BriefMessage = z.infer<typeof BriefMessageSchema>
 export type BriefTone = BriefMessage['tone']
 export type WaitingMessage = z.infer<typeof WaitingMessageSchema>

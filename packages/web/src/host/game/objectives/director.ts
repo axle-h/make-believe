@@ -317,6 +317,23 @@ export function setLevel(state: GameState, level: number): number {
   return state.objectives.level
 }
 
+/**
+ * Back to the beginning: level 1 and nothing scored. It is the other half of
+ * the grown-up's menu, and it is the only thing in the game that puts the
+ * ladder *down* — the room itself only ever climbs.
+ *
+ * The crown is not part of the ladder and stays where it is: it is a title
+ * somebody won, not a number this resets.
+ */
+export function restartLadder(state: GameState): void {
+  const director = state.objectives
+  director.level = 1
+  director.score = 0
+  director.streak = 0
+  director.pending = []
+  director.levelledUpTo = null
+}
+
 function run(state: GameState, objective: Objective, dtMs: number): void {
   const director = state.objectives
   const template = templateFor(objective.kind)

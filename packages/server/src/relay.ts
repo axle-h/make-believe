@@ -165,8 +165,10 @@ export function createRelay(mint: () => string = generateSessionCode): Relay {
     routeFromPlayer(playerId, message) {
       if (host === null) return false
       if (!players.has(playerId)) return false
-      // The socket, not the payload, decides who this came from.
-      const tagged: ServerToHostMessage = { ...message, playerId }
+      // The socket, not the payload, decides who this came from. That is what
+      // makes a grown-up's `command` safe: a phone cannot claim to be somebody
+      // else's `playerId`, because the tag is not the one it sent.
+      const tagged: HostInboundMessage = { ...message, playerId }
       host.send(tagged)
       return true
     },

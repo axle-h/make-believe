@@ -4,6 +4,7 @@ import {
   isValidSessionCode,
   splitHeadline,
   type BriefMessage,
+  type GrownupMessage,
   type HostToPlayerMessage,
   type PaletteEntry,
   type PlayerToHostMessage,
@@ -72,8 +73,11 @@ const SENT_MS = 1_500
 /** What colour the phone is before a TV has said which blob it is. */
 const DEFAULT_BLOB = '#4ea8ff'
 
-/** What is open over the joystick, if anything. */
-type Sheet = 'say' | 'draw' | 'menu' | 'quit'
+/**
+ * What is open over the joystick, if anything. `options` is only ever built on
+ * one phone in the room and does not exist in the markup — see `showOptions`.
+ */
+type Sheet = 'say' | 'draw' | 'menu' | 'quit' | 'options'
 
 const screens: Record<Screen, HTMLElement> = {
   join: requireElement<HTMLElement>('#screen-join'),
@@ -81,12 +85,16 @@ const screens: Record<Screen, HTMLElement> = {
   play: requireElement<HTMLElement>('#screen-play'),
 }
 
-const sheets: Record<Sheet, HTMLElement> = {
-  say: requireElement<HTMLElement>('#sheet-say'),
-  draw: requireElement<HTMLElement>('#sheet-draw'),
-  menu: requireElement<HTMLElement>('#sheet-menu'),
-  quit: requireElement<HTMLElement>('#sheet-quit'),
-}
+/**
+ * The things that can sit over the joystick. It is a map rather than a fixed
+ * record because one of them is built at runtime and only on one phone.
+ */
+const sheets = new Map<Sheet, HTMLElement>([
+  ['say', requireElement<HTMLElement>('#sheet-say')],
+  ['draw', requireElement<HTMLElement>('#sheet-draw')],
+  ['menu', requireElement<HTMLElement>('#sheet-menu')],
+  ['quit', requireElement<HTMLElement>('#sheet-quit')],
+])
 const joinForm = requireElement<HTMLFormElement>('#join-form')
 const joinColours = requireElement<HTMLElement>('#join-colours')
 const joinFull = requireElement<HTMLElement>('#join-full')
@@ -375,6 +383,13 @@ function applyMessage(message: HostToPlayerMessage): void {
     showBrief(message)
     return
   }
+  // The grown-up's sheet. It only ever arrives on one phone in the room, and
+  // building it is the whole of what this phone knows about it: it has no
+  // opinion about who gets one and never asks for it.
+  if (message.type === 'grownup') {
+    showOptions(message)
+    return
+  }
   if (message.type === 'assigned') {
     document.documentElement.style.setProperty('--blob', message.colour)
     blobColour = message.colour
@@ -536,14 +551,14 @@ requireElement<HTMLButtonElement>('#menu-quit').addEventListener('click', () => 
 function openSheet(which: Sheet): void {
   release()
   sheet = which
-  for (const [name, element] of Object.entries(sheets)) element.hidden = name !== which
+  for (const [name, element] of sheets) element.hidden = name !== which
   if (which === 'say') openKeyboard()
   if (which === 'draw') openSketch()
 }
 
 function closeSheet(): void {
   sheet = null
-  for (const element of Object.values(sheets)) element.hidden = true
+  for (const element of sheets.values()) element.hidden = true
 }
 
 // --- saying something ----------------------------------------------------
@@ -597,6 +612,127 @@ window.visualViewport?.addEventListener('resize', () => {
   if (document.activeElement !== textInput) return
   textInput.scrollIntoView({ block: 'center' })
 })
+
+// --- the sheet only one phone in the room has ----------------------------
+
+/**
+ * The grown-up's sheet: pick any task, or put the ladder back to the start.
+ *
+ * **Every part of it is built here, at runtime, and only when the TV sends
+ * one.** Nothing about it is in `index.html`, because every phone is served
+ * the same page and a sheet sitting in the markup is a sheet an older child
+ * finds by opening the page on a laptop. It is never rendered greyed or
+ * disabled on a phone that does not have it either: a disabled item is an
+ * advertisement.
+ *
+ * Nothing else about this phone changes. It drives, says things and draws like
+ * every other phone, and has one extra sheet.
+ */
+let optionsSheet: HTMLElement | null = null
+let optionsLadder: HTMLElement | null = null
+let optionsTasks: HTMLElement | null = null
+
+function showOptions(message: GrownupMessage): void {
+  const { tasks, list } = optionsSheet ? existingOptions() : buildOptions()
+  tasks.textContent = `Level ${message.level} of ${message.maxLevel} · ${message.score} points`
+  list.replaceChildren(
+    ...message.tasks.map((task) => {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'button button-quiet'
+      button.dataset.task = task.kind
+      button.textContent = task.title
+      // Exactly what the TV would accept: a room too small for a task is a
+      // task nobody in it could finish.
+      button.disabled = !task.playable
+      button.addEventListener('click', () => {
+        sendMessage({ type: 'command', playerId, command: 'task', kind: task.kind })
+        closeSheet()
+      })
+      return button
+    }),
+  )
+}
+
+function existingOptions(): { tasks: HTMLElement; list: HTMLElement } {
+  return { tasks: optionsLadder as HTMLElement, list: optionsTasks as HTMLElement }
+}
+
+/** The sheet itself, and the dull line in the menu that opens it. */
+function buildOptions(): { tasks: HTMLElement; list: HTMLElement } {
+  const sheetEl = document.createElement('div')
+  sheetEl.id = 'sheet-options'
+  sheetEl.className = 'sheet'
+  sheetEl.hidden = true
+
+  const head = document.createElement('header')
+  head.className = 'sheet-head'
+  const heading = document.createElement('h2')
+  heading.textContent = 'Options'
+  const close = document.createElement('button')
+  close.className = 'close'
+  close.type = 'button'
+  close.textContent = '✕'
+  close.setAttribute('aria-label', 'Back to the joystick')
+  close.addEventListener('click', closeSheet)
+  head.append(heading, close)
+
+  const ladder = document.createElement('p')
+  ladder.className = 'hint sheet-hint'
+  const list = document.createElement('div')
+  list.className = 'menu-items'
+  sheetEl.append(head, ladder, list, buildRestart())
+  document.body.append(sheetEl)
+
+  sheets.set('options', sheetEl)
+  optionsSheet = sheetEl
+  optionsLadder = ladder
+  optionsTasks = list
+
+  const item = document.createElement('button')
+  item.id = 'menu-options'
+  item.type = 'button'
+  item.className = 'button button-quiet'
+  item.textContent = 'Options'
+  item.addEventListener('click', () => openSheet('options'))
+  requireElement<HTMLElement>('#sheet-menu .menu-items').append(item)
+
+  return { tasks: ladder, list }
+}
+
+/**
+ * Back to level 1 with nothing scored. It asks first, exactly as Quit does,
+ * because it is the other thing on this phone that throws something away.
+ */
+function buildRestart(): HTMLElement {
+  const row = document.createElement('div')
+  row.className = 'sheet-buttons'
+  const ask = document.createElement('button')
+  ask.id = 'options-restart'
+  ask.type = 'button'
+  ask.className = 'button button-quiet'
+  ask.textContent = 'Start from the beginning'
+
+  const confirm = document.createElement('button')
+  confirm.id = 'options-restart-confirm'
+  confirm.type = 'button'
+  confirm.className = 'button'
+  confirm.textContent = 'Yes, start again'
+  confirm.hidden = true
+
+  ask.addEventListener('click', () => {
+    ask.hidden = true
+    confirm.hidden = false
+  })
+  confirm.addEventListener('click', () => {
+    sendMessage({ type: 'command', playerId, command: 'restart' })
+    confirm.hidden = true
+    ask.hidden = false
+    closeSheet()
+  })
+  row.append(ask, confirm)
+  return row
+}
 
 // --- quitting ------------------------------------------------------------
 

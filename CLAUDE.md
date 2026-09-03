@@ -19,8 +19,23 @@ anything and hands the phone back to the name screen. **The TV takes no input
 during play** — no remote, nothing to click. It is a window onto the world; the
 phones run it. The single exception is a debug menu hidden behind the `d` key
 (`src/host/debug.ts`), which lists every task so a grown-up can look at one out
-of order; it is not part of the game, no phone can reach it, and no other key
-on the TV does anything at all.
+of order; it is not part of the game, and no other key on the TV does anything
+at all.
+
+**A blob called Daddy gets that menu on its phone** (`src/host/game/grownup.ts`),
+which is the same two director functions reached from the sofa rather than from
+a keyboard nobody has plugged in. What the "no phone can reach it" rule was
+protecting is intact: the host still owns everything, the two functions do
+exactly what the director does to itself, **the host grants the privilege and
+the phone never claims it** — commands from a blob the host did not name Daddy
+are dropped, and the socket decides who is speaking rather than the payload.
+**It is a secret from the children, and the secret is the whole of the
+protection**: nothing in any UI, on any phone, on the TV, or in the page a
+phone is served may hint that it exists. The sheet is built at runtime when
+`grownup` arrives and is in no markup; it is never rendered greyed or disabled
+on a phone that does not have it, because a disabled item is an advertisement;
+the join screen behaves identically for every name; and the word `Daddy` lives
+in the **host** rather than in `shared`, so it never ships to a phone at all.
 Rounds may arrive one day with an actual game idea (milestone 11); until then
 nothing may put a phone into a mode or make it wait its turn.
 
@@ -106,6 +121,13 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 { type: 'input',   playerId: string, dx: number, dy: number }   // normalised -1..1, ~30/sec while touching, only on change
 { type: 'drawing', playerId: string, png: string }              // data:image/png;base64,... from canvas.toDataURL()
 { type: 'text',    playerId: string, value: string }            // cap ~60 chars
+{ type: 'command', playerId: string, command: 'task', kind: string }
+{ type: 'command', playerId: string, command: 'restart' }       // the grown-up's two buttons. Kept out of
+//                                                              // `ServerToHostMessageSchema` for the reason
+//                                                              // `session` is: that union is the game model's
+//                                                              // input type, and this is a grown-up reaching for
+//                                                              // `askFor` and `setLevel`, which `main.ts` calls
+//                                                              // directly, exactly as `debug.ts` does.
 { type: 'finish',  playerId: string }                           // "I'm done — forget me." The host deletes the
 //                                                              // blob outright, drawing and all; nothing is sent
 //                                                              // back. NOT `left`: a phone that has merely gone
@@ -128,6 +150,12 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 //                                                              // changes — an away blob keeps its colour, so
 //                                                              // only joining, quitting and being forgotten
 //                                                              // move it.
+{ type: 'grownup', tasks: [{ kind, title, playable }],
+  level: number, maxLevel: number, score: number }              // the grown-up's sheet, and only ever to the one
+//                                                              // blob the host decided was Daddy. `playable` is
+//                                                              // exactly `present >= minPlayers`, which is what
+//                                                              // `askFor` accepts — and deliberately not
+//                                                              // `suits`, or the menu would lie.
 { type: 'refused', reason: 'colour' | 'name' | 'full' }         // that hello was not granted, and why. Its own
 //                                                              // message rather than something the phone works
 //                                                              // out from a palette, because a palette to '*'
@@ -216,6 +244,7 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 - One browser context opens `/host/`. The session is read off the `window.__game` test hook when a test needs it; nothing on the TV shows it and no URL carries it.
 - Two more contexts open `/`, wait for the TV, type a name, tap a colour and join. That is the whole of getting in — and the join screen cannot be filled in before the TV answers, because the swatches *are* the palette it sent.
 - A TV reload gives every phone a new identity under the same name, with nobody touching them.
+- A phone that joins as Daddy opens the ☰ menu, finds one more line, picks sumo, and the TV is running sumo — alongside one that joins as somebody else and finds the menu holding nothing but Quit, with no trace of the sheet anywhere in its page.
 - Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round-trips a PNG; a blob is redrawn mid-game without losing its place; a blob that finishes is forgotten by the TV and its phone comes back as somebody new, choosing again; a colour somebody has is greyed on every other phone with their name on it, and a name somebody has is refused in as many words; the room solves the simple task until the level rises and the world starts asking for a different one, which is played by driving into each other. That one climbs the ladder for real rather than poking the model, so it takes about a minute, and nothing may replace it with a shortcut.
 
   The tasks at the top of the ladder are covered too — sumo, and the crown taken by driving into whoever has it. Those unlock twelve and twenty-one solved tasks up, which is not a slow test but no test at all, so `askFor` in `e2e/world.ts` sets the level and puts tasks back until the director asks for the one wanted. It is the **only** thing in the suite that reaches past the UI, and everything after it is the real director, real joysticks and the real TV. Do not add a second such seam; do not use this one to skip the climb.
@@ -332,6 +361,7 @@ code obeys everywhere but states nowhere.
 - Wake Lock API to stop phones sleeping (may be unavailable without HTTPS — degrade gracefully).
 - Mobile keyboards shift layout — test the Say sheet on a real phone early.
 - The player page is an installable PWA: `public/manifest.webmanifest`, `public/sw.js` (hand-written, ~60 lines, network-first, no Workbox and no build plugin), icons generated from `public/icons/blob.svg` by `scripts/icons.mjs` and committed. **Only the player page** — the host page links no manifest and the worker never touches `/host/`.
+- Over the joystick, on **one** phone in the room, the ☰ menu holds one dull extra line built at runtime when a `grownup` message arrives: pick any task, or start the ladder again (which asks first, exactly as Quit does). Nothing else about that phone changes — it drives, says things and draws like every other phone.
 - There are three screens: `waiting` (no TV yet), `join` (a name and a row of ten swatches) and `play`. The socket opens on load, before anybody has typed anything, because the join screen is made of the palette and only the TV knows it — so the order is waiting → join → play. A phone that has played before has its name and its colour in storage and gets in with one tap; a phone that is already in *this* world walks straight back into its blob without being asked anything, which is what makes a reload, a wifi blip and a TV coming back all non-events. There is no scan screen and no QR reader on the phone — the code in the URL was the only thing one was ever for.
 - **A blob cannot be renamed.** Over the joystick are Say, Draw and a **menu** (☰), and in the menu is **Quit**: quitting sends `finish` (the message keeps its name; the child reads "Quit"), and the phone then clears its name, its colour, its drawing and its `playerId` and goes back to the join screen, so starting again is a new blob picked from scratch rather than a new label on the old one. It is behind the menu because it is the one thing that undoes anything and no thumb should find it by accident. Nothing else on the phone ever throws anything away, and it asks before it does.
 - Which world it is in comes back on the socket, not from the page it was opened at. On a `session` that does not match the one in storage, the phone mints a fresh `playerId` and reconnects — the relay tags what a phone says with the id its *socket* arrived under, so a new identity has to arrive on a new socket. Its name and its last drawing are kept: only the identity was stale.

@@ -9,6 +9,10 @@ import {
   applyMessage,
   briefFor,
   createGame,
+  grownup,
+  grownupLadder,
+  grownupTasks,
+  obeyGrownup,
   palette,
   snapshot,
   type Brief,
@@ -104,6 +108,9 @@ function send(message: HostOutboundMessage): void {
  */
 function sendBriefs(briefs: Brief[]): void {
   for (const brief of briefs) send({ ...brief, type: 'brief' })
+  // A new task or a new level is exactly a brief that changed, so this is
+  // where the grown-up's sheet finds out about both.
+  refreshGrownup()
 }
 
 /**
@@ -142,6 +149,17 @@ function handleMessage(message: HostInboundMessage): void {
     session = message.session
     return
   }
+  // A grown-up reaching for the debug menu from the sofa. Also not something
+  // the world hears: it is the same two director functions the TV's `d` key
+  // calls, and `debug.ts` calls them exactly like this.
+  if (message.type === 'command') {
+    // The TV shows nothing at all: a task asked for from the sofa starts
+    // exactly as the director's own choice would, and a restart is visible
+    // only as the level and score being back where they started.
+    obeyGrownup(state, message)
+    refreshGrownup()
+    return
+  }
   // A socket with nobody on it yet. Also not something that happened in the
   // world — there is no blob to hear about — so the model never sees it either.
   if (message.type === 'arrived') {
@@ -155,6 +173,9 @@ function handleMessage(message: HostInboundMessage): void {
     send({ type: 'refused', reason: result.refused, to: result.playerId })
     return
   }
+  // Whatever just happened may have changed who is here, which changes what
+  // the grown-up's sheet may ask for.
+  refreshGrownup()
   if (result.kind === 'finished') {
     // A colour has come free, and somebody may be sitting on a join screen
     // waiting for exactly that.
@@ -175,11 +196,43 @@ function handleMessage(message: HostInboundMessage): void {
   if (brief) send({ ...brief, type: 'brief', to: player.playerId })
 }
 
+/**
+ * The grown-up's sheet, out to the one blob the host decided was Daddy — and
+ * to nobody else, ever. A phone that never receives this builds nothing, which
+ * is the whole of how the sheet stays a secret: it is not in the markup, so
+ * there is nothing on any other phone to find.
+ *
+ * It is re-sent when the roster changes, when the level changes and when a
+ * task starts, which is what the signature below is for: a sheet that says the
+ * room is too small for hot potato after a third child arrived is a sheet that
+ * lies.
+ */
+let grownupSaid = ''
+
+function refreshGrownup(): void {
+  const daddy = grownup(state)
+  if (!daddy) {
+    grownupSaid = ''
+    return
+  }
+  const tasks = grownupTasks(state)
+  const ladder = grownupLadder(state)
+  const saying = `${daddy.playerId} ${ladder.level} ${ladder.score} ${tasks
+    .map((task) => `${task.kind}:${task.playable}`)
+    .join(',')}`
+  if (saying === grownupSaid) return
+  grownupSaid = saying
+  send({ type: 'grownup', tasks, ...ladder, to: daddy.playerId })
+}
+
 const phaser = startPhaser(world, state, {
   onBriefs: sendBriefs,
   // A blob the world has waited long enough for is gone, and its colour with
   // it. Anybody on a join screen should see that swatch go live.
-  onForgotten: () => sendPalette('*'),
+  onForgotten: () => {
+    sendPalette('*')
+    refreshGrownup()
+  },
 })
 
 /**

@@ -3,9 +3,11 @@ import { MAX_NAME_LENGTH } from './blobName.js'
 import {
   ArrivedMessageSchema,
   AssignedMessageSchema,
+  CommandMessageSchema,
   BriefMessageSchema,
   DrawingMessageSchema,
   FinishMessageSchema,
+  GrownupMessageSchema,
   HostInboundMessageSchema,
   HostOutboundMessageSchema,
   HostToPlayerMessageSchema,
@@ -130,6 +132,97 @@ describe('refused', () => {
     expect(
       HostOutboundMessageSchema.safeParse({ type: 'refused', reason: 'name', to: 'p1' }).success,
     ).toBe(true)
+  })
+})
+
+/**
+ * A grown-up reaching for the two functions the TV's `d` key already calls.
+ * The host grants the privilege and the phone never claims it, so all this
+ * has to do is be a well-formed thing to ask for.
+ */
+describe('command', () => {
+  it('asks for a task by name, or for the ladder to start again', () => {
+    expect(
+      CommandMessageSchema.safeParse({
+        type: 'command',
+        playerId: 'p1',
+        command: 'task',
+        kind: 'sumo',
+      }).success,
+    ).toBe(true)
+    expect(
+      CommandMessageSchema.safeParse({ type: 'command', playerId: 'p1', command: 'restart' })
+        .success,
+    ).toBe(true)
+  })
+
+  /** `shared` knows nothing about objectives: the host resolves the kind. */
+  it('takes any bounded string as a kind, and refuses an unbounded one', () => {
+    const kind = 'x'.repeat(65)
+    expect(
+      CommandMessageSchema.safeParse({ type: 'command', playerId: 'p1', command: 'task', kind })
+        .success,
+    ).toBe(false)
+    expect(
+      CommandMessageSchema.safeParse({ type: 'command', playerId: 'p1', command: 'task' }).success,
+    ).toBe(false)
+    expect(
+      CommandMessageSchema.safeParse({ type: 'command', playerId: 'p1', command: 'explode' })
+        .success,
+    ).toBe(false)
+  })
+
+  /**
+   * It is something a phone may say and something the TV socket receives —
+   * and deliberately *not* something the world hears: `route()` in `apply.ts`
+   * switches exhaustively over what the model acts on, and this is a grown-up
+   * reaching for the director rather than a thing that happened in the world.
+   */
+  it('is in both unions that carry it, and in neither that must not', () => {
+    const message = { type: 'command', playerId: 'p1', command: 'restart' }
+    expect(PlayerToHostMessageSchema.safeParse(message).success).toBe(true)
+    expect(HostInboundMessageSchema.safeParse(message).success).toBe(true)
+    expect(ServerToHostMessageSchema.safeParse(message).success).toBe(false)
+  })
+})
+
+/**
+ * The grown-up's sheet, as the TV describes it. It is only ever sent to one
+ * blob, and a phone that never receives it builds nothing.
+ */
+describe('grownup', () => {
+  const sheet = {
+    type: 'grownup',
+    tasks: [
+      { kind: 'onTheSpot', title: 'Stand on the spot', playable: true },
+      { kind: 'sumo', title: 'Sumo', playable: false },
+    ],
+    level: 3,
+    maxLevel: 8,
+    score: 120,
+  }
+
+  it('carries every task, whether the room can play it, and the ladder', () => {
+    expect(GrownupMessageSchema.safeParse(sheet).success).toBe(true)
+  })
+
+  it('rejects a row that does not say whether it can be played', () => {
+    expect(
+      GrownupMessageSchema.safeParse({
+        ...sheet,
+        tasks: [{ kind: 'sumo', title: 'Sumo' }],
+      }).success,
+    ).toBe(false)
+  })
+
+  it('rejects a ladder that starts below one, because there is no level 0', () => {
+    expect(GrownupMessageSchema.safeParse({ ...sheet, level: 0 }).success).toBe(false)
+    expect(GrownupMessageSchema.safeParse({ ...sheet, score: -1 }).success).toBe(false)
+  })
+
+  it('is something a phone can be sent, and something the host can send', () => {
+    expect(HostToPlayerMessageSchema.safeParse(sheet).success).toBe(true)
+    expect(HostOutboundMessageSchema.safeParse({ ...sheet, to: 'p1' }).success).toBe(true)
   })
 })
 

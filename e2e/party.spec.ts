@@ -220,6 +220,71 @@ test.describe('a party', () => {
   })
 
   /**
+   * The grown-up's sheet. A blob called Daddy gets the debug menu on its
+   * phone; every other phone is served the same page and has no trace of it
+   * anywhere, because none of it exists until the TV sends one.
+   *
+   * It is a living-room secret rather than a boundary — anybody who knows the
+   * name can take the controls — so what this checks is that nothing in front
+   * of a child points at it.
+   */
+  test('a grown-up can pick a task from the sofa, and nobody else can find it', async ({
+    party,
+  }) => {
+    test.setTimeout(120_000)
+    const host = await party.openHost()
+    const wilf = await party.joinAs('Wilf')
+    const daddy = await party.joinAs('Daddy')
+
+    // Nothing about the other phone's menu changed: one item, and it is Quit.
+    await openTool(wilf, 'menu')
+    await expect(wilf.page.locator('#sheet-menu .menu-items button')).toHaveCount(1)
+    await expect(wilf.page.locator('#menu-quit')).toBeVisible()
+    // Not hidden, not greyed — not there. A disabled item is an advertisement.
+    await expect(wilf.page.locator('#sheet-options')).toHaveCount(0)
+    await expect(wilf.page.locator('#menu-options')).toHaveCount(0)
+    expect(await wilf.page.content()).not.toContain('Start from the beginning')
+    await wilf.page.click('#menu-close')
+
+    // And on the grown-up's phone, the same menu holds one more thing.
+    await openTool(daddy, 'menu')
+    await daddy.page.click('#menu-options')
+    await expect(daddy.page.locator('#sheet-options')).toBeVisible()
+
+    // Sumo is twelve solved tasks up the ladder. From here it is one tap.
+    await daddy.page.click('#sheet-options button[data-task="sumo"]')
+    await expect.poll(async () => (await runningObjective(host)).kind).toBe('sumo')
+    // The TV said nothing about where it came from: it started exactly as the
+    // director's own choice would have, and the phone went back to its
+    // joystick rather than into a mode.
+    await expect(daddy.page.locator('#pad')).toBeVisible()
+
+    // The other half of the sheet puts the ladder back, and asks first. Earn
+    // something to put back, first: the room solves the standing task.
+    await openTool(daddy, 'menu')
+    await daddy.page.click('#menu-options')
+    await daddy.page.click('#sheet-options button[data-task="onTheSpot"]')
+    await expect.poll(async () => (await runningObjective(host)).kind).toBe('onTheSpot')
+    await solveTheSpot(host, [wilf, daddy])
+    expect((await snapshot(host)).objectives.score).toBeGreaterThan(0)
+
+    await openTool(daddy, 'menu')
+    await daddy.page.click('#menu-options')
+    await daddy.page.click('#options-restart')
+    await expect(daddy.page.locator('#options-restart-confirm')).toBeVisible()
+    await daddy.page.click('#options-restart-confirm')
+
+    await expect.poll(async () => (await snapshot(host)).objectives.score).toBe(0)
+    expect((await snapshot(host)).objectives.level).toBe(1)
+
+    // It plays the game like everybody else, sheet or no sheet.
+    const before = await playerNamed(host, 'Daddy')
+    const away = before.y < (await snapshot(host)).world.height / 2 ? 1 : -1
+    await pushJoystick(daddy, { dx: 0, dy: away }, 400)
+    expect(Math.abs((await playerNamed(host, 'Daddy')).y - before.y)).toBeGreaterThan(20)
+  })
+
+  /**
    * The whole of getting in. A phone that has never been here opens the
    * address and is asked two things — a name and a colour — and there is no
    * code to carry over from the TV, so nothing for an installed phone to scan.
@@ -299,7 +364,7 @@ test.describe('a party', () => {
     // Another name and the same phone walks in.
     await pickAndJoin(phone, 'Ida')
     await expect
-      .poll(async () => (await snapshot(host)).players.map((player) => player.name).sort())
+      .poll(async () => (await snapshot(host)).players.map((player) => player.name).toSorted())
       .toEqual(['Ida', 'Ivy'])
   })
 

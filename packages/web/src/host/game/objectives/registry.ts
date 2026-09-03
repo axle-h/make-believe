@@ -42,6 +42,16 @@ export function templateFor(kind: Objective['kind']): ObjectiveTemplate<Objectiv
 }
 
 /**
+ * The same lookup for a string that arrived off the wire, where an unknown
+ * kind is a thing to shrug at rather than to throw over. `shared` knows nothing
+ * about objectives and must not start to, so a grown-up's phone sends a plain
+ * string and this is what turns it back into a task.
+ */
+export function findTemplate(kind: string): ObjectiveTemplate<Objective> | null {
+  return TEMPLATES.find((candidate) => candidate.kind === kind) ?? null
+}
+
+/**
  * The tasks that appear for the first time at this level — usually one, twice
  * two, and nothing at all at the levels that only make the old ones harder.
  *
