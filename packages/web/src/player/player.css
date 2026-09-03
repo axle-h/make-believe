@@ -294,8 +294,18 @@ h1 {
 }
 
 /*
- * Saying something, drawing and finishing are overlays rather than screens: the
- * joystick is never more than one tap away, because nothing takes turns.
+ * The menu is not a tool and does not want a tool's width: Say and Draw keep
+ * the thumb-sized halves, and everything else sits in a square beside them.
+ */
+.tool-menu {
+  flex: 0 0 3.4rem;
+  font-size: 1.3rem;
+}
+
+/*
+ * Saying something, drawing, the menu and quitting are overlays rather than
+ * screens: the joystick is never more than one tap away, because nothing takes
+ * turns.
  */
 .sheet {
   position: fixed;
@@ -342,6 +352,15 @@ h1 {
 .sheet-buttons {
   display: flex;
   gap: 0.75rem;
+}
+
+/* One thing per row, each as wide as the sheet, so nothing is a small target. */
+.menu-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 22rem;
 }
 
 /* A sheet that explains itself rather than handing over a tool. */

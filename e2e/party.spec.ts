@@ -383,7 +383,7 @@ test.describe('an objective', () => {
     await expect(wilf.page.locator('#brief-headline')).toHaveText(objective.headline)
     await expect(ida.page.locator('#brief-headline')).toHaveText(objective.headline)
     await expect(wilf.page.locator('#pad')).toBeVisible()
-    for (const tool of ['say', 'draw', 'finish']) {
+    for (const tool of ['say', 'draw', 'menu']) {
       // oxlint-disable-next-line no-await-in-loop
       await expect(wilf.page.locator(`#tool-${tool}`)).toBeEnabled()
     }
@@ -474,7 +474,7 @@ test.describe('an objective', () => {
 
     // Being chased takes nothing away from anybody.
     await expect(chased.page.locator('#pad')).toBeVisible()
-    for (const tool of ['say', 'draw', 'finish']) {
+    for (const tool of ['say', 'draw', 'menu']) {
       // oxlint-disable-next-line no-await-in-loop
       await expect(chased.page.locator(`#tool-${tool}`)).toBeEnabled()
     }
@@ -553,7 +553,7 @@ test.describe('an objective', () => {
 
     // Being shoved about takes nothing away from anybody.
     await expect(ida.page.locator('#pad')).toBeVisible()
-    for (const tool of ['say', 'draw', 'finish']) {
+    for (const tool of ['say', 'draw', 'menu']) {
       // oxlint-disable-next-line no-await-in-loop
       await expect(ida.page.locator(`#tool-${tool}`)).toBeEnabled()
     }
@@ -657,7 +657,7 @@ test.describe('an objective', () => {
 
     // Being chased takes nothing away from anybody.
     await expect(wearer.page.locator('#pad')).toBeVisible()
-    for (const tool of ['say', 'draw', 'finish']) {
+    for (const tool of ['say', 'draw', 'menu']) {
       // oxlint-disable-next-line no-await-in-loop
       await expect(wearer.page.locator(`#tool-${tool}`)).toBeEnabled()
     }

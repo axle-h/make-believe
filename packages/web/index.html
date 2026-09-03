@@ -54,8 +54,10 @@
 
       <!--
         The controller. The joystick is the whole point of it, so it gets the
-        middle of the screen; saying something, redrawing your blob and
-        finishing with it are always one tap away along the bottom.
+        middle of the screen; saying something and redrawing your blob are
+        always one tap away along the bottom. Quitting is the one thing that
+        undoes anything, so it lives behind the menu beside them rather than
+        under a thumb that is already down there driving.
       -->
       <section id="screen-play" class="screen screen-play" hidden>
         <p id="play-name" class="play-name">Blob</p>
@@ -78,7 +80,14 @@
         <nav class="tools" aria-label="What else your blob can do">
           <button id="tool-say" class="tool" type="button">Say</button>
           <button id="tool-draw" class="tool" type="button">Draw</button>
-          <button id="tool-finish" class="tool" type="button">Finish</button>
+          <button
+            id="tool-menu"
+            class="tool tool-menu"
+            type="button"
+            aria-label="More"
+          >
+            ☰
+          </button>
         </nav>
       </section>
     </main>
@@ -123,21 +132,35 @@
     </div>
 
     <!--
-      Finishing is the only thing on the phone that undoes anything, so it says
+      Everything that is not a tool. There is one thing in it today; it is a
+      list so that the next one costs nothing.
+    -->
+    <div id="sheet-menu" class="sheet" hidden>
+      <header class="sheet-head">
+        <h2>Menu</h2>
+        <button id="menu-close" class="close" type="button" aria-label="Back to the joystick">✕</button>
+      </header>
+      <div class="menu-items">
+        <button id="menu-quit" class="button button-quiet" type="button">Quit</button>
+      </div>
+    </div>
+
+    <!--
+      Quitting is the only thing on the phone that undoes anything, so it says
       plainly what goes and gives an equally easy way back to the joystick.
     -->
-    <div id="sheet-finish" class="sheet" hidden>
+    <div id="sheet-quit" class="sheet" hidden>
       <header class="sheet-head">
-        <h2>Finished playing?</h2>
-        <button id="finish-close" class="close" type="button" aria-label="Back to the joystick">✕</button>
+        <h2>Quit playing?</h2>
+        <button id="quit-close" class="close" type="button" aria-label="Back to the joystick">✕</button>
       </header>
       <p class="hint sheet-hint">
         Your blob goes for good: its name, its picture and where it was
         standing. Then you can start again with a new name and a new colour.
       </p>
       <div class="sheet-buttons">
-        <button id="finish-cancel" class="button button-quiet" type="button">Keep playing</button>
-        <button id="finish-confirm" class="button" type="button">Finish</button>
+        <button id="quit-cancel" class="button button-quiet" type="button">Keep playing</button>
+        <button id="quit-confirm" class="button" type="button">Quit</button>
       </div>
     </div>
 

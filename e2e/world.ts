@@ -446,19 +446,21 @@ async function placesOn(
  * Open one of the tools over the joystick. They are always there — the TV has
  * no say in what a phone is doing.
  */
-export async function openTool(player: Player, tool: 'say' | 'draw' | 'finish'): Promise<void> {
+export async function openTool(player: Player, tool: 'say' | 'draw' | 'menu'): Promise<void> {
   await player.page.click(`#tool-${tool}`)
   await expect(player.page.locator(`#sheet-${tool}`)).toBeVisible()
 }
 
 /**
- * Finish with a blob, as a child who has had enough does: the tool, and then
- * the button that says so. The phone is back on the join screen afterwards,
- * holding nothing it held before.
+ * Finish with a blob, as a child who has had enough does: the menu, Quit, and
+ * then the button that confirms it. The phone is back on the join screen
+ * afterwards, holding nothing it held before.
  */
 export async function finishPlaying(player: Player): Promise<void> {
-  await openTool(player, 'finish')
-  await player.page.click('#finish-confirm')
+  await openTool(player, 'menu')
+  await player.page.click('#menu-quit')
+  await expect(player.page.locator('#sheet-quit')).toBeVisible()
+  await player.page.click('#quit-confirm')
   await expect(player.page.locator('#screen-join')).toBeVisible()
 }
 

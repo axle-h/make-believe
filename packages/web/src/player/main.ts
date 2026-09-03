@@ -26,7 +26,7 @@ import './player.css'
  * tells it. No game state lives here.
  *
  * Everything a blob can do is available the whole time — drive, say something,
- * redraw itself, or finish with it and start again as somebody new. There are
+ * redraw itself, or quit and start again as somebody new. There are
  * no rounds and the TV never tells a phone to switch to anything.
  */
 
@@ -57,7 +57,7 @@ const SENT_MS = 1_500
 const DEFAULT_BLOB = '#4ea8ff'
 
 /** What is open over the joystick, if anything. */
-type Sheet = 'say' | 'draw' | 'finish'
+type Sheet = 'say' | 'draw' | 'menu' | 'quit'
 
 const screens: Record<Screen, HTMLElement> = {
   join: requireElement<HTMLElement>('#screen-join'),
@@ -68,7 +68,8 @@ const screens: Record<Screen, HTMLElement> = {
 const sheets: Record<Sheet, HTMLElement> = {
   say: requireElement<HTMLElement>('#sheet-say'),
   draw: requireElement<HTMLElement>('#sheet-draw'),
-  finish: requireElement<HTMLElement>('#sheet-finish'),
+  menu: requireElement<HTMLElement>('#sheet-menu'),
+  quit: requireElement<HTMLElement>('#sheet-quit'),
 }
 const joinForm = requireElement<HTMLFormElement>('#join-form')
 const nameInput = requireElement<HTMLInputElement>('#name-input')
@@ -91,7 +92,7 @@ const drawCrayons = requireElement<HTMLElement>('#draw-crayons')
 const drawClear = requireElement<HTMLButtonElement>('#draw-clear')
 const drawDone = requireElement<HTMLButtonElement>('#draw-done')
 const drawStatus = requireElement<HTMLElement>('#draw-status')
-const finishConfirm = requireElement<HTMLButtonElement>('#finish-confirm')
+const quitConfirm = requireElement<HTMLButtonElement>('#quit-confirm')
 const linkStatus = requireElement<HTMLElement>('#link-status')
 
 function requireElement<T extends Element>(selector: string): T {
@@ -379,14 +380,17 @@ function showScreen(which: Screen): void {
 for (const [name, button] of [
   ['say', requireElement<HTMLButtonElement>('#tool-say')],
   ['draw', requireElement<HTMLButtonElement>('#tool-draw')],
-  ['finish', requireElement<HTMLButtonElement>('#tool-finish')],
+  ['menu', requireElement<HTMLButtonElement>('#tool-menu')],
 ] as const) {
   button.addEventListener('click', () => openSheet(name))
 }
 
-for (const selector of ['#say-close', '#draw-close', '#finish-close', '#finish-cancel']) {
+for (const selector of ['#say-close', '#draw-close', '#menu-close', '#quit-close', '#quit-cancel']) {
   requireElement<HTMLButtonElement>(selector).addEventListener('click', closeSheet)
 }
+
+// The menu holds the one thing that is not a tool, and asks before it does it.
+requireElement<HTMLButtonElement>('#menu-quit').addEventListener('click', () => openSheet('quit'))
 
 /**
  * Put a tool over the joystick. The blob stops first: a thumb that leaves the
@@ -457,7 +461,7 @@ window.visualViewport?.addEventListener('resize', () => {
   textInput.scrollIntoView({ block: 'center' })
 })
 
-// --- finishing with a blob -----------------------------------------------
+// --- quitting ------------------------------------------------------------
 
 /**
  * Done with this blob. The TV is asked to forget it outright — the blob, the
@@ -468,8 +472,10 @@ window.visualViewport?.addEventListener('resize', () => {
  * There is no answer to wait for. What the phone knows about itself is thrown
  * away either way, and if the message never lands the blob is left standing
  * about like any other phone that walked out of wifi range.
+ *
+ * The child reads this as "Quit"; on the wire it is still `finish`.
  */
-finishConfirm.addEventListener('click', () => {
+quitConfirm.addEventListener('click', () => {
   // Whoever was driving lets go first, or the blob is left running across the
   // TV for the moment before the world forgets it.
   release()
@@ -480,7 +486,7 @@ finishConfirm.addEventListener('click', () => {
   askForName()
 })
 
-/** Throw away everything this phone knew about the blob it has just finished. */
+/** Throw away everything this phone knew about the blob it has just quit. */
 function startOver(): void {
   playerId = createPlayerId()
   store(PLAYER_ID_KEY, playerId)
