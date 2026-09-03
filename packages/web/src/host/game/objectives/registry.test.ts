@@ -1,11 +1,11 @@
 import { MAX_DETAIL_LENGTH, MAX_HEADLINE_LENGTH } from '@make-believe/shared'
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from '../apply.js'
-import { BLOB_SIZE, MAX_LEVEL } from '../constants.js'
+import { BLOB_SIZE, MAX_LEVEL, PALETTE } from '../constants.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
-import { contains } from '../zones.js'
+import { contains, radiusFor } from '../zones.js'
 import { eligibleTemplates, templateFor, TEMPLATES, unlockedAt } from './registry.js'
 import type { ObjectiveTemplate } from './types.js'
 
@@ -22,6 +22,13 @@ function room(count: number, seed = 1): GameState {
   }
   return state
 }
+
+/**
+ * The tasks whose pads are meant to hold the whole room at once. Everything
+ * else puts down pads for a couple, or somewhere to bring a parcel, and is not
+ * being asked to fit six blobs inside one circle.
+ */
+const GATHERS_EVERYBODY = new Set<string>(['followTheChain'])
 
 function generate(template: ObjectiveTemplate, state: GameState, level: number, seed: number) {
   return template.generate({
@@ -146,6 +153,31 @@ describe('every task, at every level, in every size of room', () => {
             expect(new Set(objective.carryables.map((thing) => thing.id)).size).toBe(
               objective.carryables.length,
             )
+          }
+        }
+      })
+
+      /**
+       * The tasks that want the whole room standing on one pad at once have to
+       * put down a pad the whole room fits on. A pad is clamped to its own
+       * square of floor so that two of them never overlap, and that clamp used
+       * to win silently: six blobs were sent to gather on a pad with room for
+       * three, which is not a hard task but an impossible one.
+       *
+       * A task that gathers everybody onto a pad adds its kind to the list.
+       */
+      it('puts down a pad the whole room fits on, where the room is asked onto one', () => {
+        if (!GATHERS_EVERYBODY.has(template.kind)) return
+        for (let level = 1; level <= MAX_LEVEL; level++) {
+          for (let present = template.minPlayers; present <= PALETTE.length; present++) {
+            for (let seed = 0; seed < 6; seed++) {
+              const state = room(present, seed)
+              const objective = generate(template, state, level, seed)
+              for (const zone of objective.zones) {
+                if (zone.shape !== 'circle') continue
+                expect(zone.radius).toBeGreaterThanOrEqual(radiusFor(present, 1))
+              }
+            }
           }
         }
       })

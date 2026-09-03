@@ -51,10 +51,13 @@ export const pairs: ObjectiveTemplate<PairsObjective> = {
 
   generate(context: GenerateContext): PairsObjective {
     const hard = difficulty(context.level, MAX_LEVEL)
-    // One pad per couple, exactly. There is no cap: a room of ten gets five,
-    // because a capped count is a sum the room cannot make come out.
+    // One pad per couple, exactly — `makePads` may not trade one away for
+    // room, and there is no cap either: a room of ten gets five, because a
+    // capped count is a sum the room cannot make come out.
     const count = Math.max(1, Math.floor(context.players.length / 2))
-    const zones = makePads(context, count, 2, scale(ROOMINESS.easy, ROOMINESS.hard, hard))
+    const zones = makePads(context, count, 2, scale(ROOMINESS.easy, ROOMINESS.hard, hard), {
+      exactly: true,
+    })
     // Dim until it has its two, so how far along the room is can be read off
     // the floor without anybody counting anything.
     for (const zone of zones) zone.dim = true

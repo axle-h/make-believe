@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { WORLD_HEIGHT, WORLD_WIDTH, ZONE_COLOURS } from '../constants.js'
+import { radiusFor } from '../zones.js'
 import { createRng } from '../rng.js'
 import { colourOfPad, makePads, nameOfColour, MAX_NAMED_PADS } from './pads.js'
 import type { GenerateContext } from './types.js'
@@ -73,11 +74,40 @@ describe('making pads', () => {
     expect(squashed?.radius).toBeLessThan(two?.radius ?? 0)
   })
 
+  /**
+   * A pad nobody can all stand on is worse than a pad fewer. Six blobs sent to
+   * gather on a pad they cannot fit inside is not a hard task, it is an
+   * impossible one — which is how following the lights came back from the
+   * second play test.
+   */
+  it('lays out fewer pads rather than shrinking one below its crowd', () => {
+    const roomy = makePads(context(), 4, 8, 1.7)
+
+    expect(roomy.length).toBeLessThan(4)
+    for (const pad of roomy) expect(pad.radius).toBeGreaterThanOrEqual(radiusFor(8, 1))
+  })
+
+  it('gives up the count only as far as it has to', () => {
+    // Two pads for two blobs each fit on the floor several times over.
+    expect(makePads(context(), 4, 2, 1.2)).toHaveLength(4)
+  })
+
   /** However many blobs a pad is meant to hold, it has to fit on the floor. */
-  it('will not make a pad bigger than its own share of the floor', () => {
+  it('keeps a single pad inside the world however big the crowd', () => {
     const [huge] = makePads(context(), 4, 40, 3)
 
-    expect(huge?.radius).toBeLessThan(WORLD_WIDTH / 4 / 2)
+    expect(huge?.radius).toBeLessThanOrEqual(WORLD_HEIGHT / 2)
+  })
+
+  /**
+   * A task whose count means something takes the squash instead — pairs lays
+   * out one pad per couple, and a pad fewer is a sum that cannot come out.
+   */
+  it('keeps an exact count, and shrinks the pads to do it', () => {
+    const pads = makePads(context(), 4, 8, 1.7, { exactly: true })
+
+    expect(pads).toHaveLength(4)
+    for (const pad of pads) expect(pad.radius).toBeLessThan(radiusFor(8, 1.7))
   })
 
   it('gives every pad a name that can be read out loud', () => {

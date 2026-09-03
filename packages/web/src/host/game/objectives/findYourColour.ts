@@ -63,12 +63,14 @@ export const findYourColour: ObjectiveTemplate<FindYourColourObjective> = {
     // does not reshuffle itself between one go and the next. Two of the same
     // colour get one pad between them, which is a squeeze rather than a bug.
     const colours = coloursPresent(context.players)
+    // One pad per colour, exactly: a pad traded away for room would be a
+    // child sent to look for a pad that is not on the floor.
     const zones = makePads(
       context,
       colours.length,
       sharing(context.players, colours),
       scale(ROOMINESS.easy, ROOMINESS.hard, hard),
-      colours,
+      { colours, exactly: true },
     )
     const totalMs = Math.round(scale(TIME_LIMIT.easy, TIME_LIMIT.hard, hard))
 

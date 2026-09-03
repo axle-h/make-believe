@@ -20,27 +20,56 @@ import type { GenerateContext } from './types.js'
 /** How many pads can be told apart by colour alone. */
 export const MAX_NAMED_PADS = ZONE_COLOURS.length
 
+export interface PadOptions {
+  /**
+   * Colours for the pads, in order, for a task that identifies a pad by
+   * something other than the floor palette.
+   */
+  colours?: readonly string[]
+  /**
+   * This many pads or nothing: the count means something to the task and may
+   * not be traded away for room. Pairs lays out one pad per couple, so a pad
+   * fewer is a sum the room cannot make come out.
+   */
+  exactly?: boolean
+  /**
+   * The fewest that are still worth having, for a task that can give some of
+   * its pads up but not all of them: a chain of lights with one pad has
+   * nowhere to send anybody.
+   */
+  least?: number
+}
+
 /**
  * A handful of pads, placed clear of each other and wholly inside the world.
  * `capacity` is how many blobs one pad is meant to hold, and `roominess` how
  * much elbow room they get doing it — under 1 they have to shove.
+ *
+ * **The capacity comes first.** Every pad has to stay inside its own square of
+ * floor, or two of them overlap and "which pad are you on?" stops having an
+ * answer — so when the room a capacity asks for will not fit that square, this
+ * lays out *fewer* pads rather than shrinking them. A pad nobody can all stand
+ * on is worse than a pad fewer: six blobs told to gather on a pad they cannot
+ * all fit inside is not a hard task, it is an impossible one, and that is how
+ * following the lights came back from the second play test.
  */
 export function makePads(
   context: GenerateContext,
   count: number,
   capacity: number,
   roominess: number,
-  colours?: readonly string[],
+  options: PadOptions = {},
 ): CircleZone[] {
   const { rng } = context
-  const cell = cellsAcross(context.world, count)
-  // A little jiggle either way, so two goes at the same level are not twins —
-  // but never bigger than its own square of floor, because pads that overlap
-  // make "which pad are you on?" unanswerable, and that is the whole game.
+  // A little jiggle either way, so two goes at the same level are not twins.
   const wanted = radiusFor(capacity, roominess * range(rng, 0.94, 1.06))
+  const least = options.exactly === true ? count : Math.min(count, options.least ?? 1)
+  const laid = fitting(context.world, count, wanted, least)
+  const cell = cellsAcross(context.world, laid)
+  // A task that insists on its count takes the squash; nothing else has to.
   const radius = Math.min(wanted, (Math.min(cell.width, cell.height) / 2) * FILL)
 
-  const squares = shuffled(rng, count)
+  const squares = shuffled(rng, laid)
   return squares.map((square, index) => {
     const spot = somewhereIn(rng, context.world, cell, square, radius)
     return {
@@ -52,7 +81,7 @@ export function makePads(
       // A task that identifies a pad by something other than the pad palette —
       // find your own pad colours them like the blobs — says so; everything
       // else takes the floor colours, which are chosen not to be blobs.
-      colour: colours?.[index] ?? colourOfPad(index),
+      colour: options.colours?.[index] ?? colourOfPad(index),
     }
   })
 }
@@ -78,6 +107,19 @@ export function nameOfColour(hex: string): string {
 
 /** How much of its square of floor a pad may fill, leaving a lane between them. */
 const FILL = 0.8
+
+/**
+ * The most pads, up to the number asked for, whose own squares of floor are
+ * big enough for a pad of the size wanted — and never fewer than `least`,
+ * which is where a task says how much of its count it cannot do without.
+ */
+function fitting(world: World, count: number, wanted: number, least: number): number {
+  for (let laid = count; laid > least; laid--) {
+    const cell = cellsAcross(world, laid)
+    if ((Math.min(cell.width, cell.height) / 2) * FILL >= wanted) return laid
+  }
+  return Math.max(1, least)
+}
 
 interface Grid {
   columns: number

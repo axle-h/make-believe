@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from '../apply.js'
+import { MAX_LEVEL, PALETTE } from '../constants.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
@@ -58,6 +59,45 @@ describe('lighting the chain', () => {
 
   it('asks for a longer chain as the level goes up', () => {
     expect(make(room(2), 8).chain.length).toBeGreaterThan(make(room(2), 1).chain.length)
+  })
+
+  /**
+   * Six lights was too many to hold in a head, and the room ran out of clock
+   * long before the end of it. Four is the top of it now, at every level and
+   * in every size of room.
+   */
+  it('never asks for more than four lights', () => {
+    for (let level = 1; level <= MAX_LEVEL; level++) {
+      for (let players = 2; players <= PALETTE.length; players++) {
+        for (let seed = 0; seed < 8; seed++) {
+          expect(make(room(players), level, seed).chain.length).toBeLessThanOrEqual(4)
+        }
+      }
+    }
+  })
+
+  /**
+   * A longer chain must not also be a tighter one. It was the other way round:
+   * the hardest version asked for twice the lights in three quarters of the
+   * time, which is where a room of six got stuck.
+   */
+  it('gives the room time for each light rather than for the task', () => {
+    const easy = make(room(4), 1)
+    const hard = make(room(4), MAX_LEVEL)
+
+    expect(easy.totalMs / easy.chain.length).toBeGreaterThan(hard.totalMs / hard.chain.length)
+    expect(hard.totalMs / hard.chain.length).toBeGreaterThan(10_000)
+  })
+
+  /** Whatever else it gives up, it never comes down to one pad and no chain. */
+  it('always has somewhere to send the room next', () => {
+    for (let level = 1; level <= MAX_LEVEL; level++) {
+      for (let players = 2; players <= PALETTE.length; players++) {
+        for (let seed = 0; seed < 8; seed++) {
+          expect(make(room(players), level, seed).zones.length).toBeGreaterThanOrEqual(2)
+        }
+      }
+    }
   })
 })
 

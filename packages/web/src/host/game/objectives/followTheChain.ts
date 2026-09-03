@@ -33,13 +33,28 @@ export interface FollowTheChainObjective extends ObjectiveBase {
   heldMs: number
 }
 
-const ROOMINESS = { easy: 1.7, hard: 1.1 }
+/**
+ * The whole room has to fit on the lit pad at once, so there is a great deal
+ * more of it than there is on a pad two blobs share. A room of six on a pad
+ * they cannot all stand inside is not a hard task, it is an impossible one.
+ */
+const ROOMINESS = { easy: 2.2, hard: 1.6 }
 /** How long they have to all be on one before it counts. A pause, not a wait. */
 const HOLD = { easy: 500, hard: 1_200 }
-/** How many pads are on the floor, and how many lights the chain has. */
-const PADS = { easy: 3, hard: 4 }
-const LENGTH = { easy: 3, hard: 6 }
-const TIME_LIMIT = { easy: 60_000, hard: 45_000 }
+/**
+ * How many pads are on the floor. It does not climb with the level: harder is
+ * a longer chain and less elbow room, not more pads to squint at — and every
+ * pad added is floor taken off all of them.
+ */
+const PADS = 3
+const LENGTH = { easy: 2, hard: 4 }
+/**
+ * How long each light in the chain is worth. Per light rather than per task,
+ * because a longer chain must not also be a tighter one — which is what it was
+ * until the second play test, where the hardest version was six lights in less
+ * time than three had been given.
+ */
+const PER_LIGHT = { easy: 20_000, hard: 14_000 }
 
 export const followTheChain: ObjectiveTemplate<FollowTheChainObjective> = {
   kind: 'followTheChain',
@@ -51,22 +66,26 @@ export const followTheChain: ObjectiveTemplate<FollowTheChainObjective> = {
   generate(context: GenerateContext): FollowTheChainObjective {
     const hard = difficulty(context.level, MAX_LEVEL)
     const { rng } = context
-    const count = Math.round(scale(PADS.easy, PADS.hard, hard))
+    // Not `exactly`: if the room is too big for three pads this size, two
+    // roomy pads are a game and three cramped ones are not. Two is the floor,
+    // though — a chain with one pad has nowhere to send anybody.
     const zones = makePads(
       context,
-      count,
+      PADS,
       Math.max(2, context.players.length),
       scale(ROOMINESS.easy, ROOMINESS.hard, hard),
+      { least: 2 },
     )
     const length = Math.round(scale(LENGTH.easy, LENGTH.hard, hard))
-    const totalMs = Math.round(scale(TIME_LIMIT.easy, TIME_LIMIT.hard, hard))
+    const totalMs = Math.round(length * scale(PER_LIGHT.easy, PER_LIGHT.hard, hard))
 
     // Never the same pad twice running: a light that stays where it is reads
     // as a broken game rather than a lucky one.
     const chain: string[] = []
     while (chain.length < length) {
-      const zone = zones[intRange(rng, 0, zones.length - 1)]
-      if (!zone || zone.id === chain.at(-1)) continue
+      const elsewhere = zones.filter((zone) => zone.id !== chain.at(-1))
+      const zone = elsewhere[intRange(rng, 0, elsewhere.length - 1)]
+      if (!zone) break
       chain.push(zone.id)
     }
 
