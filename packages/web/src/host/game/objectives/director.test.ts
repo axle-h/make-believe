@@ -15,6 +15,7 @@ import { createGame, type GameState } from '../state.js'
 import { tick } from '../tick.js'
 import { contains } from '../zones.js'
 import { askFor, banner, briefFor, setLevel, stepObjectives } from './director.js'
+import type { ColourHuntObjective } from './colourHunt.js'
 import type { DrawItObjective } from './drawIt.js'
 import type { Brief, Objective } from './types.js'
 
@@ -517,6 +518,22 @@ describe('what the phones are told', () => {
     expect(first).toHaveLength(1)
     expect(first[0]?.to).toBe('*')
     expect(second).toEqual([])
+  })
+
+  /**
+   * A brief that changes only which word of it is painted has still changed:
+   * the word is the whole instruction, so the phone has to hear about it.
+   */
+  it('says it again when only the painted word changes', () => {
+    const state = room(['Wilf', 'Ida'])
+    askFor(state, 'colourHunt')
+    stepObjectives(state, 16)
+    expect(stepObjectives(state, 16)).toEqual([])
+
+    const hunt = state.objectives.current as ColourHuntObjective
+    hunt.paint = 'indigo'
+
+    expect(stepObjectives(state, 16)).toHaveLength(1)
   })
 
   it('says it again when the wording changes', () => {

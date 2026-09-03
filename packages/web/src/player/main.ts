@@ -2,6 +2,7 @@ import {
   HostToPlayerMessageSchema,
   MAX_TEXT_LENGTH,
   isValidSessionCode,
+  splitHeadline,
   type BriefMessage,
   type HostToPlayerMessage,
   type PlayerToHostMessage,
@@ -291,13 +292,37 @@ function applyMessage(message: HostToPlayerMessage): void {
 function showBrief(message: BriefMessage | null): void {
   const headline = message?.headline ?? ''
   const detail = message?.detail ?? ''
-  briefHeadline.textContent = headline
+  paintHeadline(headline, message?.emphasis)
   briefDetail.textContent = detail
   briefDetail.hidden = detail.length === 0
   brief.dataset.tone = message?.tone ?? 'task'
   if (message?.colour) brief.style.setProperty('--brief', message.colour)
   else brief.style.removeProperty('--brief')
   brief.hidden = headline.length === 0
+}
+
+/**
+ * The headline, with the one word the world has picked out painted in the
+ * brief's colour — "everybody go **green**". The word is a `<span>` in the
+ * middle and the rest is text either side of it, which is the same three
+ * pieces the TV lays out.
+ *
+ * The whole line is normally tinted, so when there is a word to pick out the
+ * rest of the sentence steps back to plain ink and the word keeps the colour:
+ * otherwise painting it would be painting what was already painted.
+ *
+ * The phone decides nothing about which word it is: the world says so, and a
+ * brief with no `emphasis` is one flat line exactly as before.
+ */
+function paintHeadline(headline: string, emphasis?: string): void {
+  const { before, word, after } = splitHeadline(headline, emphasis)
+  briefHeadline.replaceChildren(before)
+  briefHeadline.classList.toggle('painted', word.length > 0)
+  if (word.length === 0) return
+  const painted = document.createElement('span')
+  painted.className = 'brief-word'
+  painted.textContent = word
+  briefHeadline.append(painted, after)
 }
 
 /** Sit on the waiting screen and try again shortly, until a TV answers. */

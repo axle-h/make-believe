@@ -266,6 +266,19 @@ h1 {
   color: var(--brief);
 }
 
+/*
+ * One word of the headline is the whole instruction — "everybody go green" —
+ * and the world says which. The rest of the sentence steps back to plain ink
+ * so that the painted word is the thing a child who cannot read it sees.
+ */
+.brief-headline.painted {
+  color: var(--ink);
+}
+
+.brief-word {
+  color: var(--brief);
+}
+
 .brief-detail {
   margin: 0.15rem 0 0;
   font-size: 0.9rem;

@@ -103,6 +103,10 @@ export const colourHunt: ObjectiveTemplate<ColourHuntObjective> = {
         headline: objective.headline,
         detail: `${done} of ${present.length} painted. Tap Draw!`,
         colour: objective.paintHex,
+        // The colour it is asking for, written in that colour. That word is
+        // the whole of the instruction, and it was in the same flat white as
+        // the rest of the sentence until the second play test.
+        emphasis: objective.paint,
         tone: 'task',
       },
     ]

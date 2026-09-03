@@ -1,4 +1,5 @@
 export * from './blobName.js'
+export * from './headline.js'
 export * from './messages.js'
 export * from './paints.js'
 export * from './sessionCode.js'

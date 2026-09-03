@@ -1,4 +1,4 @@
-import { ASKABLE_PAINTS } from '@make-believe/shared'
+import { ASKABLE_PAINTS, splitHeadline } from '@make-believe/shared'
 import { describe, expect, it } from 'vitest'
 import { applyMessage, noteSkinColour } from '../apply.js'
 import { toRgb } from '../colour.js'
@@ -90,6 +90,14 @@ describe('painting a blob', () => {
     expect(objective.outcome).toBe('done')
   })
 
+  /**
+   * Reported as a bug at the second play test and kept exactly as it is. The
+   * task *is* the whole room drawing at once — the only moment all evening
+   * where six children look down together and then all look up again — and a
+   * room told it has already finished has been given nothing to do. It matters
+   * more once children pick their own colours, not less: a room could then
+   * genuinely start out all green.
+   */
   it('is not done by a blob that was already that colour and drew nothing', () => {
     const state = room(2)
     const wanted = ASKABLE_PAINTS[0]!
@@ -124,6 +132,28 @@ describe('painting a blob', () => {
     colourHunt.step(objective, state, 100)
 
     expect(objective.outcome).toBe('running')
+  })
+})
+
+describe('saying which colour, in that colour', () => {
+  /**
+   * "Everybody go green!" in one flat white is a sentence whose only
+   * instruction is the one word a child who cannot read has no way to get at.
+   * The word is named so that both screens can paint it.
+   */
+  it('picks out the colour word, and gives it the colour to paint it in', () => {
+    const state = room(2)
+    const objective = make(state)
+
+    const [brief] = colourHunt.briefs(objective, state)
+
+    expect(brief?.emphasis).toBe(objective.paint)
+    expect(brief?.colour).toBe(objective.paintHex)
+    // And it has to be a word of its own headline, or neither screen can find it.
+    expect(brief?.headline).toContain(objective.paint)
+    expect(splitHeadline(brief?.headline ?? '', brief?.emphasis)).toMatchObject({
+      word: objective.paint,
+    })
   })
 })
 

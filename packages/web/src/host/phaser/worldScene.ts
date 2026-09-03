@@ -1,3 +1,4 @@
+import { splitHeadline } from '@make-believe/shared'
 import Phaser from 'phaser'
 import {
   BLOB_CORNER,
@@ -239,7 +240,16 @@ export class WorldScene extends Phaser.Scene {
   /** Parcels and crates: on the floor, and in somebody's arms. */
   private thingsDown: Phaser.GameObjects.Graphics | null = null
   private thingsHeld: Phaser.GameObjects.Graphics | null = null
+  /**
+   * The banner's first line, in three pieces. Most briefs use only the first
+   * and it is centred on its own; a brief that names one word of its headline
+   * — "everybody go **green**" — gets that word in the middle piece, painted,
+   * with the three of them laid out along one baseline. Phaser's `Text` has no
+   * rich text in it, so three objects is what a coloured word costs.
+   */
   private headline: Phaser.GameObjects.Text | null = null
+  private headlineWord: Phaser.GameObjects.Text | null = null
+  private headlineAfter: Phaser.GameObjects.Text | null = null
   private detail: Phaser.GameObjects.Text | null = null
   private timer: Phaser.GameObjects.Graphics | null = null
   private score: Phaser.GameObjects.Text | null = null
@@ -278,6 +288,16 @@ export class WorldScene extends Phaser.Scene {
     this.timer = this.add.graphics().setDepth(DEPTH_BANNER)
     const middle = this.state.world.width / 2
     this.headline = this.add.text(middle, BANNER_TOP, '', BANNER_STYLE).setOrigin(0.5, 0).setDepth(DEPTH_BANNER)
+    this.headlineWord = this.add
+      .text(middle, BANNER_TOP, '', BANNER_STYLE)
+      .setOrigin(0, 0)
+      .setVisible(false)
+      .setDepth(DEPTH_BANNER)
+    this.headlineAfter = this.add
+      .text(middle, BANNER_TOP, '', BANNER_STYLE)
+      .setOrigin(0, 0)
+      .setVisible(false)
+      .setDepth(DEPTH_BANNER)
     this.detail = this.add.text(middle, BANNER_TOP, '', BANNER_DETAIL_STYLE).setOrigin(0.5, 0).setDepth(DEPTH_BANNER)
     this.score = this.add
       .text(
@@ -528,18 +548,29 @@ export class WorldScene extends Phaser.Scene {
    */
   private renderBanner(objective: ObjectiveSnapshot | null): void {
     const headline = this.headline
+    const word = this.headlineWord
+    const after = this.headlineAfter
     const detail = this.detail
-    if (!headline || !detail) return
+    if (!headline || !word || !after || !detail) return
 
     const line = banner(this.state)
     const tone = line?.tone ?? 'task'
     const text = line?.headline ?? ''
+    const parts = splitHeadline(text, line?.emphasis)
+    const painted = parts.word.length > 0
     // Setting the size re-wraps and re-measures the text, so it is only ever
     // touched when it has actually changed.
     const size = tone === 'level' ? LEVEL_SIZE : HEADLINE_SIZE
-    if (headline.style.fontSize !== `${size}px`) headline.setFontSize(size)
-    if (headline.text !== text) headline.setText(text)
+    for (const piece of [headline, word, after]) {
+      if (piece.style.fontSize !== `${size}px`) piece.setFontSize(size)
+    }
+    if (headline.text !== parts.before) headline.setText(parts.before)
+    if (word.text !== parts.word) word.setText(parts.word)
+    if (after.text !== parts.after) after.setText(parts.after)
     headline.setVisible(text.length > 0).setColor(TONE_COLOURS[tone])
+    word.setVisible(painted).setColor(line?.colour ?? TONE_COLOURS[tone])
+    after.setVisible(painted).setColor(TONE_COLOURS[tone])
+    this.layOutHeadline(painted)
 
     const under = line?.detail ?? ''
     if (detail.text !== under) detail.setText(under)
@@ -549,6 +580,29 @@ export class WorldScene extends Phaser.Scene {
       objective,
       detail.visible ? detail.y + detail.height : headline.y + headline.height,
     )
+  }
+
+  /**
+   * Where the pieces of the first line sit. One piece is centred on the screen
+   * as it always was; three are laid end to end and the group is centred, so
+   * the painted word stays part of the sentence rather than becoming a caption
+   * of its own.
+   */
+  private layOutHeadline(painted: boolean): void {
+    const headline = this.headline
+    const word = this.headlineWord
+    const after = this.headlineAfter
+    if (!headline || !word || !after) return
+
+    const middle = this.state.world.width / 2
+    if (!painted) {
+      headline.setOrigin(0.5, 0).setX(middle)
+      return
+    }
+    const left = middle - (headline.width + word.width + after.width) / 2
+    headline.setOrigin(0, 0).setX(left)
+    word.setX(left + headline.width)
+    after.setX(left + headline.width + word.width)
   }
 
   /** How much of the clock is left, as a bar rather than a number to read. */

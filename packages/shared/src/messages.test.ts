@@ -228,6 +228,56 @@ describe('brief', () => {
       HostToPlayerMessageSchema.safeParse({ type: 'brief', headline: 'Go!', tone: 'task' }).success,
     ).toBe(true)
   })
+
+  /**
+   * One word of the headline, painted in the brief's colour. The word has to
+   * be in the sentence it is a word of: anything else is a renderer told to
+   * find something that is not there.
+   */
+  it('accepts a word of its own headline to paint, and refuses any other', () => {
+    expect(
+      BriefMessageSchema.safeParse({
+        type: 'brief',
+        headline: 'Everybody go green!',
+        emphasis: 'green',
+        colour: '#5ddf7f',
+        tone: 'task',
+      }).success,
+    ).toBe(true)
+    expect(
+      BriefMessageSchema.safeParse({
+        type: 'brief',
+        headline: 'Everybody go green!',
+        emphasis: 'blue',
+        tone: 'task',
+      }).success,
+    ).toBe(false)
+    expect(
+      BriefMessageSchema.safeParse({
+        type: 'brief',
+        headline: 'Everybody go green!',
+        emphasis: '',
+        tone: 'task',
+      }).success,
+    ).toBe(false)
+  })
+
+  it('carries the painted word to a phone and out of the host', () => {
+    const painted = {
+      type: 'brief',
+      headline: 'Everybody go green!',
+      emphasis: 'green',
+      colour: '#5ddf7f',
+      tone: 'task',
+    }
+
+    expect(HostToPlayerMessageSchema.safeParse(painted).success).toBe(true)
+    expect(HostOutboundMessageSchema.safeParse({ ...painted, to: '*' }).success).toBe(true)
+    // And the refusal survives the trip through the union the server parses.
+    expect(
+      HostOutboundMessageSchema.safeParse({ ...painted, emphasis: 'blue', to: '*' }).success,
+    ).toBe(false)
+  })
 })
 
 describe('session', () => {

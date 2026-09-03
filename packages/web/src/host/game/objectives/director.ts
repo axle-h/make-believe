@@ -474,7 +474,11 @@ function readdressed(shared: Brief | undefined, to: Brief['to']): Brief {
   return { ...shared, to }
 }
 
-/** Two briefs are the same brief if they read the same. */
+/**
+ * Two briefs are the same brief if they read the same — which includes which
+ * word of the headline is painted, or a brief that changes only that would
+ * never reach a phone.
+ */
 function wording(brief: Brief): string {
-  return `${brief.headline} ${brief.detail ?? ''} ${brief.colour ?? ''} ${brief.tone}`
+  return [brief.headline, brief.detail, brief.colour, brief.emphasis, brief.tone].join(' ')
 }

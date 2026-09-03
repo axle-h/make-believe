@@ -116,12 +116,26 @@ export const BriefMessageSchema = z.object({
   /** Tints the strip when the task is about a particular colour. */
   colour: z.string().min(1).max(32).optional(),
   /**
+   * A word inside the headline to paint in `colour`. "Everybody go green!" in
+   * one flat white is a sentence whose only instruction is the word a
+   * three-year-old cannot read; painted, the word is the instruction.
+   *
+   * It has to be a word the headline actually contains — see the refusal
+   * below — and `splitHeadline` is how both ends cut the sentence up.
+   */
+  emphasis: z.string().min(1).max(MAX_HEADLINE_LENGTH).optional(),
+  /**
    * How it should read. `task` is what the world wants, `win` and `miss` are
    * how the last one ended, and `level` is the room getting better at this —
    * the one line all evening that is about the children rather than the game,
    * and the only one either screen makes bigger than the rest.
    */
   tone: z.enum(['task', 'win', 'miss', 'level']),
+}).refine((brief) => brief.emphasis === undefined || brief.headline.includes(brief.emphasis), {
+  // A word that is not in the sentence is a renderer looking for something
+  // that is not there, which is a bug on the TV rather than a thing to draw.
+  error: 'emphasis must be a word of the headline',
+  path: ['emphasis'],
 })
 
 /**

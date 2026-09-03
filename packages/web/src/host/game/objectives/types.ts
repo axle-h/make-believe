@@ -39,6 +39,13 @@ export interface Brief {
   detail?: string
   colour?: string
   /**
+   * A word of the headline to paint in `colour`, for the tasks whose whole
+   * instruction is one word: "everybody go **green**". Both screens cut the
+   * sentence up with `splitHeadline`, and the word has to be in the headline
+   * — the schema refuses anything else.
+   */
+  emphasis?: string
+  /**
    * How it should read. `task` is what the world wants, `win` and `miss` are
    * how the last one ended, and `level` is the room getting better — the one
    * line all evening that is about the children rather than the game, and the
