@@ -22,6 +22,12 @@ export interface CarryableBase {
   x: number
   y: number
   colour: string
+  /**
+   * What it actually is, drawn over it: an apple, a bone, a slice of bread.
+   * A coloured square with a picture on it is the same game and a good deal
+   * funnier, and the picture says what it is without a word being read.
+   */
+  glyph?: string
   /** Where it has been delivered, if it has: a zone id. Home things stay put. */
   home: string | null
 }

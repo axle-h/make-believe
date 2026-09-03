@@ -1,3 +1,4 @@
+import { THEMES } from '@make-believe/shared'
 import { describe, expect, it } from 'vitest'
 import { stillOut, type Parcel } from '../carryables.js'
 import { createRng } from '../rng.js'
@@ -105,5 +106,31 @@ describe('sorting', () => {
 
     expect(brief?.to).toBe('*')
     expect(brief?.detail).toContain(`0 of ${objective.parcels}`)
+  })
+})
+
+/**
+ * Socks, or eggs, or presents. The colour is still the rule and the picture
+ * rides on top of it: a blue sock is a sock on a blue square.
+ */
+describe('what is being sorted', () => {
+  it('gives every parcel the same picture, whatever colour it is', () => {
+    const objective = make(room(3))
+
+    const glyphs = new Set(objective.carryables.map((thing) => thing.glyph))
+    const colours = new Set(objective.carryables.map((thing) => thing.colour))
+    expect(glyphs.size).toBe(1)
+    expect([...glyphs][0]).toBeTruthy()
+    expect(colours.size).toBeGreaterThan(1)
+  })
+
+  it('says what they are in the headline, in the singular', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const objective = make(room(3), 6, seed)
+      const theme = THEMES.find((one) => one.glyph === objective.carryables[0]?.glyph)
+
+      expect(theme).toBeDefined()
+      expect(objective.headline).toBe(`Every ${theme?.one} in its own colour!`)
+    }
   })
 })

@@ -1,3 +1,4 @@
+import { THEMES } from '@make-believe/shared'
 import { describe, expect, it } from 'vitest'
 import { stillOut, type Parcel } from '../carryables.js'
 import { createRng } from '../rng.js'
@@ -140,6 +141,46 @@ describe('fetching', () => {
 
     expect(brief?.to).toBe('*')
     expect(brief?.detail).toContain(`1 of ${objective.parcels}`)
-    expect(brief?.colour).toBe(objective.zones[0]?.colour)
+    // The strip is the colour of the things, not of the house: it is what to
+    // go and look for that a child who cannot read the sentence needs.
+    expect(brief?.colour).toBe(objective.thingColour)
+    expect(brief?.emphasis).toBe(objective.things)
+    expect(brief?.headline).toContain(objective.things)
+  })
+})
+
+/**
+ * Apples in a basket rather than parcels in a depot. It is the same game and a
+ * good deal easier to understand without reading: the thing has a picture on
+ * it, the house has one too, and the word for what they are is painted in the
+ * colour they are.
+ */
+describe('what is being carried', () => {
+  it('gives every parcel the same picture, and the house one of its own', () => {
+    const objective = make(room(2))
+
+    const glyphs = new Set(objective.carryables.map((thing) => thing.glyph))
+    expect(glyphs.size).toBe(1)
+    expect([...glyphs][0]).toBeTruthy()
+    expect(objective.zones[0]?.label).toBeTruthy()
+    expect(objective.zones[0]?.label).not.toBe([...glyphs][0])
+  })
+
+  it('takes them all from one theme, so it is never apples in a postbox', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const objective = make(room(2), 4, seed)
+      const theme = THEMES.find((one) => one.things === objective.things)
+
+      expect(theme).toBeDefined()
+      expect(objective.thingColour).toBe(theme?.colour)
+      expect(objective.carryables[0]?.glyph).toBe(theme?.glyph)
+      expect(objective.zones[0]?.label).toBe(theme?.homeGlyph)
+      expect(objective.headline).toBe(`Take the ${theme?.things} home!`)
+    }
+  })
+
+  /** The picture on the house *is* the instruction, so it is drawn like one. */
+  it('draws the house picture big enough to read across a room', () => {
+    expect(make(room(2)).zones[0]?.labelSize).toBeGreaterThan(40)
   })
 })

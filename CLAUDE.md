@@ -287,10 +287,11 @@ code obeys everywhere but states nowhere.
 11. Objectives: something to actually do. Zones, then carryables; one task
     running at all times, procedurally parameterised and levelled up as the
     room gets good at them. Never rounds — no phone ever waits its turn.
-    **All of it is built.** Twelve tasks, in `src/host/game/objectives/`, each
-    a file and a line in `registry.ts`: stand on the spot, hot potato, two to a
-    pad, follow the lights, find your own pad, colour hunt, draw it, fetch,
-    sorting, a crate too heavy for one, sumo, and keep the crown. Underneath
+    **All of it is built.** Thirteen tasks, in `src/host/game/objectives/`,
+    each a file and a line in `registry.ts`: stand on the spot, hot potato, two
+    to a pad, follow the lights, find your own pad, colour hunt, draw it,
+    fetch, sorting, in order, a crate too heavy for one, sumo, and keep the
+    crown. Underneath
     them: the seeded RNG, zones and pads, carryables, obstacles (walls a blob
     cannot drive through, which only hot potato uses — anybody standing where
     one appears is slid out over a few frames rather than teleported), the
@@ -340,7 +341,7 @@ code obeys everywhere but states nowhere.
       with six bowed heads.
 
     `registry.test.ts` asserts what has to be true of every task; adding the
-    thirteenth inherits it. The e2e for the two at the top of the ladder is
+    fourteenth inherits it. The e2e for the two at the top of the ladder is
     described under Testing.
 
 ## Phaser notes (host)
@@ -368,6 +369,7 @@ code obeys everywhere but states nowhere.
 - Wake Lock API to stop phones sleeping (may be unavailable without HTTPS — degrade gracefully).
 - Mobile keyboards shift layout — test the Say sheet on a real phone early.
 - The player page is an installable PWA: `public/manifest.webmanifest`, `public/sw.js` (hand-written, ~60 lines, network-first, no Workbox and no build plugin), icons generated from `public/icons/blob.svg` by `scripts/icons.mjs` and committed. **Only the player page** — the host page links no manifest and the worker never touches `/host/`.
+- **What is being carried is themed** (`shared/src/themes.ts`): apples into a basket, bones to the dog, socks to the washing. A theme gives fetch and sorting their headline, the picture drawn over each thing and the picture on the house — the same game, funnier, and a good deal easier to understand without reading. The renderer keeps a glyph per carryable id, exactly as it keeps a tally per zone id. `SEQUENCES` is the same idea in an order: bread, cheese, bread.
 - **The phone makes the noises, never the TV.** Cues come out of the model — `stepObjectives` returns `Sound[]` beside its briefs — and are worked out by looking at what *changed*, so a task earns its cues without reporting anything and nothing can repeat every frame. They are rate-limited to about one per phone per 250ms. The synth is `src/player/sounds.ts`: sixty lines of WebAudio, no files and no dependency, and it lives under `src/player/` because an `AudioContext` is a `window` and `purity.test.ts` would say so. A context must be woken inside a gesture, and the Join tap is that gesture; if it is still asleep the cues are dropped in silence, because nothing depends on being heard. There is a **mute switch in the ☰ menu**, remembered in storage.
 - Over the joystick, on **one** phone in the room, the ☰ menu holds one dull extra line built at runtime when a `grownup` message arrives: pick any task, or start the ladder again (which asks first, exactly as Quit does). Nothing else about that phone changes — it drives, says things and draws like every other phone.
 - There are three screens: `waiting` (no TV yet), `join` (a name and a row of ten swatches) and `play`. The socket opens on load, before anybody has typed anything, because the join screen is made of the palette and only the TV knows it — so the order is waiting → join → play. A phone that has played before has its name and its colour in storage and gets in with one tap; a phone that is already in *this* world walks straight back into its blob without being asked anything, which is what makes a reload, a wifi blip and a TV coming back all non-events. There is no scan screen and no QR reader on the phone — the code in the URL was the only thing one was ever for.

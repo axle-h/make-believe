@@ -157,9 +157,12 @@ const TONE_COLOURS: Record<Brief['tone'], string> = {
  * a child has to be able to read to play.
  */
 /** What a depot is called, written across it. */
+/** The usual size for a word written on the floor. Some zones ask for more. */
+const ZONE_LABEL_SIZE = 22
+
 const ZONE_LABEL_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'system-ui, sans-serif',
-  fontSize: '22px',
+  fontSize: `${ZONE_LABEL_SIZE}px`,
   fontStyle: 'bold',
   color: '#10121a',
   align: 'center',
@@ -171,6 +174,13 @@ const ZONE_LABEL_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
  * into a heap nobody could count, which told a room less than a numeral does
  * and looked like a mess on the floor.
  */
+/** What a thing is, drawn on it: an apple, a bone, a slice of bread. */
+const THING_GLYPH_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
+  fontFamily: 'system-ui, sans-serif',
+  fontSize: '30px',
+  align: 'center',
+}
+
 const TALLY_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'system-ui, sans-serif',
   fontSize: '52px',
@@ -251,6 +261,8 @@ export class WorldScene extends Phaser.Scene {
   private readonly zoneLabels = new Map<string, Phaser.GameObjects.Text>()
   /** How many parcels each depot is holding, written on it. Kept by zone id. */
   private readonly tallies = new Map<string, Phaser.GameObjects.Text>()
+  /** What each thing on the floor actually is — an apple, a bone — by its id. */
+  private readonly glyphs = new Map<string, Phaser.GameObjects.Text>()
   /** Parcels and crates: on the floor, and in somebody's arms. */
   private thingsDown: Phaser.GameObjects.Graphics | null = null
   private thingsHeld: Phaser.GameObjects.Graphics | null = null
@@ -425,6 +437,10 @@ export class WorldScene extends Phaser.Scene {
       if (!zone.label) continue
       named.add(zone.id)
       const label = this.zoneLabels.get(zone.id) ?? this.createZoneLabel(zone.id)
+      // A house asking for the next slice of bread asks with a picture, and
+      // the picture is the whole instruction, so it is drawn the size of one.
+      const size = zone.labelSize ?? ZONE_LABEL_SIZE
+      if (label.style.fontSize !== `${size}px`) label.setFontSize(size)
       if (label.text !== zone.label) label.setText(zone.label)
       label
         .setPosition(zone.x, zone.y)
@@ -459,6 +475,7 @@ export class WorldScene extends Phaser.Scene {
     down.clear()
     held.clear()
 
+    const drawn = new Set<string>()
     for (const thing of objective?.carryables ?? []) {
       // A delivered parcel is counted rather than drawn: a dozen of them
       // landing on one spot used to stack into a heap that said less about how
@@ -466,7 +483,39 @@ export class WorldScene extends Phaser.Scene {
       if (thing.kind === 'parcel' && thing.home !== null) continue
       const carried = thing.kind === 'parcel' && thing.carriedBy !== null
       this.drawThing(carried ? held : down, thing)
+      if (thing.glyph !== undefined) {
+        drawn.add(thing.id)
+        this.renderGlyph(thing)
+      }
     }
+    for (const [id, glyph] of this.glyphs) {
+      if (drawn.has(id)) continue
+      glyph.destroy()
+      this.glyphs.delete(id)
+    }
+  }
+
+  /**
+   * What a thing on the floor actually is, drawn over it. The square underneath
+   * is still the colour that matters — sorting is played by colour — and the
+   * picture is what makes it an apple rather than a parcel.
+   *
+   * They move every frame, so like the things themselves they are placed every
+   * frame; they are kept by carryable id, exactly as the tallies are by zone.
+   */
+  private renderGlyph(thing: Carryable): void {
+    const glyph = this.glyphs.get(thing.id) ?? this.createGlyph(thing.id)
+    if (glyph.text !== thing.glyph) glyph.setText(thing.glyph ?? '')
+    glyph.setPosition(thing.x, thing.y)
+  }
+
+  private createGlyph(id: string): Phaser.GameObjects.Text {
+    const glyph = this.add
+      .text(0, 0, '', THING_GLYPH_STYLE)
+      .setOrigin(0.5, 0.5)
+      .setDepth(DEPTH_THING_HELD)
+    this.glyphs.set(id, glyph)
+    return glyph
   }
 
   /**
@@ -865,5 +914,7 @@ function zoneSignature(zone: Zone): string {
   // The dimming is in here because a chain of lights moves by nothing else
   // changing: leave it out and the floor never redraws as the light travels.
   const at = `${Math.round(zone.x)}:${Math.round(zone.y)}`
-  return `${zone.id}:${zone.shape}:${at}:${size}:${zone.colour}:${zone.dim === true}`
+  // And the label, because a house that is asking for the next thing changes
+  // by nothing else: leave it out and it goes on asking for the first one.
+  return `${zone.id}:${zone.shape}:${at}:${size}:${zone.colour}:${zone.dim === true}:${zone.label ?? ''}`
 }

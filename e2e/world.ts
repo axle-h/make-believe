@@ -73,6 +73,8 @@ export interface CarryableSnapshot {
   x: number
   y: number
   colour: string
+  /** What it actually is — an apple, a bone — drawn over it. */
+  glyph?: string
   /** The zone it has been delivered to, or `null` while it is still out. */
   home: string | null
   /** Parcels only: whoever is carrying it. */

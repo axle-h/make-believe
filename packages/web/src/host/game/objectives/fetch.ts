@@ -7,6 +7,7 @@ import {
   type Carryable,
   type Parcel,
 } from '../carryables.js'
+import { THEMES } from '@make-believe/shared'
 import { MAX_LEVEL, ZONE_COLOURS } from '../constants.js'
 import { pick } from '../rng.js'
 import { placeZone, radiusFor, zoneReach, type HouseZone } from '../zones.js'
@@ -33,7 +34,13 @@ export interface FetchObjective extends ObjectiveBase {
   kind: 'fetch'
   /** How many there were to start with, so the brief can count them down. */
   parcels: number
+  /** What they are, plural, for the one word of the headline that is painted. */
+  things: string
+  thingColour: string
 }
+
+/** Big enough to read across a room: the picture on the house *is* the answer. */
+const HOME_GLYPH_SIZE = 52
 
 /** How many to fetch: an armful at first, a proper job later. */
 const PARCELS = { easy: 3, hard: 7 }
@@ -54,6 +61,10 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
     // brief being read. It is squarish and wide enough for the whole room to
     // crowd into at once, because they will.
     const across = radiusFor(Math.max(2, context.players.length), 1.4) * 2
+    // What is being carried, and where to. It is the same game either way, but
+    // apples in a basket is funnier than parcels in a depot and a good deal
+    // easier to understand without reading a word of it.
+    const theme = pick(rng, THEMES)
     const depot: HouseZone = {
       id: `${context.id}-depot`,
       shape: 'house',
@@ -62,6 +73,8 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
       x: 0,
       y: 0,
       colour: pick(rng, ZONE_COLOURS).hex,
+      label: theme.homeGlyph,
+      labelSize: HOME_GLYPH_SIZE,
     }
     const at = placeZone(rng, context.world, zoneReach(depot), [])
     depot.x = at.x
@@ -74,7 +87,8 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
         id: `${context.id}-parcel-${index}`,
         x: spot.x,
         y: spot.y,
-        colour: depot.colour,
+        colour: theme.colour,
+        glyph: theme.glyph,
         home: null,
         carriedBy: null,
       }),
@@ -83,7 +97,9 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
     return {
       kind: 'fetch',
       id: context.id,
-      headline: 'Bring it all home!',
+      headline: `Take the ${theme.things} home!`,
+      things: theme.things,
+      thingColour: theme.colour,
       remainingMs: totalMs,
       totalMs,
       zones: [depot],
@@ -105,6 +121,8 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
   briefs(objective) {
     const left = stillOut(objective.carryables).length
     const home = objective.parcels - left
+    // The word for what they are, painted in the colour they are: the one word
+    // of the sentence that says what to go and look for.
     const brief: Brief = {
       to: '*',
       headline: objective.headline,
@@ -112,10 +130,10 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
         left === 0
           ? 'All of it!'
           : `${home} of ${objective.parcels} home. Drive into one to pick it up`,
+      colour: objective.thingColour,
+      emphasis: objective.things,
       tone: 'task',
     }
-    const depot = objective.zones[0]
-    if (depot) brief.colour = depot.colour
     return [brief]
   },
 }

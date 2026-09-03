@@ -20,6 +20,12 @@ export interface ZoneBase {
   /** Drawn on the floor when the pad means something on its own. */
   label?: string
   /**
+   * How big to draw that label, when the usual size will not do. A house that
+   * is asking for the next slice of bread is asking with a picture, and the
+   * picture *is* the instruction, so it is drawn the size of one.
+   */
+  labelSize?: number
+  /**
    * Drawn faintly: it is on the floor, but it is not what the world is asking
    * for this second. The pads a chain of lights has not reached yet are dim,
    * and the one lit up is not — so which one to run at needs no reading at all.

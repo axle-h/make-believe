@@ -7,8 +7,9 @@ import {
   type Carryable,
   type Parcel,
 } from '../carryables.js'
+import { THEMES } from '@make-believe/shared'
 import { MAX_LEVEL } from '../constants.js'
-import { intRange } from '../rng.js'
+import { intRange, pick } from '../rng.js'
 import type { CircleZone } from '../zones.js'
 import { makePads, MAX_NAMED_PADS, nameOfColour } from './pads.js'
 import {
@@ -58,6 +59,9 @@ export const sorting: ObjectiveTemplate<SortingObjective> = {
     // Named on the floor as well as coloured, for whoever is reading by then.
     for (const depot of depots) depot.label = nameOfColour(depot.colour).toUpperCase()
 
+    // Socks, or eggs, or presents. The colour is still the rule and the glyph
+    // rides on top of it: a blue sock is a sock on a blue square.
+    const theme = pick(rng, THEMES)
     const count = Math.round(scale(PARCELS.easy, PARCELS.hard, hard))
     const carryables: Carryable[] = scatter(rng, context.world, count, depots, PARCEL_SIZE).map(
       (spot, index): Parcel => ({
@@ -67,6 +71,7 @@ export const sorting: ObjectiveTemplate<SortingObjective> = {
         y: spot.y,
         // Every depot gets something to receive, then the rest fall where they may.
         colour: (depots[index % depots.length] ?? depots[0])?.colour ?? '#f6f0e2',
+        glyph: theme.glyph,
         home: null,
         carriedBy: null,
       }),
@@ -83,7 +88,7 @@ export const sorting: ObjectiveTemplate<SortingObjective> = {
     return {
       kind: 'sorting',
       id: context.id,
-      headline: 'Everything in its own colour!',
+      headline: `Every ${theme.one} in its own colour!`,
       remainingMs: totalMs,
       totalMs,
       zones: depots,

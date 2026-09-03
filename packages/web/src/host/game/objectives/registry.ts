@@ -4,6 +4,7 @@ import { fetch } from './fetch.js'
 import { findYourColour } from './findYourColour.js'
 import { followTheChain } from './followTheChain.js'
 import { hotPotato } from './hotPotato.js'
+import { inOrder } from './inOrder.js'
 import { keepTheCrown } from './keepTheCrown.js'
 import { onTheSpot } from './onTheSpot.js'
 import { pairs } from './pairs.js'
@@ -30,6 +31,7 @@ export const TEMPLATES: readonly ObjectiveTemplate<Objective>[] = [
   drawIt,
   fetch,
   sorting,
+  inOrder,
   tooHeavyForOne,
   sumo,
   keepTheCrown,
