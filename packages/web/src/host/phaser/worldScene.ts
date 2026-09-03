@@ -22,6 +22,15 @@ import {
 } from '../game/index.js'
 import { WORLD_SCENE_KEY } from './sceneKey.js'
 import { cropToBlob } from './skin.js'
+import {
+  drawnCentre,
+  drawnTop,
+  poseOf,
+  restingSquelch,
+  stepSquelch,
+  type Pose,
+  type Squelch,
+} from './squelch.js'
 import { colourOfImage } from './skinColour.js'
 
 /**
@@ -198,6 +207,10 @@ interface BlobView {
   bubble: BubbleView | null
   /** The drawing this blob is wearing, or being given: a texture key. */
   skinKey: string | null
+  /** Its bounce, and where it was last frame so the hop can be paced by it. */
+  squelch: Squelch
+  atX: number
+  atY: number
 }
 
 /** What the scene does with the model beyond drawing it. */
@@ -280,12 +293,13 @@ export class WorldScene extends Phaser.Scene {
   override update(_time: number, delta: number): void {
     // A backgrounded tab hands back an enormous delta on its first frame;
     // capping it here is what stops everyone teleporting into a wall.
-    const result = tick(this.state, Math.min(delta, MAX_STEP_MS))
+    const step = Math.min(delta, MAX_STEP_MS)
+    const result = tick(this.state, step)
     if (result.briefs.length > 0) this.options.onBriefs?.(result.briefs)
-    this.render()
+    this.render(step)
   }
 
-  private render(): void {
+  private render(step: number): void {
     const list = players(this.state)
     // One read of the objective for the whole frame; four separate ones would
     // rebuild the same snapshot four times over.
@@ -302,8 +316,16 @@ export class WorldScene extends Phaser.Scene {
       const view = this.views.get(player.playerId) ?? this.createView(player)
       const alpha = player.away ? AWAY_ALPHA : 1
 
-      view.image.setPosition(player.x, player.y).setAlpha(alpha)
-      view.label.setPosition(player.x, player.y - BLOB_SIZE / 2 - NAME_GAP).setAlpha(alpha)
+      const pose = this.squelchOf(view, player, step)
+      view.image
+        .setPosition(player.x, drawnCentre(player.y, pose))
+        .setDisplaySize(BLOB_SIZE * pose.scaleX, BLOB_SIZE * pose.scaleY)
+        .setRotation(pose.rotation)
+        .setAlpha(alpha)
+      // The name rides the bounce rather than hanging in the air over it: a
+      // blob and its label are one character, and a fixed gap from the top of
+      // the blob is the only way they never end up on top of each other.
+      view.label.setPosition(player.x, drawnTop(player.y, pose) - NAME_GAP).setAlpha(alpha)
       const named = nameWithBadges(player.name, badges.get(player.playerId))
       if (view.label.text !== named) view.label.setText(named)
 
@@ -562,9 +584,32 @@ export class WorldScene extends Phaser.Scene {
       .text(player.x, player.y, player.name, NAME_STYLE)
       .setOrigin(0.5, 1)
       .setDepth(DEPTH_NAME)
-    const view: BlobView = { image, label, bubble: null, skinKey: null }
+    const view: BlobView = {
+      image,
+      label,
+      bubble: null,
+      skinKey: null,
+      squelch: restingSquelch(),
+      atX: player.x,
+      atY: player.y,
+    }
     this.views.set(player.playerId, view)
     return view
+  }
+
+  /**
+   * Advance one blob's bounce and say how to draw it this frame.
+   *
+   * The model has already moved everybody by the time this runs, so what paces
+   * the hop is how far a blob actually got — which means a blob shoved across
+   * the floor by somebody else bounces along too, and one driving into a wall
+   * stands there and does not.
+   */
+  private squelchOf(view: BlobView, player: Player, step: number): Pose {
+    view.squelch = stepSquelch(view.squelch, player.x - view.atX, player.y - view.atY, step)
+    view.atX = player.x
+    view.atY = player.y
+    return poseOf(view.squelch)
   }
 
   /**
