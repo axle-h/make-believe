@@ -20,6 +20,7 @@ function make(state: GameState, level = 6, seed = 51): DrawItObjective {
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 

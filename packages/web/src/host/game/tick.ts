@@ -1,6 +1,6 @@
 import { resolveCollisions } from './collisions.js'
 import { AWAY_TIMEOUT_MS, SPEED } from './constants.js'
-import { stepObjectives } from './objectives/director.js'
+import { forgetPlayer, stepObjectives } from './objectives/director.js'
 import type { Brief } from './objectives/types.js'
 import { pushOutOfObstacles } from './obstacles.js'
 import { clampToWorld, type GameState } from './state.js'
@@ -40,6 +40,7 @@ export function tick(state: GameState, dtMs: number): TickResult {
       player.awayForMs += step
       if (player.awayForMs >= AWAY_TIMEOUT_MS) {
         state.players.delete(player.playerId)
+        forgetPlayer(state, player.playerId)
         removed.push(player.playerId)
       }
       continue

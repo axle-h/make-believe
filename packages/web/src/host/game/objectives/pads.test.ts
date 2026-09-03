@@ -12,6 +12,7 @@ function context(seed = 3): GenerateContext {
     rng: createRng(seed),
     level: 1,
     players: [],
+    crown: null,
   }
 }
 

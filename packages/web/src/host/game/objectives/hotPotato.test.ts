@@ -28,6 +28,7 @@ function make(state: GameState, level = 2, seed = 7): HotPotatoObjective {
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 

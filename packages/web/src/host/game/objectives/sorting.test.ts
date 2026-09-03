@@ -22,6 +22,7 @@ function make(state: GameState, level = 6, seed = 71): SortingObjective {
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 

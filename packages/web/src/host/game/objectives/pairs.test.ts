@@ -22,6 +22,7 @@ function make(state: GameState, level = 3, seed = 11): PairsObjective {
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 

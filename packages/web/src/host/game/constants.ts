@@ -68,6 +68,15 @@ export const ZONE_COLOURS = [
   { name: 'green', hex: '#b9ffb0' },
 ] as const
 
+/**
+ * The crown, worn beside the name of whoever holds it.
+ *
+ * It lives here rather than in the task that plays for it because it outlives
+ * that task: a crown that lasts thirty seconds is a token, and one that stays
+ * on somebody's head between games is a title.
+ */
+export const CROWN_BADGE = '👑'
+
 /** How many objectives the room has to finish before the next one gets harder. */
 export const LEVEL_UP_AFTER = 3
 

@@ -1,7 +1,7 @@
 import { normaliseName, type ServerToHostMessage } from '@make-believe/shared'
 import type { Rgb } from './colour.js'
 import { BUBBLE_MS } from './constants.js'
-import { observeMessage } from './objectives/director.js'
+import { forgetPlayer, observeMessage } from './objectives/director.js'
 import { nextFreeSlot, spawnPosition, takeColour, type GameState, type Player } from './state.js'
 
 /**
@@ -166,6 +166,10 @@ function finish(state: GameState, playerId: string): ApplyResult {
   const player = state.players.get(playerId)
   if (!player) return { applied: false, reason: 'unknown-player' }
   state.players.delete(playerId)
+  // Everything the world was holding for this blob goes with it, including
+  // the crown: a title on a head that is not on the floor is not one anybody
+  // can come and take.
+  forgetPlayer(state, playerId)
   return { applied: true, kind: 'finished', player }
 }
 

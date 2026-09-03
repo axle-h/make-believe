@@ -689,7 +689,7 @@ test.describe('an objective', () => {
     if (!chaser) throw new Error('expected somebody to give chase')
 
     // Everybody is told who to go for, and how to go for them.
-    await expect(chaser.page.locator('#brief-headline')).toHaveText('Keep the crown!')
+    await expect(chaser.page.locator('#brief-headline')).toHaveText(crown.headline)
     await expect(chaser.page.locator('#brief-detail')).toHaveText(
       `${wearer.name} has it! Drive into them to take it.`,
     )

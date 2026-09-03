@@ -56,9 +56,10 @@ export interface Brief {
 
 /**
  * Something the world has pinned to one blob: the potato, the crown, whose
- * turn it is to draw. It is drawn *on* the blob rather than beside it, because
- * a child working out who has it should not have to read anything to find out,
- * and the names and bubbles are already stacked above their heads.
+ * turn it is to draw. It is drawn **beside the blob's name**, on the front of
+ * it — "👑 Ivy" — and never over the middle of the blob, which is where the
+ * child's own drawing is. A badge over the drawing covers the one thing in the
+ * game a child made themselves.
  */
 export interface Mark {
   playerId: string
@@ -114,6 +115,13 @@ export interface GenerateContext {
   level: number
   /** The blobs present when it was made. It is judged against whoever is present later. */
   players: Player[]
+  /**
+   * Who is wearing the standing crown, if anybody. It is the one thing in the
+   * game that outlives the task that put it there, which is what makes it a
+   * title rather than a badge that lasts half a minute — so the task that
+   * plays for it starts from whoever already has it.
+   */
+  crown: string | null
 }
 
 /**

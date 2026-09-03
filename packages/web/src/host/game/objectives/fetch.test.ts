@@ -23,6 +23,7 @@ function make(state: GameState, level = 4, seed = 61): FetchObjective {
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 

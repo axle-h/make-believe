@@ -21,6 +21,7 @@ function make(state: GameState, level = 4, seed = 21): FindYourColourObjective {
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 

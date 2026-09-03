@@ -37,6 +37,7 @@ function generate(template: ObjectiveTemplate, state: GameState, level: number, 
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 

@@ -1,8 +1,8 @@
 import { nearestTouching } from '../collisions.js'
-import { MAX_LEVEL } from '../constants.js'
+import { CROWN_BADGE, MAX_LEVEL } from '../constants.js'
 import { pick, range } from '../rng.js'
 import { activePlayers } from '../selectors.js'
-import type { Player } from '../state.js'
+import type { GameState, Player } from '../state.js'
 import { secondsLeft } from './hold.js'
 import {
   difficulty,
@@ -21,12 +21,18 @@ import {
  * It is hot potato inside out, and that is the point of having both: there
  * everybody runs from the blob holding the thing, here everybody runs at them.
  * The crown is a mark rather than anything on the floor — the same badge worn
- * in the middle of a blob that the potato is — because a thing you keep by
+ * beside a blob's name that the potato is — because a thing you keep by
  * running away with it is a thing that has to move exactly as fast as you do.
  *
  * Nobody is eliminated and nothing is taken away for good: a crown lost is a
  * crown that can be taken straight back, and the time already worn stays
  * banked, so a child who has it stolen has not lost what they had.
+ *
+ * **And it outlives the game.** Whoever wins it wears it between tasks and
+ * into the next one, until somebody takes it off them; the room comes back to
+ * the same blob and the headline says whose it is. One badge that lasts thirty
+ * seconds is much like another, and a badge that is still there two games
+ * later is a title.
  */
 
 export interface KeepTheCrownObjective extends ObjectiveBase {
@@ -42,9 +48,6 @@ export interface KeepTheCrownObjective extends ObjectiveBase {
   /** How long this go has lasted. */
   heldForMs: number
 }
-
-/** The crown itself, worn by whoever has it. */
-const CROWN = '👑'
 
 /** How long it takes to win it outright. */
 const CROWN_TIME = { easy: 7_000, hard: 11_000 }
@@ -68,13 +71,17 @@ export const keepTheCrown: ObjectiveTemplate<KeepTheCrownObjective> = {
   generate(context: GenerateContext): KeepTheCrownObjective {
     const hard = difficulty(context.level, MAX_LEVEL)
     const { rng } = context
-    const start = pick(rng, context.players)
+    // Whoever is already wearing it starts wearing it, which is the whole of
+    // what makes the crown a title: the room comes back to take it off the
+    // same blob it left it on, and the headline says so by name.
+    const standing = context.players.find((player) => player.playerId === context.crown)
+    const start = standing ?? pick(rng, context.players)
     // A little jiggle either way, so two goes at the same level are not twins.
     const totalMs = Math.round(scale(TIME_LIMIT.easy, TIME_LIMIT.hard, hard) * range(rng, 0.9, 1.1))
     return {
       kind: 'keepTheCrown',
       id: context.id,
-      headline: 'Keep the crown!',
+      headline: standing ? `Take the crown off ${standing.name}!` : 'Keep the crown!',
       remainingMs: totalMs,
       totalMs,
       zones: [],
@@ -111,7 +118,7 @@ export const keepTheCrown: ObjectiveTemplate<KeepTheCrownObjective> = {
     objective.wornMs[wearer.playerId] = wornBy(objective, wearer.playerId) + dtMs
 
     if (wornBy(objective, wearer.playerId) >= objective.crownMs) {
-      objective.outcome = 'done'
+      win(objective, state, wearer)
       objective.note = `${wearer.name} kept the crown!`
       return
     }
@@ -122,10 +129,13 @@ export const keepTheCrown: ObjectiveTemplate<KeepTheCrownObjective> = {
     }
 
     // The buzzer is the end of it rather than a failure to finish in time, so
-    // this says so itself before the director can call it a miss.
+    // this says so itself before the director can call it a miss. Whoever wore
+    // it longest keeps it, and keeps it into the next game and the one after.
     if (objective.remainingMs <= 0) {
-      objective.outcome = 'done'
-      objective.note = whoWoreItLongest(objective, present)
+      const longest = whoWoreItLongest(objective, present)
+      if (longest) win(objective, state, longest)
+      else objective.outcome = 'done'
+      objective.note = longest ? `${longest.name} wore it longest!` : 'That crown never settled!'
     }
   },
 
@@ -168,7 +178,7 @@ function crownTo(objective: KeepTheCrownObjective, playerId: string): void {
 }
 
 function marksFor(playerId: string): Mark[] {
-  return [{ playerId, badge: CROWN }]
+  return [{ playerId, badge: CROWN_BADGE }]
 }
 
 /**
@@ -187,11 +197,25 @@ function secondsToGo(objective: KeepTheCrownObjective, playerId: string): number
 }
 
 /**
- * What the TV says at the buzzer, when nobody managed to keep it long enough:
- * whoever had it the longest of everybody still here. Cheerful either way,
- * because the crown going round all game without settling is a good game.
+ * Over, and the crown goes on this blob's head — not for the rest of the task,
+ * which is finished, but for the rest of the evening. It is the one thing a
+ * task leaves behind it.
  */
-function whoWoreItLongest(objective: KeepTheCrownObjective, present: readonly Player[]): string {
+function win(objective: KeepTheCrownObjective, state: GameState, winner: Player): void {
+  objective.outcome = 'done'
+  state.objectives.crown = winner.playerId
+  objective.marks = marksFor(winner.playerId)
+}
+
+/**
+ * Who had it the longest of everybody still here, for the buzzer. Cheerful
+ * either way, because the crown going round all game without settling is a
+ * good game — and if nobody wore it at all, nobody wins it.
+ */
+function whoWoreItLongest(
+  objective: KeepTheCrownObjective,
+  present: readonly Player[],
+): Player | null {
   let best: Player | null = null
   let longest = 0
   for (const player of present) {
@@ -200,5 +224,5 @@ function whoWoreItLongest(objective: KeepTheCrownObjective, present: readonly Pl
     longest = worn
     best = player
   }
-  return best ? `${best.name} wore it longest!` : 'That crown never settled!'
+  return best
 }

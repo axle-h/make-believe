@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from '../apply.js'
 import {
+  AWAY_TIMEOUT_MS,
   BLOB_SIZE,
   COUNTDOWN_MS,
+  CROWN_BADGE,
   INTERLUDE_MS,
   LEVEL_UP_AFTER,
   LEVEL_UP_INTERLUDE_MS,
@@ -16,6 +18,7 @@ import { tick } from '../tick.js'
 import { contains } from '../zones.js'
 import { askFor, banner, briefFor, setLevel, stepObjectives } from './director.js'
 import type { ColourHuntObjective } from './colourHunt.js'
+import type { KeepTheCrownObjective } from './keepTheCrown.js'
 import type { DrawItObjective } from './drawIt.js'
 import type { Brief, Objective } from './types.js'
 
@@ -506,6 +509,73 @@ describe('coming and going', () => {
     expect(state.objectives.score).toBe(0)
     expect(banner(state)?.headline).toBe('Waiting for another blob…')
     expect(banner(state)?.tone).toBe('task')
+  })
+})
+
+/** Play a crown game through to the buzzer, and hand back who won it. */
+function crowned(state: GameState): string {
+  askFor(state, 'keepTheCrown')
+  const game = state.objectives.current as KeepTheCrownObjective
+  stepObjectives(state, 1_000)
+  game.remainingMs = 0
+  stepObjectives(state, 16)
+  expect(game.outcome).toBe('done')
+  return state.objectives.crown as string
+}
+
+/**
+ * The one thing a task leaves behind it. Everything else about a task is over
+ * when it is over; the crown stays on somebody's head, which is what makes it
+ * a title rather than a badge that lasted half a minute.
+ */
+describe('the crown', () => {
+  it('stays on its wearer through the breather and into the next task', () => {
+    const state = room(['Wilf', 'Ida'])
+    const wearer = crowned(state)
+    expect(wearer).not.toBeNull()
+
+    stepObjectives(state, INTERLUDE_MS + 1)
+    stepObjectives(state, 16)
+
+    expect(state.objectives.current?.kind).not.toBe('keepTheCrown')
+    expect(state.objectives.crown).toBe(wearer)
+    // And it is on the TV, beside that blob's name, while something else runs.
+    expect(objectives(state).marks).toEqual([{ playerId: wearer, badge: CROWN_BADGE }])
+  })
+
+  /**
+   * While the room is playing for it, the game moves it about and draws it
+   * itself. Two crowns on screen at once is a question nobody can answer.
+   */
+  it('is drawn once, by the game that is playing for it', () => {
+    const state = room(['Wilf', 'Ida'])
+    crowned(state)
+    stepObjectives(state, INTERLUDE_MS + 1)
+    askFor(state, 'keepTheCrown')
+
+    expect(objectives(state).marks).toEqual([])
+    expect(objectives(state).objective?.marks).toHaveLength(1)
+  })
+
+  it('is nobody\'s once its wearer has finished with their blob', () => {
+    const state = room(['Wilf', 'Ida'])
+    const wearer = crowned(state)
+
+    applyMessage(state, { type: 'finish', playerId: wearer })
+
+    expect(state.objectives.crown).toBeNull()
+    expect(objectives(state).marks).toEqual([])
+  })
+
+  /** A blob the world has waited long enough for takes it with it. */
+  it('is nobody\'s once its wearer has been forgotten for good', () => {
+    const state = room(['Wilf', 'Ida'])
+    const wearer = crowned(state)
+    applyMessage(state, { type: 'left', playerId: wearer })
+
+    tick(state, AWAY_TIMEOUT_MS + 1)
+
+    expect(state.objectives.crown).toBeNull()
   })
 })
 

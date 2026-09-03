@@ -24,6 +24,7 @@ function make(state: GameState, level = 5, seed = 41): ColourHuntObjective {
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 

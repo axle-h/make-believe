@@ -21,6 +21,7 @@ function make(state: GameState, level = 3, seed = 31): FollowTheChainObjective {
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 

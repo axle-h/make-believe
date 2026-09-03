@@ -1,4 +1,5 @@
 import type { Carryable } from './carryables.js'
+import { CROWN_BADGE } from './constants.js'
 import type { Mark, Outcome } from './objectives/types.js'
 import type { Obstacle } from './obstacles.js'
 import type { GameState, Player } from './state.js'
@@ -66,6 +67,12 @@ export interface DirectorSnapshot {
   level: number
   score: number
   streak: number
+  /**
+   * What the *world* has pinned to a blob, over and above whatever the running
+   * task has: the crown, which outlives the task that was played for it. The
+   * renderer draws these beside a name exactly as it draws a task's own.
+   */
+  marks: Mark[]
   /** `null` while the world is waiting for enough blobs to ask for anything. */
   objective: ObjectiveSnapshot | null
 }
@@ -88,6 +95,7 @@ export function objectives(state: GameState): DirectorSnapshot {
     level: director.level,
     score: director.score,
     streak: director.streak,
+    marks: standingMarks(state),
     objective:
       objective === null
         ? null
@@ -105,6 +113,20 @@ export function objectives(state: GameState): DirectorSnapshot {
             carryables: objective.carryables,
           },
   }
+}
+
+/**
+ * What the world itself has pinned to a blob between one task and the next.
+ *
+ * Only the crown, and only when the room is not currently playing for it: the
+ * game that plays for the crown moves it about as it goes, and two crowns on
+ * screen at once is a question nobody can answer.
+ */
+function standingMarks(state: GameState): Mark[] {
+  const { crown, current } = state.objectives
+  if (crown === null || current?.kind === 'keepTheCrown') return []
+  if (!state.players.has(crown)) return []
+  return [{ playerId: crown, badge: CROWN_BADGE }]
 }
 
 /**
@@ -139,6 +161,7 @@ function copyObjectives(director: DirectorSnapshot): DirectorSnapshot {
   const objective = director.objective
   return {
     ...director,
+    marks: structuredClone(director.marks),
     objective:
       objective === null
         ? null

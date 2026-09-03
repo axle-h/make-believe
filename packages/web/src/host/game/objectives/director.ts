@@ -64,6 +64,16 @@ export interface Director {
    * being thrown away: it gets played the moment another blob turns up.
    */
   pending: Objective['kind'][]
+  /**
+   * Who is wearing the crown, between one task and the next.
+   *
+   * It is the only thing in the game that outlives the task that put it there.
+   * A badge that lasts thirty seconds is much like any other badge; one that
+   * is still on somebody's head two games later is a title, and taking it off
+   * them is worth doing. It is cleared when its wearer finishes with their
+   * blob or is forgotten for good, and by nothing else.
+   */
+  crown: string | null
   /** The last thing each phone was told, so only changes go on the wire. */
   announced: Brief[]
 }
@@ -152,6 +162,7 @@ export function createDirector(seed: number = randomSeed()): Director {
     lastKind: null,
     levelledUpTo: null,
     pending: [],
+    crown: null,
     announced: [],
   }
 }
@@ -196,6 +207,16 @@ export function observeMessage(state: GameState, message: ServerToHostMessage): 
 export function briefFor(state: GameState, playerId: string): Brief | null {
   const briefs = currentBriefs(state)
   return briefs.find((brief) => brief.to === playerId) ?? briefs.find((brief) => brief.to === '*') ?? null
+}
+
+/**
+ * A blob the world has finished with — quit, or away so long it has been
+ * forgotten. If it was wearing the crown, the crown is nobody's until the next
+ * game for it: a title held by a blob that is not on the floor is not a thing
+ * anybody can take back.
+ */
+export function forgetPlayer(state: GameState, playerId: string): void {
+  if (state.objectives.crown === playerId) state.objectives.crown = null
 }
 
 /** The one line across the top of the TV, which is the same line the phones get. */
@@ -258,6 +279,7 @@ function begin(state: GameState, template: ObjectiveTemplate<Objective>, present
     rng: director.rng,
     level: director.level,
     players: present,
+    crown: director.crown,
   })
   director.interludeMs = 0
 }

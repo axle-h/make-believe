@@ -329,7 +329,7 @@ export class WorldScene extends Phaser.Scene {
     // Whatever the task has pinned to particular blobs, ready to be read out of
     // in the loop below: a badge is part of a blob's name, not a thing sitting
     // on top of it.
-    const badges = badgesByPlayer(director.objective)
+    const badges = badgesByPlayer(director)
 
     for (const player of list) {
       seen.add(player.playerId)
@@ -789,13 +789,16 @@ export class WorldScene extends Phaser.Scene {
 }
 
 /**
- * Whatever the task has pinned to each blob, by `playerId`. Usually empty and
+ * Whatever has been pinned to each blob, by `playerId`. Usually empty and
  * never more than one each, but the shape allows for two so that a task which
  * wants to hand out a second badge does not have to change this.
+ *
+ * Two sources: the running task's own marks, and the world's — which is the
+ * crown, still on the head of whoever won it several games ago.
  */
-function badgesByPlayer(objective: ObjectiveSnapshot | null): Map<string, string> {
+function badgesByPlayer(director: DirectorSnapshot): Map<string, string> {
   const badges = new Map<string, string>()
-  for (const mark of objective?.marks ?? []) {
+  for (const mark of [...director.marks, ...(director.objective?.marks ?? [])]) {
     badges.set(mark.playerId, (badges.get(mark.playerId) ?? '') + mark.badge)
   }
   return badges

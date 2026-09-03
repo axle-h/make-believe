@@ -28,6 +28,7 @@ function make(state: GameState, level = MAX_LEVEL, seed = 7): KeepTheCrownObject
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 
@@ -244,6 +245,82 @@ describe('keep the crown: ending', () => {
     play(state, objective, 5_000)
 
     expect(objective.outcome).toBe('running')
+  })
+})
+
+/**
+ * The crown is the one thing in the game that outlives the task that put it
+ * there. One badge that lasts thirty seconds is much like another; a badge
+ * that is still on somebody's head two games later is a title, and taking it
+ * off them is worth doing.
+ */
+describe('keep the crown: between one game and the next', () => {
+  it('leaves the crown with whoever won it outright', () => {
+    const state = room(2)
+    const objective = make(state)
+    const wearer = objective.wearer as string
+
+    play(state, objective, objective.crownMs + 100)
+
+    expect(state.objectives.crown).toBe(wearer)
+  })
+
+  it('leaves it with whoever wore it longest when the buzzer goes', () => {
+    const state = room(2)
+    const objective = make(state)
+    const wearer = objective.wearer as string
+    play(state, objective, 1_000)
+    objective.remainingMs = 0
+    play(state, objective, 50)
+
+    expect(state.objectives.crown).toBe(wearer)
+  })
+
+  it('leaves it with nobody when nobody ever wore it', () => {
+    const state = room(2)
+    const objective = make(state)
+    for (const player of activePlayers(state)) {
+      applyMessage(state, { type: 'left', playerId: player.playerId })
+    }
+    objective.remainingMs = 0
+
+    play(state, objective, 50)
+
+    expect(state.objectives.crown).toBeNull()
+  })
+
+  it('starts the next game on the blob that is already wearing it', () => {
+    const state = room(3)
+    const standing = 'p2'
+
+    const objective = keepTheCrown.generate({
+      id: 'obj-2',
+      world: state.world,
+      rng: createRng(3),
+      level: MAX_LEVEL,
+      players: activePlayers(state),
+      crown: standing,
+    })
+
+    expect(objective.wearer).toBe(standing)
+    // And the room is told whose it is, because it is a title by now.
+    expect(objective.headline).toBe(`Take the crown off ${state.players.get(standing)?.name}!`)
+  })
+
+  it('picks somebody when the standing wearer is not here any more', () => {
+    const state = room(3)
+
+    const objective = keepTheCrown.generate({
+      id: 'obj-2',
+      world: state.world,
+      rng: createRng(3),
+      level: MAX_LEVEL,
+      players: activePlayers(state),
+      crown: 'somebody-who-left',
+    })
+
+    expect(state.players.has(objective.wearer as string)).toBe(true)
+    expect(objective.headline).toBe('Keep the crown!')
   })
 })
 

@@ -21,6 +21,7 @@ function make(state: GameState, level = 1, seed = 7): OnTheSpotObjective {
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 
@@ -152,6 +153,7 @@ describe('standing on it', () => {
       rng: createRng(2),
       level: 1,
       players: [],
+      crown: null,
     })
 
     onTheSpot.step(objective, state, 60_000)

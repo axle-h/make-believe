@@ -21,6 +21,7 @@ function make(state: GameState, level = 7, seed = 81): TooHeavyObjective {
     rng: createRng(seed),
     level,
     players: activePlayers(state),
+    crown: null,
   })
 }
 
