@@ -56,12 +56,20 @@ export function unlockedAt(level: number): Objective['kind'][] {
 }
 
 /**
- * The tasks that could run right now: unlocked by the level, and with enough
- * blobs present to mean anything. An empty list is the world quietly waiting
- * for another blob, which is not a failure of any kind.
+ * The tasks that could run right now: unlocked by the level, with enough blobs
+ * present to mean anything, and — for the ones that are fussier than a
+ * headcount — suiting a room this size. An empty list is the world quietly
+ * waiting for another blob, which is not a failure of any kind.
  */
 export function eligibleTemplates(level: number, present: number): ObjectiveTemplate<Objective>[] {
-  return TEMPLATES.filter(
-    (template) => template.minLevel <= level && template.minPlayers <= present,
-  )
+  return TEMPLATES.filter((template) => template.minLevel <= level && suitsRoom(template, present))
+}
+
+/**
+ * Whether this room can be asked for this task at all. `askFor` deliberately
+ * only checks the headcount half, so a grown-up can look at a task out of
+ * order; everything the game does for itself checks both.
+ */
+export function suitsRoom(template: ObjectiveTemplate<Objective>, present: number): boolean {
+  return template.minPlayers <= present && (template.suits?.(present) ?? true)
 }

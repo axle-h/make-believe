@@ -6,11 +6,12 @@ import {
   LEVEL_UP_INTERLUDE_MS,
   MAX_LEVEL,
   SCORE_PER_OBJECTIVE,
+  UNSUITABLE_GRACE_MS,
 } from '../constants.js'
 import { createRng, pick, randomSeed, type Rng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import type { GameState, Player } from '../state.js'
-import { eligibleTemplates, templateFor, unlockedAt } from './registry.js'
+import { eligibleTemplates, suitsRoom, templateFor, unlockedAt } from './registry.js'
 import type { Brief, Objective, ObjectiveTemplate } from './types.js'
 
 /**
@@ -35,6 +36,12 @@ export interface Director {
   interludeMs: number
   /** How many objectives this world has made; ids and nothing else. */
   made: number
+  /**
+   * How long the running task has gone on not suiting the room. A task is
+   * dropped once it has stopped suiting the room for good rather than for a
+   * frame, so that a phone flickering out of wifi does not take one down.
+   */
+  unsuitableMs: number
   /**
    * What was played last, so the next one is something else where there is
    * anything else to play. Three goes at the same task in a row reads as a
@@ -141,6 +148,7 @@ export function createDirector(seed: number = randomSeed()): Director {
     current: null,
     interludeMs: 0,
     made: 0,
+    unsuitableMs: 0,
     lastKind: null,
     levelledUpTo: null,
     pending: [],
@@ -243,6 +251,7 @@ function begin(state: GameState, template: ObjectiveTemplate<Objective>, present
   director.levelledUpTo = null
   director.made += 1
   director.lastKind = template.kind
+  director.unsuitableMs = 0
   director.current = template.generate({
     id: `obj-${director.made}`,
     world: state.world,
@@ -262,6 +271,10 @@ function begin(state: GameState, template: ObjectiveTemplate<Objective>, present
  * `false` means there are not enough blobs in the room for that one, which is
  * a thing to say rather than a thing to force: a task judged against two
  * children when it needs three is a task nobody can finish.
+ *
+ * It checks the headcount and deliberately not `suits`: a grown-up who wants
+ * to look at two-to-a-pad with five blobs should get to look at it, even
+ * though the room cannot finish it. The director itself checks both.
  */
 export function askFor(state: GameState, kind: Objective['kind']): boolean {
   const template = templateFor(kind)
@@ -288,7 +301,17 @@ function run(state: GameState, objective: Objective, dtMs: number): void {
 
   // The room has emptied out below what this task needs. Abandon it without a
   // word — a task nobody can finish is the world's problem, not the children's.
-  if (activePlayers(state).length < template.minPlayers) {
+  const present = activePlayers(state).length
+  if (present < template.minPlayers) {
+    director.current = null
+    return
+  }
+
+  // And the same for a room that has stopped suiting it: five blobs asked for
+  // two to a pad is a sum that cannot come out. It has to stay that way for a
+  // moment first, because a phone that blinks is not a child who left.
+  director.unsuitableMs = suitsRoom(template, present) ? 0 : director.unsuitableMs + dtMs
+  if (director.unsuitableMs >= UNSUITABLE_GRACE_MS) {
     director.current = null
     return
   }

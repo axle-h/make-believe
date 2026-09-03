@@ -8,6 +8,7 @@ import {
   LEVEL_UP_INTERLUDE_MS,
   MAX_LEVEL,
   SCORE_PER_OBJECTIVE,
+  UNSUITABLE_GRACE_MS,
 } from '../constants.js'
 import { activePlayers, objectives } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
@@ -453,6 +454,44 @@ describe('coming and going', () => {
     standOnIt(state, objective)
     runUntilFinished(state)
     expect(objective.outcome).toBe('done')
+  })
+
+  /**
+   * The other half of "a child who wanders off never leaves the others with
+   * something they cannot finish": five blobs cannot be put in twos, so the
+   * task goes rather than standing there being impossible.
+   */
+  it('drops a task the room has stopped suiting, once it is sure', () => {
+    const state = room(['Wilf', 'Ida', 'Bo', 'Ada'])
+    expect(askFor(state, 'pairs')).toBe(true)
+    applyMessage(state, { type: 'join', playerId: 'p5', name: 'Ted' })
+
+    // A moment's grace first: a phone that blinks is not a child who left.
+    stepObjectives(state, 100)
+    expect(state.objectives.current?.kind).toBe('pairs')
+
+    for (let elapsed = 0; elapsed <= UNSUITABLE_GRACE_MS; elapsed += 100) {
+      stepObjectives(state, 100)
+      if (state.objectives.current === null) break
+    }
+
+    expect(state.objectives.current).toBeNull()
+    expect(state.objectives.score).toBe(0)
+  })
+
+  it('is not taken down by a phone that flickers out of wifi and back', () => {
+    const state = room(['Wilf', 'Ida', 'Bo', 'Ada', 'Ned', 'Fay'])
+    askFor(state, 'pairs')
+    const running = state.objectives.current
+
+    applyMessage(state, { type: 'left', playerId: 'p6' })
+    stepObjectives(state, 500)
+    applyMessage(state, { type: 'join', playerId: 'p6', name: 'Fay' })
+    for (let elapsed = 0; elapsed < UNSUITABLE_GRACE_MS * 2; elapsed += 100) {
+      stepObjectives(state, 100)
+    }
+
+    expect(state.objectives.current).toBe(running)
   })
 
   it('abandons quietly when the room drops below what the task needs', () => {

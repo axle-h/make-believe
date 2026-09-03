@@ -56,6 +56,21 @@ describe('the catalogue', () => {
     expect(new Set(titles).size).toBe(titles.length)
   })
 
+  /**
+   * A task fussier than a headcount has to be askable of *some* room, or it is
+   * a file nobody ever plays. Adding the thirteenth inherits this.
+   */
+  it('never lets a task quietly become unaskable', () => {
+    for (const template of TEMPLATES) {
+      const suits = template.suits
+      if (!suits) continue
+      const rooms = Array.from({ length: 16 }, (_, at) => at + 1).filter(
+        (present) => present >= template.minPlayers,
+      )
+      expect(rooms.some((present) => suits(present))).toBe(true)
+    }
+  })
+
   it('unlocks every one of them somewhere on the ladder', () => {
     for (const template of TEMPLATES) {
       expect(template.minLevel).toBeGreaterThanOrEqual(1)

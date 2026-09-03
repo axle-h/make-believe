@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from '../apply.js'
+import { MAX_LEVEL } from '../constants.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { pairs, type PairsObjective } from './pairs.js'
+import { eligibleTemplates } from './registry.js'
 
 function room(count: number): GameState {
   const state = createGame(1)
@@ -33,6 +35,11 @@ function stand(state: GameState, objective: PairsObjective, pad: number, ids: st
   }
 }
 
+/** What the world could ask a room this size for, at the top of the ladder. */
+function kinds(present: number): string[] {
+  return eligibleTemplates(MAX_LEVEL, present).map((template) => template.kind)
+}
+
 function corner(state: GameState, ids: string[]): void {
   for (const id of ids) {
     const player = state.players.get(id)!
@@ -42,10 +49,16 @@ function corner(state: GameState, ids: string[]): void {
 }
 
 describe('laying out the pads', () => {
-  it('puts down one pad per couple, and never only one', () => {
-    expect(make(room(3)).zones).toHaveLength(2)
+  it('puts down one pad per couple, however big the room is', () => {
     expect(make(room(4)).zones).toHaveLength(2)
     expect(make(room(6)).zones).toHaveLength(3)
+    // No cap: ten blobs get five pads, because four pads and ten blobs in
+    // twos is a sum that does not come out.
+    expect(make(room(10)).zones).toHaveLength(5)
+  })
+
+  it('starts every pad dim, so a lit one means it has its two', () => {
+    expect(make(room(4)).zones.every((zone) => zone.dim === true)).toBe(true)
   })
 
   it('squeezes the pads as the level goes up', () => {
@@ -73,6 +86,52 @@ describe('pairing up', () => {
     expect(objective.heldMs).toBe(0)
   })
 
+  /**
+   * The rule a child would guess from the name, and the one the pads are sized
+   * for: three on a pad is a crowd, not a couple.
+   */
+  it('does not count three on a pad, however keen they are', () => {
+    const state = room(4)
+    const objective = make(state)
+    stand(state, objective, 0, ['p1', 'p2', 'p3'])
+    stand(state, objective, 1, ['p4'])
+
+    pairs.step(objective, state, 10_000)
+
+    expect(objective.outcome).toBe('running')
+    expect(pairs.briefs(objective, state)[0]?.detail).toContain('0 of 4')
+  })
+
+  it('is not done with the whole room piled onto one pad', () => {
+    const state = room(4)
+    const objective = make(state)
+    stand(state, objective, 0, ['p1', 'p2', 'p3', 'p4'])
+
+    pairs.step(objective, state, 10_000)
+
+    expect(objective.outcome).toBe('running')
+
+    // And splitting into the two pads is what finishes it.
+    stand(state, objective, 1, ['p3', 'p4'])
+    pairs.step(objective, state, objective.holdMs + 1)
+    expect(objective.outcome).toBe('done')
+  })
+
+  it('lights a pad once it has its two, and dims it again when they split', () => {
+    const state = room(4)
+    const objective = make(state)
+    stand(state, objective, 0, ['p1', 'p2'])
+    corner(state, ['p3', 'p4'])
+
+    pairs.step(objective, state, 16)
+    expect(objective.zones[0]?.dim).toBe(false)
+    expect(objective.zones[1]?.dim).toBe(true)
+
+    corner(state, ['p2'])
+    pairs.step(objective, state, 16)
+    expect(objective.zones[0]?.dim).toBe(true)
+  })
+
   it('is not done while somebody is on no pad at all', () => {
     const state = room(4)
     const objective = make(state)
@@ -98,27 +157,18 @@ describe('pairing up', () => {
   })
 
   /**
-   * The rule is "nobody on their own", not "exactly two everywhere". A room of
-   * three has to pile onto one pad, and a room that grows or shrinks mid-task
-   * always has a sum that comes out — which is the whole reason for the rule.
+   * It is judged against whoever is here now. A couple who put their phones
+   * down leave a pad spare, and a spare pad must not be a task the four who
+   * are left cannot finish.
    */
-  it('lets three blobs share a pad rather than leaving one of them stranded', () => {
-    const state = room(3)
-    const objective = make(state)
-    stand(state, objective, 0, ['p1', 'p2', 'p3'])
-
-    pairs.step(objective, state, objective.holdMs + 1)
-
-    expect(objective.outcome).toBe('done')
-  })
-
-  it('stops counting a blob whose phone has been put down', () => {
-    const state = room(4)
+  it('stops counting a blob whose phone has been put down, spare pad and all', () => {
+    const state = room(6)
     const objective = make(state)
     stand(state, objective, 0, ['p1', 'p2'])
-    corner(state, ['p3', 'p4'])
-    applyMessage(state, { type: 'left', playerId: 'p3' })
-    applyMessage(state, { type: 'left', playerId: 'p4' })
+    stand(state, objective, 1, ['p3', 'p4'])
+    corner(state, ['p5', 'p6'])
+    applyMessage(state, { type: 'left', playerId: 'p5' })
+    applyMessage(state, { type: 'left', playerId: 'p6' })
 
     pairs.step(objective, state, objective.holdMs + 1)
 
@@ -136,6 +186,25 @@ describe('pairing up', () => {
     pairs.step(objective, state, 200)
 
     expect(objective.heldMs).toBe(800)
+  })
+})
+
+describe('which rooms it suits', () => {
+  it('is only ever asked for when the room can be halved', () => {
+    for (const even of [4, 6, 8, 10]) expect(pairs.suits?.(even)).toBe(true)
+    for (const odd of [3, 5, 7, 9]) expect(pairs.suits?.(odd)).toBe(false)
+  })
+
+  it('wants four, because two blobs and one pad is not a negotiation', () => {
+    expect(pairs.minPlayers).toBe(4)
+  })
+
+  it('is offered to an even room and withheld from an odd one', () => {
+    expect(kinds(4)).toContain('pairs')
+    expect(kinds(10)).toContain('pairs')
+    expect(kinds(5)).not.toContain('pairs')
+    expect(kinds(3)).not.toContain('pairs')
+    expect(kinds(2)).not.toContain('pairs')
   })
 })
 

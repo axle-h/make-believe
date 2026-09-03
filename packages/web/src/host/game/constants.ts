@@ -100,5 +100,14 @@ export const LEVEL_UP_INTERLUDE_MS = 13_000
  */
 export const COUNTDOWN_MS = 5_000
 
+/**
+ * How long a task has to go on not suiting the room before it is dropped.
+ *
+ * A phone that goes quiet is marked away the moment it does, so a blip in the
+ * wifi would otherwise flip a room of four odd and take "two to a pad" down
+ * with it. A second or so of it is a room that has genuinely changed.
+ */
+export const UNSUITABLE_GRACE_MS = 1_500
+
 /** The hardest the ladder goes. Beyond this the parameters stop tightening. */
 export const MAX_LEVEL = 8

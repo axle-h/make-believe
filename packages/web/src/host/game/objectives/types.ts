@@ -129,6 +129,17 @@ export interface ObjectiveTemplate<T extends Objective = Objective> {
   minPlayers: number
   /** The level at which it starts appearing. */
   minLevel: number
+  /**
+   * Whether a room this size can be asked for this at all, beyond simply
+   * being big enough. Checked when one is chosen and again while it runs: a
+   * task that stops suiting the room is dropped, exactly as one the room has
+   * emptied out of already is.
+   *
+   * It is the one place the standing rule — a child who wanders off never
+   * leaves the others with something they cannot finish — is honoured by the
+   * director rather than by the task itself.
+   */
+  suits?(present: number): boolean
   generate(context: GenerateContext): T
   /** One step of this task. Sets `outcome` when it is finished. */
   step(objective: T, state: GameState, dtMs: number): void
