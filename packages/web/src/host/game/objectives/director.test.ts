@@ -21,6 +21,7 @@ import type { ColourHuntObjective } from './colourHunt.js'
 import type { KeepTheCrownObjective } from './keepTheCrown.js'
 import type { DrawItObjective } from './drawIt.js'
 import type { Brief, Objective } from './types.js'
+import { joinPlayer } from '../testRoom.js'
 
 /**
  * The director is the thing that must never turn the game into rounds, so
@@ -31,7 +32,7 @@ import type { Brief, Objective } from './types.js'
 function room(names: string[], seed = 1): GameState {
   const state = createGame(seed)
   for (const [index, name] of names.entries()) {
-    applyMessage(state, { type: 'join', playerId: `p${index + 1}`, name })
+    joinPlayer(state, `p${index + 1}`, name)
   }
   return state
 }
@@ -114,7 +115,7 @@ describe('choosing something to do', () => {
   it('makes one the moment a second blob arrives, with nobody pressing anything', () => {
     const state = room(['Wilf'])
     stepObjectives(state, 16)
-    applyMessage(state, { type: 'join', playerId: 'p2', name: 'Ida' })
+    joinPlayer(state, 'p2', 'Ida')
     stepObjectives(state, 16)
 
     expect(state.objectives.current?.kind).toBe('onTheSpot')
@@ -322,7 +323,7 @@ describe('a line for one phone only', () => {
   it('tells a phone that turns up halfway through where it goes', () => {
     const state = room(['Wilf', 'Ida'], 12)
     findingColours(state)
-    applyMessage(state, { type: 'join', playerId: 'p3', name: 'Ted' })
+    joinPlayer(state, 'p3', 'Ted')
     stepObjectives(state, 16)
 
     expect(briefFor(state, 'p3')?.to).toBe('p3')
@@ -446,7 +447,7 @@ describe('coming and going', () => {
     standOnIt(state, objective)
     stepObjectives(state, 100)
 
-    applyMessage(state, { type: 'join', playerId: 'p3', name: 'Ted' })
+    joinPlayer(state, 'p3', 'Ted')
     const brief = briefFor(state, 'p3')
 
     expect(brief?.headline).toBe(objective.headline)
@@ -468,7 +469,7 @@ describe('coming and going', () => {
   it('drops a task the room has stopped suiting, once it is sure', () => {
     const state = room(['Wilf', 'Ida', 'Bo', 'Ada'])
     expect(askFor(state, 'pairs')).toBe(true)
-    applyMessage(state, { type: 'join', playerId: 'p5', name: 'Ted' })
+    joinPlayer(state, 'p5', 'Ted')
 
     // A moment's grace first: a phone that blinks is not a child who left.
     stepObjectives(state, 100)
@@ -490,7 +491,7 @@ describe('coming and going', () => {
 
     applyMessage(state, { type: 'left', playerId: 'p6' })
     stepObjectives(state, 500)
-    applyMessage(state, { type: 'join', playerId: 'p6', name: 'Fay' })
+    joinPlayer(state, 'p6', 'Fay')
     for (let elapsed = 0; elapsed < UNSUITABLE_GRACE_MS * 2; elapsed += 100) {
       stepObjectives(state, 100)
     }
@@ -832,7 +833,7 @@ describe('going up a level', () => {
     expect(state.objectives.pending).toEqual(['hotPotato'])
 
     // A third blob turns up, and the moment there is room for it, it is next.
-    applyMessage(state, { type: 'join', playerId: 'p3', name: 'Ted' })
+    joinPlayer(state, 'p3', 'Ted')
     standOnIt(state, instead)
     runUntilFinished(state)
     stepObjectives(state, INTERLUDE_MS + 1)

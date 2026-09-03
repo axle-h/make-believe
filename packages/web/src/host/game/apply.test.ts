@@ -4,10 +4,11 @@ import { BLOB_SIZE, BUBBLE_MS, PALETTE, WORLD_HEIGHT, WORLD_WIDTH } from './cons
 import { playerById } from './selectors.js'
 import { createGame, nextFreeSlot, type GameState } from './state.js'
 import { tick } from './tick.js'
+import { joinPlayer } from './testRoom.js'
 
 /** Everything a phone can send, as helpers. */
 const join = (state: GameState, playerId: string, name: string) =>
-  applyMessage(state, { type: 'join', playerId, name })
+  joinPlayer(state, playerId, name)
 const input = (state: GameState, playerId: string, dx: number, dy: number) =>
   applyMessage(state, { type: 'input', playerId, dx, dy })
 const left = (state: GameState, playerId: string) => applyMessage(state, { type: 'left', playerId })
@@ -18,10 +19,15 @@ const draw = (state: GameState, playerId: string, png: string) =>
 const finish = (state: GameState, playerId: string) =>
   applyMessage(state, { type: 'finish', playerId })
 const png = (body: string) => `data:image/png;base64,${body}`
+/** A hello that asks for one particular colour, the way a phone does. */
+const ask = (state: GameState, playerId: string, name: string, colour: string) =>
+  applyMessage(state, { type: 'join', playerId, name, colour })
 
 /** The player a successful apply is about, or a failure if it did not apply. */
 function playerOf(result: ReturnType<typeof applyMessage>) {
-  if (!result.applied) throw new Error(`expected the message to apply, got ${result.reason}`)
+  if (!result.applied) {
+    throw new Error(`expected the message to apply: ${JSON.stringify(result)}`)
+  }
   return result.player
 }
 
@@ -82,31 +88,119 @@ describe('join', () => {
     expect(state.players.size).toBe(1)
   })
 
-  /**
-   * The floor is reused so the room does not spread out forever, but the
-   * colour is not: a blob standing where the last one stood, in the same
-   * colour, is the old blob as far as anybody watching is concerned.
-   */
-  it('reuses the place a leaver gave up, but never their colour', () => {
+  /** The floor is reused so that the room does not spread out forever. */
+  it('reuses the place a leaver gave up', () => {
     const state = createGame()
     join(state, 'p1', 'Wilf')
     join(state, 'p2', 'Ida')
     state.players.delete('p1')
 
     expect(nextFreeSlot(state)).toBe(0)
-    const next = playerOf(join(state, 'p3', 'Ted'))
-    expect(next.slot).toBe(0)
-    expect(next.colour).toBe(PALETTE[2])
+    expect(playerOf(join(state, 'p3', 'Ted')).slot).toBe(0)
+  })
+})
+
+/**
+ * A colour is asked for, not handed out. The world grants it, says who has it,
+ * or says there is no room — and the phone only ever shows what it was told.
+ */
+describe('asking for a colour', () => {
+  it('grants the one asked for', () => {
+    const state = createGame()
+
+    expect(playerOf(ask(state, 'p1', 'Wilf', PALETTE[4] as string)).colour).toBe(PALETTE[4])
   })
 
-  it('goes round the palette rather than running out of colours', () => {
+  it('refuses one somebody is already wearing, and says which kind of no', () => {
     const state = createGame()
-    for (let i = 0; i < PALETTE.length; i++) join(state, `p${i}`, `B${i}`)
-    const worn = [...state.players.values()].map((player) => player.colour)
+    ask(state, 'p1', 'Wilf', PALETTE[4] as string)
 
-    expect(new Set(worn).size).toBe(PALETTE.length)
-    // One more than there are colours: somebody shares rather than getting none.
-    expect(playerOf(join(state, 'extra', 'Ted')).colour).toBe(PALETTE[0])
+    expect(ask(state, 'p2', 'Ida', PALETTE[4] as string)).toEqual({
+      applied: false,
+      refused: 'colour',
+      playerId: 'p2',
+    })
+    expect(state.players.size).toBe(1)
+  })
+
+  it('refuses a colour that is not a blob colour at all', () => {
+    const state = createGame()
+
+    expect(ask(state, 'p1', 'Wilf', '#123456')).toMatchObject({ refused: 'colour' })
+  })
+
+  /**
+   * An away blob is still standing on the floor waiting for its phone. Giving
+   * its colour away while it stood there would be giving its blob away.
+   */
+  it('keeps a colour for a blob whose phone has merely gone quiet', () => {
+    const state = createGame()
+    ask(state, 'p1', 'Wilf', PALETTE[4] as string)
+    left(state, 'p1')
+
+    expect(ask(state, 'p2', 'Ida', PALETTE[4] as string)).toMatchObject({ refused: 'colour' })
+  })
+
+  it('lets a colour go the moment its blob quits', () => {
+    const state = createGame()
+    ask(state, 'p1', 'Wilf', PALETTE[4] as string)
+    finish(state, 'p1')
+
+    expect(playerOf(ask(state, 'p2', 'Ida', PALETTE[4] as string)).colour).toBe(PALETTE[4])
+  })
+
+  /** A blob may not be refused its own colour: that is what a reconnect is. */
+  it('lets a blob that is already here say hello again', () => {
+    const state = createGame()
+    const first = playerOf(ask(state, 'p1', 'Wilf', PALETTE[4] as string))
+    left(state, 'p1')
+
+    const again = playerOf(ask(state, 'p1', 'Wilf', PALETTE[4] as string))
+
+    expect(again).toBe(first)
+    expect(again.away).toBe(false)
+  })
+
+  it('refuses the eleventh blob, because there is no eleventh colour', () => {
+    const state = createGame()
+    for (const [index, colour] of PALETTE.entries()) ask(state, `p${index}`, `B${index}`, colour)
+
+    expect(ask(state, 'extra', 'Ted', PALETTE[0] as string)).toMatchObject({ refused: 'full' })
+    expect(state.players.size).toBe(PALETTE.length)
+  })
+})
+
+/**
+ * One blob per name, on the same terms as one blob per colour. Two blobs
+ * called Ivy are two labels a child cannot tell apart.
+ */
+describe('asking for a name', () => {
+  it('refuses a name somebody already has, whatever the case', () => {
+    const state = createGame()
+    ask(state, 'p1', 'Ivy', PALETTE[0] as string)
+
+    expect(ask(state, 'p2', 'IVY', PALETTE[1] as string)).toEqual({
+      applied: false,
+      refused: 'name',
+      playerId: 'p2',
+    })
+    expect(state.players.size).toBe(1)
+  })
+
+  /** A blob may not be refused its own label. */
+  it('lets a blob keep the name it already has', () => {
+    const state = createGame()
+    ask(state, 'p1', 'Ivy', PALETTE[0] as string)
+
+    expect(ask(state, 'p1', 'ivy', PALETTE[0] as string)).toMatchObject({ kind: 'rejoined' })
+  })
+
+  it('lets a name go the moment its blob quits', () => {
+    const state = createGame()
+    ask(state, 'p1', 'Ivy', PALETTE[0] as string)
+    finish(state, 'p1')
+
+    expect(playerOf(ask(state, 'p2', 'Ivy', PALETTE[1] as string)).name).toBe('Ivy')
   })
 })
 
@@ -133,14 +227,16 @@ describe('finish', () => {
 
   it('leaves nothing behind for a later blob to inherit', () => {
     const state = createGame()
-    const before = playerOf(join(state, 'p1', 'Wilf'))
+    join(state, 'p1', 'Wilf')
     join(state, 'p2', 'Ida')
     draw(state, 'p1', png('AAAA'))
+    say(state, 'p1', 'bye')
     finish(state, 'p1')
 
     // The same phone, back with a new identity, as the player page mints one.
+    // It may well pick the colour it just gave up — that is a child choosing,
+    // and it is the picture and the name that had to go.
     const after = playerOf(join(state, 'p1-again', 'Ted'))
-    expect(after.colour).not.toBe(before.colour)
     expect(after.skin).toBeNull()
     expect(after.bubble).toBeNull()
     expect(after.name).toBe('Ted')

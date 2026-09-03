@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { applyMessage } from './apply.js'
 import { BLOB_SIZE } from './constants.js'
 import { createRng } from './rng.js'
 import { activePlayers } from './selectors.js'
 import { createGame } from './state.js'
 import { blobsIn, contains, placeZone, radiusFor, zoneReach, type CircleZone, type RectZone } from './zones.js'
+import { joinPlayer } from './testRoom.js'
 
 const spot: CircleZone = { id: 'z1', shape: 'circle', x: 100, y: 100, radius: 50, colour: '#fff' }
 const pad: RectZone = { id: 'z2', shape: 'rect', x: 200, y: 200, width: 100, height: 60, colour: '#fff' }
@@ -32,8 +32,8 @@ describe('contains', () => {
 describe('blobsIn', () => {
   it('says who is standing on it', () => {
     const state = createGame()
-    applyMessage(state, { type: 'join', playerId: 'p1', name: 'Wilf' })
-    applyMessage(state, { type: 'join', playerId: 'p2', name: 'Ida' })
+    joinPlayer(state, 'p1', 'Wilf')
+    joinPlayer(state, 'p2', 'Ida')
     const [one, two] = activePlayers(state)
     one!.x = spot.x
     one!.y = spot.y

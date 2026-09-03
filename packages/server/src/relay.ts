@@ -1,5 +1,6 @@
 import {
   generateSessionCode,
+  type HostInboundMessage,
   type HostOutboundMessage,
   type HostToPlayerMessage,
   type PlayerToHostMessage,
@@ -122,6 +123,9 @@ export function createRelay(mint: () => string = generateSessionCode): Relay {
      * out whether that makes it somebody new. The only refusal is that there
      * is no TV yet.
      *
+     * The TV is told it has arrived, so that it can answer with the palette
+     * before the phone has any identity at all.
+     *
      * A rejected connection is told to wait but is left open: the caller closes
      * it, so that it can say why in the close frame.
      */
@@ -134,6 +138,11 @@ export function createRelay(mint: () => string = generateSessionCode): Relay {
       players.set(playerId, connection)
       if (previous && previous !== connection) previous.close()
       announceSession(connection)
+      // And the TV is told there is somebody on the end of a socket who has
+      // not said who they are yet, which is its cue to send back the palette:
+      // a join screen is made of who has which colour, and only the TV knows.
+      const arrived: HostInboundMessage = { type: 'arrived', playerId }
+      host.send(arrived)
       return { ok: true }
     },
 

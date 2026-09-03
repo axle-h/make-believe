@@ -117,6 +117,50 @@ h1 {
   border-radius: 12px;
 }
 
+/*
+ * The row of blob colours. Ten of them, big enough for a three-year-old's
+ * thumb, with the name of whoever has one written under it — a child looking
+ * for their own colour is told why it will not take without reading a message.
+ */
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.swatch {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 3px solid transparent;
+  border-radius: 12px;
+  background: var(--swatch);
+  display: grid;
+  place-items: end center;
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #10121a;
+  overflow: hidden;
+}
+
+.swatch[aria-pressed='true'] {
+  border-color: var(--ink);
+}
+
+/* Taken: still there, still its own colour, plainly not for tapping. */
+.swatch:disabled {
+  opacity: 0.35;
+}
+
+.swatch-who {
+  max-width: 100%;
+  padding-bottom: 0.15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .button:disabled {
   opacity: 0.35;
 }

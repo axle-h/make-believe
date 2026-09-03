@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { applyMessage } from '../apply.js'
 import { CRATE_SIZE, type Crate } from '../carryables.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { tooHeavyForOne, type TooHeavyObjective } from './tooHeavyForOne.js'
+import { joinPlayer } from '../testRoom.js'
 
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
+    joinPlayer(state, `p${index}`, `B${index}`)
   }
   return state
 }

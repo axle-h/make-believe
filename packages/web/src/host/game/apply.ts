@@ -1,8 +1,15 @@
-import { normaliseName, type ServerToHostMessage } from '@make-believe/shared'
+import { normaliseName, type RefusedReason, type ServerToHostMessage } from '@make-believe/shared'
 import type { Rgb } from './colour.js'
-import { BUBBLE_MS } from './constants.js'
+import { BUBBLE_MS, MAX_BLOBS } from './constants.js'
 import { forgetPlayer, observeMessage } from './objectives/director.js'
-import { nextFreeSlot, spawnPosition, takeColour, type GameState, type Player } from './state.js'
+import {
+  claimColour,
+  namedAs,
+  nextFreeSlot,
+  spawnPosition,
+  type GameState,
+  type Player,
+} from './state.js'
 
 /**
  * Everything the world hears from a phone, applied to the state. The state is
@@ -19,11 +26,19 @@ import { nextFreeSlot, spawnPosition, takeColour, type GameState, type Player } 
 /** A message about somebody the world has never heard of. */
 export type IgnoredReason = 'unknown-player'
 
+/**
+ * Why a hello was not granted: the colour has gone, the name is somebody
+ * else's, or there are already as many blobs as there are colours. All three
+ * send the phone back to its join screen to pick again; none of them is a
+ * queue, except the eleventh phone, which is waiting for a physical thing
+ * rather than for a turn.
+ */
 export type ApplyResult =
   | { applied: true; kind: 'joined' | 'rejoined'; player: Player }
   | { applied: true; kind: 'input' | 'away' | 'text' | 'drawing'; player: Player }
   | { applied: true; kind: 'finished'; player: Player }
   | { applied: false; reason: IgnoredReason }
+  | { applied: false; refused: RefusedReason; playerId: string }
 
 export function applyMessage(state: GameState, message: ServerToHostMessage): ApplyResult {
   const result = route(state, message)
@@ -34,7 +49,7 @@ export function applyMessage(state: GameState, message: ServerToHostMessage): Ap
 function route(state: GameState, message: ServerToHostMessage): ApplyResult {
   switch (message.type) {
     case 'join':
-      return join(state, message.playerId, message.name)
+      return join(state, message.playerId, message.name, message.colour)
     case 'input':
       return input(state, message.playerId, message.dx, message.dy)
     case 'finish':
@@ -49,31 +64,47 @@ function route(state: GameState, message: ServerToHostMessage): ApplyResult {
 }
 
 /**
- * A phone said hello. A `playerId` the world already knows keeps its blob,
- * colour, slot, name and position — which is what makes a refresh on the phone
- * a non-event. Anyone else gets a fresh blob in the next colour going.
+ * A phone said hello, asking to be called something and to be a colour.
+ *
+ * A `playerId` the world already knows keeps its blob, colour, slot, name and
+ * position — which is what makes a refresh on the phone a non-event, and why
+ * it is exempt from both checks below: a blob may not be refused its own name
+ * or its own colour.
+ *
+ * Anybody else has to ask for a colour nobody is wearing and a name nobody is
+ * called, and there have to be fewer than ten blobs already. The world decides
+ * all three; the phone only shows what it was told.
  *
  * The name comes off the hello every time rather than only the first: the
  * hello is what a phone says on every reconnect, and it is the only thing that
  * knows what its child is called.
  */
-function join(state: GameState, playerId: string, rawName: string): ApplyResult {
+function join(state: GameState, playerId: string, rawName: string, colour: string): ApplyResult {
   // The schema has already refused a blank name; tidy it for the label.
   const name = normaliseName(rawName)
   const existing = state.players.get(playerId)
   if (existing) {
+    const other = namedAs(state, name)
+    if (other && other !== existing) return { applied: false, refused: 'name', playerId }
     existing.name = name
     existing.away = false
     existing.awayForMs = 0
     return { applied: true, kind: 'rejoined', player: existing }
   }
+  // Ten colours is ten blobs. The eleventh phone waits with its name typed and
+  // gets in the moment somebody quits, which is a physical limit rather than a
+  // turn: nobody who is already in ever waits for anything.
+  if (state.players.size >= MAX_BLOBS) return { applied: false, refused: 'full', playerId }
+  if (namedAs(state, name)) return { applied: false, refused: 'name', playerId }
+  if (!claimColour(state, colour)) return { applied: false, refused: 'colour', playerId }
+
   const slot = nextFreeSlot(state)
   const { x, y } = spawnPosition(state, slot)
   const player: Player = {
     playerId,
     name,
     slot,
-    colour: takeColour(state),
+    colour,
     x,
     y,
     dx: 0,

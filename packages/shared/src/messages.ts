@@ -33,10 +33,22 @@ export const RecipientSchema = z.union([z.literal('*'), PlayerIdSchema])
 
 // --- player → host -------------------------------------------------------
 
+/** A colour, as a hex string. Both palettes are hexes and neither is long. */
+export const ColourSchema = z.string().min(1).max(32)
+
+/**
+ * "I am here, I am called this, and I want to be that colour."
+ *
+ * The colour is asked for rather than handed out: a child picks their blob off
+ * a row of swatches, and the world grants it or says who has it. The name is
+ * asked for on the same terms — one blob each, because two blobs called Ivy
+ * are two labels a child cannot tell apart.
+ */
 export const JoinMessageSchema = z.object({
   type: z.literal('join'),
   playerId: PlayerIdSchema,
   name: z.string().max(MAX_NAME_LENGTH).refine(isValidName, 'name must not be blank'),
+  colour: ColourSchema,
 })
 
 const AxisSchema = z.number().finite().min(-1).max(1)
@@ -101,6 +113,46 @@ export const AssignedMessageSchema = z.object({
 })
 
 /**
+ * Every colour there is, who has it, and what to call it — the whole of what a
+ * join screen needs. It goes to a phone the moment its socket attaches, and to
+ * everybody whenever the roster changes, so an open join screen greys itself
+ * out live and the eleventh phone watches a colour come free.
+ *
+ * `takenBy` is the *name* of whoever is wearing it, because that is what the
+ * phone shows: "Bo has that one now". An away blob still holds its colour —
+ * it is still on the floor, waiting for its phone — so only joining, quitting
+ * and being forgotten for good change this.
+ */
+export const PaletteMessageSchema = z.object({
+  type: z.literal('palette'),
+  colours: z
+    .array(
+      z.object({
+        hex: ColourSchema,
+        name: z.string().min(1).max(32),
+        takenBy: z.string().max(MAX_NAME_LENGTH).nullable(),
+      }),
+    )
+    .max(64),
+})
+
+/**
+ * "Not that one." The answer to a join the world could not grant, with the
+ * reason in as many words.
+ *
+ * It is its own message rather than something the phone works out from a fresh
+ * palette: a palette broadcast to everybody can arrive while a join is in
+ * flight, and a phone that read one as a refusal would refuse itself for
+ * somebody else's arrival. A refused phone goes back to the join screen — it
+ * does not sit on waiting — and the fresh palette that comes with this is what
+ * it needs to say *who* has the colour it wanted.
+ */
+export const RefusedMessageSchema = z.object({
+  type: z.literal('refused'),
+  reason: z.enum(['colour', 'name', 'full']),
+})
+
+/**
  * What the world is asking for, echoed onto the phone under the blob's name.
  *
  * It is information and never an instruction: no screen changes on it, nothing
@@ -162,6 +214,8 @@ export const SessionMessageSchema = z.object({
 
 export const HostToPlayerMessageSchema = z.discriminatedUnion('type', [
   AssignedMessageSchema,
+  PaletteMessageSchema,
+  RefusedMessageSchema,
   BriefMessageSchema,
   WaitingMessageSchema,
   SessionMessageSchema,
@@ -177,6 +231,8 @@ export const HostToPlayerMessageSchema = z.discriminatedUnion('type', [
  */
 export const HostOutboundMessageSchema = z.discriminatedUnion('type', [
   AssignedMessageSchema.extend({ to: RecipientSchema }),
+  PaletteMessageSchema.extend({ to: RecipientSchema }),
+  RefusedMessageSchema.extend({ to: RecipientSchema }),
   BriefMessageSchema.extend({ to: RecipientSchema }),
 ])
 
@@ -184,6 +240,20 @@ export const HostOutboundMessageSchema = z.discriminatedUnion('type', [
 
 export const LeftMessageSchema = z.object({
   type: z.literal('left'),
+  playerId: PlayerIdSchema,
+})
+
+/**
+ * A phone has a socket but has not said who it is yet. The relay sends it so
+ * that the TV can answer with the palette, which is what a join screen is
+ * made of.
+ *
+ * It looks like the mirror of `left` and is not one: `left` is in the game
+ * model's union because the model genuinely acts on it, and this is a socket
+ * that has not become a blob yet. The world has nothing to hear.
+ */
+export const ArrivedMessageSchema = z.object({
+  type: z.literal('arrived'),
   playerId: PlayerIdSchema,
 })
 
@@ -198,9 +268,9 @@ export const ServerToHostMessageSchema = z.discriminatedUnion('type', [
 ])
 
 /**
- * Everything the host *socket* can receive. `session` is kept out of the union
- * above on purpose: it is about the connection rather than the world, and the
- * game model must never have a case for it.
+ * Everything the host *socket* can receive. `session` and `arrived` are kept
+ * out of the union above on purpose: both are about connections rather than
+ * about the world, and the game model must never have a case for either.
  */
 export const HostInboundMessageSchema = z.discriminatedUnion('type', [
   JoinMessageSchema,
@@ -209,6 +279,7 @@ export const HostInboundMessageSchema = z.discriminatedUnion('type', [
   TextMessageSchema,
   FinishMessageSchema,
   LeftMessageSchema,
+  ArrivedMessageSchema,
   SessionMessageSchema,
 ])
 
@@ -222,6 +293,12 @@ export type TextMessage = z.infer<typeof TextMessageSchema>
 export type FinishMessage = z.infer<typeof FinishMessageSchema>
 export type PlayerToHostMessage = z.infer<typeof PlayerToHostMessageSchema>
 export type AssignedMessage = z.infer<typeof AssignedMessageSchema>
+export type PaletteMessage = z.infer<typeof PaletteMessageSchema>
+/** One swatch on a join screen: a colour, its word, and who has it. */
+export type PaletteEntry = PaletteMessage['colours'][number]
+export type RefusedMessage = z.infer<typeof RefusedMessageSchema>
+export type RefusedReason = RefusedMessage['reason']
+export type ArrivedMessage = z.infer<typeof ArrivedMessageSchema>
 export type BriefMessage = z.infer<typeof BriefMessageSchema>
 export type BriefTone = BriefMessage['tone']
 export type WaitingMessage = z.infer<typeof WaitingMessageSchema>

@@ -6,13 +6,14 @@ import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { colourHunt, type ColourHuntObjective } from './colourHunt.js'
+import { joinPlayer } from '../testRoom.js'
 
 const PNG = 'data:image/png;base64,AAAA'
 
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
+    joinPlayer(state, `p${index}`, `B${index}`)
   }
   return state
 }
@@ -165,7 +166,7 @@ describe('coming and going', () => {
     paint(state, 'p1', hexOf(objective.paint))
     paint(state, 'p2', hexOf(objective.paint))
 
-    applyMessage(state, { type: 'join', playerId: 'p3', name: 'Ted' })
+    joinPlayer(state, 'p3', 'Ted')
     colourHunt.step(objective, state, 100)
     expect(objective.outcome).toBe('running')
 

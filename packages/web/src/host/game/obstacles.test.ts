@@ -3,11 +3,12 @@ import { applyMessage } from './apply.js'
 import { BLOB_SIZE } from './constants.js'
 import { insideObstacle, pushOutOfObstacles, PUSH_OUT_SPEED, type Obstacle } from './obstacles.js'
 import { createGame, type GameState, type Player } from './state.js'
+import { joinPlayer } from './testRoom.js'
 
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
+    joinPlayer(state, `p${index}`, `B${index}`)
   }
   return state
 }

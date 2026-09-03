@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { applyMessage } from '../apply.js'
 import { stillOut, type Parcel } from '../carryables.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
@@ -7,11 +6,12 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from '../constants.js'
 import { createGame, type GameState } from '../state.js'
 import { contains, roofHeight } from '../zones.js'
 import { fetch, type FetchObjective } from './fetch.js'
+import { joinPlayer } from '../testRoom.js'
 
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
+    joinPlayer(state, `p${index}`, `B${index}`)
   }
   return state
 }

@@ -1,8 +1,9 @@
+import type { PaletteEntry } from '@make-believe/shared'
 import type { Carryable } from './carryables.js'
-import { CROWN_BADGE } from './constants.js'
+import { BLOB_COLOURS, CROWN_BADGE } from './constants.js'
 import type { Mark, Outcome } from './objectives/types.js'
 import type { Obstacle } from './obstacles.js'
-import type { GameState, Player } from './state.js'
+import { wearerOf, type GameState, type Player } from './state.js'
 import type { Zone } from './zones.js'
 
 /** Read-only views of the world, for the renderer and the e2e test hook. */
@@ -25,6 +26,22 @@ export function activePlayers(state: GameState): Player[] {
 
 export function playerCount(state: GameState): number {
   return state.players.size
+}
+
+/**
+ * Every colour there is, and who has it — the whole of what a join screen is
+ * made of. Names rather than ids, because the phone shows "Bo has that one".
+ *
+ * An away blob is still on it: its blob is still standing on the floor waiting
+ * for its phone, so its colour is not going spare. Only joining, quitting and
+ * being forgotten for good change this.
+ */
+export function palette(state: GameState): PaletteEntry[] {
+  return BLOB_COLOURS.map((colour) => ({
+    hex: colour.hex,
+    name: colour.name,
+    takenBy: wearerOf(state, colour.hex)?.name ?? null,
+  }))
 }
 
 /** A plain, serialisable copy of the world for the e2e test hook. */

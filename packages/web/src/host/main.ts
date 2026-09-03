@@ -2,12 +2,14 @@ import {
   HostInboundMessageSchema,
   type HostInboundMessage,
   type HostOutboundMessage,
+  type Recipient,
 } from '@make-believe/shared'
 import { connect } from '../lib/ws.js'
 import {
   applyMessage,
   briefFor,
   createGame,
+  palette,
   snapshot,
   type Brief,
   type GameSnapshot,
@@ -105,14 +107,30 @@ function sendBriefs(briefs: Brief[]): void {
 }
 
 /**
- * A phone said something. The model decides what it means; the only thing the
- * TV has to answer is a hello, and the answer is which blob you are. That
- * message is also the phone's cue to put its controller up, so it goes out on
- * a rejoin as well — a phone that has just reloaded is waiting for it.
+ * Every colour and who has it, which is the whole of what a join screen is
+ * made of. It goes to one phone when its socket turns up, and to everybody
+ * whenever the roster changes — so an open join screen greys itself out live,
+ * and the eleventh phone watches a colour come free without anybody refreshing
+ * anything.
+ */
+function sendPalette(to: Recipient): void {
+  send({ type: 'palette', colours: palette(state), to })
+}
+
+/**
+ * A phone said something. The model decides what it means; the only things the
+ * TV has to answer are a socket arriving and a hello.
  *
- * The answer carries whether this blob already has its drawing, because a
- * world that has just been created has forgotten every one of them and the
- * phones are the only place they still exist.
+ * The answer to a hello is which blob you are, and it doubles as the phone's
+ * cue to put its controller up, so it goes out on a rejoin as well — a phone
+ * that has just reloaded is waiting for it. It carries whether this blob
+ * already has its drawing, because a world that has just been created has
+ * forgotten every one of them and the phones are the only place they exist.
+ *
+ * A hello the world cannot grant is refused in as many words — the colour has
+ * gone, the name is somebody else's, or there are already ten blobs — and the
+ * fresh palette goes out **first**, so that the phone showing the refusal
+ * already knows who has what.
  *
  * A blob that has walked in halfway through a task is told what is going on
  * right behind it, because the announcement it needed has already been made.
@@ -124,8 +142,25 @@ function handleMessage(message: HostInboundMessage): void {
     session = message.session
     return
   }
+  // A socket with nobody on it yet. Also not something that happened in the
+  // world — there is no blob to hear about — so the model never sees it either.
+  if (message.type === 'arrived') {
+    sendPalette(message.playerId)
+    return
+  }
   const result = applyMessage(state, message)
-  if (!result.applied) return
+  if (!result.applied) {
+    if (!('refused' in result)) return
+    sendPalette('*')
+    send({ type: 'refused', reason: result.refused, to: result.playerId })
+    return
+  }
+  if (result.kind === 'finished') {
+    // A colour has come free, and somebody may be sitting on a join screen
+    // waiting for exactly that.
+    sendPalette('*')
+    return
+  }
   if (result.kind !== 'joined' && result.kind !== 'rejoined') return
   const { player } = result
   send({
@@ -135,11 +170,17 @@ function handleMessage(message: HostInboundMessage): void {
     hasDrawing: player.skin !== null,
     to: player.playerId,
   })
+  if (result.kind === 'joined') sendPalette('*')
   const brief = briefFor(state, player.playerId)
   if (brief) send({ ...brief, type: 'brief', to: player.playerId })
 }
 
-const phaser = startPhaser(world, state, { onBriefs: sendBriefs })
+const phaser = startPhaser(world, state, {
+  onBriefs: sendBriefs,
+  // A blob the world has waited long enough for is gone, and its colour with
+  // it. Anybody on a join screen should see that swatch go live.
+  onForgotten: () => sendPalette('*'),
+})
 
 /**
  * The one thing on the TV that answers a key. It is hidden behind `d`, it is

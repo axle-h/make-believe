@@ -4,11 +4,12 @@ import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { drawIt, type DrawItObjective } from './drawIt.js'
+import { joinPlayer } from '../testRoom.js'
 
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
+    joinPlayer(state, `p${index}`, `B${index}`)
   }
   return state
 }

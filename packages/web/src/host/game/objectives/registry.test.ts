@@ -1,6 +1,5 @@
 import { MAX_DETAIL_LENGTH, MAX_HEADLINE_LENGTH } from '@make-believe/shared'
 import { describe, expect, it } from 'vitest'
-import { applyMessage } from '../apply.js'
 import { BLOB_SIZE, MAX_LEVEL, PALETTE } from '../constants.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
@@ -8,6 +7,7 @@ import { createGame, type GameState } from '../state.js'
 import { contains, radiusFor } from '../zones.js'
 import { eligibleTemplates, templateFor, TEMPLATES, unlockedAt } from './registry.js'
 import type { ObjectiveTemplate } from './types.js'
+import { joinPlayer } from '../testRoom.js'
 
 /**
  * What every task has to be true of, whatever it is. The catalogue is meant to
@@ -18,7 +18,7 @@ import type { ObjectiveTemplate } from './types.js'
 function room(count: number, seed = 1): GameState {
   const state = createGame(seed)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
+    joinPlayer(state, `p${index}`, `B${index}`)
   }
   return state
 }

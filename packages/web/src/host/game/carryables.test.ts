@@ -14,11 +14,12 @@ import { SPEED } from './constants.js'
 import { insideObstacle, type Box } from './obstacles.js'
 import { createGame, type GameState } from './state.js'
 import type { CircleZone } from './zones.js'
+import { joinPlayer } from './testRoom.js'
 
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
+    joinPlayer(state, `p${index}`, `B${index}`)
   }
   return state
 }

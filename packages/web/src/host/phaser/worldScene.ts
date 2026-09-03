@@ -222,6 +222,13 @@ export interface SceneOptions {
    * sending.
    */
   onBriefs?: (briefs: Brief[]) => void
+  /**
+   * Blobs the world has waited long enough for and given up on. Their colours
+   * and names have gone back into the palette, and a phone sitting on a join
+   * screen wants to know. Same arrangement as `onBriefs`: the scene knows
+   * nothing about the socket.
+   */
+  onForgotten?: (playerIds: string[]) => void
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -316,6 +323,7 @@ export class WorldScene extends Phaser.Scene {
     const step = Math.min(delta, MAX_STEP_MS)
     const result = tick(this.state, step)
     if (result.briefs.length > 0) this.options.onBriefs?.(result.briefs)
+    if (result.removed.length > 0) this.options.onForgotten?.(result.removed)
     this.render(step)
   }
 

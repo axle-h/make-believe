@@ -3,10 +3,11 @@ import { applyMessage } from './apply.js'
 import { AWAY_TIMEOUT_MS, BLOB_SIZE, BUBBLE_MS, SPEED, WORLD_HEIGHT, WORLD_WIDTH } from './constants.js'
 import { nextFreeSlot, createGame, type GameState, type Player } from './state.js'
 import { tick } from './tick.js'
+import { joinPlayer } from './testRoom.js'
 
 function withPlayer(playerId = 'p1', name = 'Wilf'): { state: GameState; player: Player } {
   const state = createGame()
-  const result = applyMessage(state, { type: 'join', playerId, name })
+  const result = joinPlayer(state, playerId, name)
   if (!result.applied) throw new Error('join should apply')
   return { state, player: result.player }
 }
@@ -65,7 +66,7 @@ describe('movement', () => {
 describe('forgetting a phone that never came back', () => {
   it('forgets an away blob once the wait is up, and frees its slot', () => {
     const { state } = withPlayer()
-    applyMessage(state, { type: 'join', playerId: 'p2', name: 'Ida' })
+    joinPlayer(state, 'p2', 'Ida')
     applyMessage(state, { type: 'left', playerId: 'p1' })
 
     const result = tick(state, AWAY_TIMEOUT_MS)
@@ -93,7 +94,7 @@ describe('forgetting a phone that never came back', () => {
     const { state } = withPlayer()
     applyMessage(state, { type: 'left', playerId: 'p1' })
     tick(state, AWAY_TIMEOUT_MS - 1)
-    applyMessage(state, { type: 'join', playerId: 'p1', name: 'Wilf' })
+    joinPlayer(state, 'p1', 'Wilf')
     applyMessage(state, { type: 'left', playerId: 'p1' })
     tick(state, AWAY_TIMEOUT_MS - 1)
 

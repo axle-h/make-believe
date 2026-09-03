@@ -5,11 +5,12 @@ import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { findYourColour, type FindYourColourObjective } from './findYourColour.js'
 import { nameOfColour } from './pads.js'
+import { joinPlayer } from '../testRoom.js'
 
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
+    joinPlayer(state, `p${index}`, `B${index}`)
   }
   return state
 }
@@ -67,7 +68,7 @@ describe('handing out the pads', () => {
   it('sends a blob wearing a colour no pad has to the nearest one going', () => {
     const state = room(2)
     const objective = make(state)
-    applyMessage(state, { type: 'join', playerId: 'p3', name: 'Ted' })
+    joinPlayer(state, 'p3', 'Ted')
     const latecomer = state.players.get('p3')!
     latecomer.colour = '#4fa9fe'
 
@@ -155,7 +156,7 @@ describe('getting home', () => {
     const objective = make(state)
     findYourColour.step(objective, state, 16)
 
-    applyMessage(state, { type: 'join', playerId: 'p3', name: 'Ted' })
+    joinPlayer(state, 'p3', 'Ted')
     findYourColour.step(objective, state, 16)
 
     expect(objective.homes.p3).toBeDefined()

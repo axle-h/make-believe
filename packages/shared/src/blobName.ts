@@ -30,6 +30,16 @@ export function normaliseName(value: string): string {
   return printable.replace(/\s+/g, ' ').trim()
 }
 
+/**
+ * Two names that are the same label on a TV. "IVY" and "ivy" are one blob's
+ * worth of name, so the world refuses the second of them — and only the world
+ * decides that; both ends share this so that a join screen can grey a name out
+ * as it is typed and be right about it.
+ */
+export function sameName(a: string, b: string): boolean {
+  return normaliseName(a).toLowerCase() === normaliseName(b).toLowerCase()
+}
+
 /** True if this is something we would happily draw above a blob. */
 export function isValidName(value: unknown): value is string {
   if (typeof value !== 'string') return false

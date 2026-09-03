@@ -5,12 +5,13 @@ import { BLOB_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from './constants.js'
 import { playerById } from './selectors.js'
 import { createGame, type GameState, type Player } from './state.js'
 import { tick } from './tick.js'
+import { joinPlayer } from './testRoom.js'
 
 /** A world with the given blobs, placed exactly where the test wants them. */
 function world(...spots: Array<{ id: string; x: number; y: number }>): GameState {
   const state = createGame()
   for (const spot of spots) {
-    applyMessage(state, { type: 'join', playerId: spot.id, name: spot.id })
+    joinPlayer(state, spot.id, spot.id)
     const player = playerById(state, spot.id)
     if (!player) throw new Error('join should apply')
     player.x = spot.x

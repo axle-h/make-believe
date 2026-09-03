@@ -5,11 +5,12 @@ import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { hotPotato, type HotPotatoObjective } from './hotPotato.js'
+import { joinPlayer } from '../testRoom.js'
 
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) {
-    applyMessage(state, { type: 'join', playerId: `p${index}`, name: `B${index}` })
+    joinPlayer(state, `p${index}`, `B${index}`)
   }
   // Spread out, so nobody is touching anybody until a test says so.
   let x = 100

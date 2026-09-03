@@ -8,6 +8,7 @@ import {
   driveTo,
   dropSocket,
   finishPlaying,
+  freeColours,
   herdOnto,
   hostSession,
   isOn,
@@ -15,6 +16,7 @@ import {
   nearestBlob,
   objectiveNow,
   openTool,
+  pickAndJoin,
   playerIdNow,
   playerNamed,
   pushJoystick,
@@ -184,12 +186,13 @@ test.describe('a party', () => {
       colour: idaBefore.colour,
     })
 
-    // Somebody new on the same phone: a new blob, a new colour, no picture.
+    // Somebody new on the same phone: a new blob, a new name, no picture. The
+    // colour is whatever they pick — the one just given up is back on the
+    // palette like any other, because a child chooses now.
     const ted = await joinAgainAs(wilf, 'Ted')
     await expect.poll(async () => (await snapshot(host)).players.length).toBe(2)
     const fresh = await playerNamed(host, 'Ted')
     expect(fresh.playerId).not.toBe(before.playerId)
-    expect(fresh.colour).not.toBe(before.colour)
     expect(fresh.colour).not.toBe(idaBefore.colour)
     expect(fresh.skinKey).toBeNull()
 
@@ -218,22 +221,86 @@ test.describe('a party', () => {
 
   /**
    * The whole of getting in. A phone that has never been here opens the
-   * address and is asked one thing; there is no code to carry over from the
-   * TV, and therefore nothing for an installed phone to have to scan for.
+   * address and is asked two things — a name and a colour — and there is no
+   * code to carry over from the TV, so nothing for an installed phone to scan.
+   *
+   * The join screen waits for a world before it can be filled in at all: the
+   * swatches are the palette the TV sent, and only the TV knows who has what.
    */
-  test('a phone opened at the bare URL is asked for a name and nothing else', async ({ party }) => {
+  test('a phone opened at the bare URL picks a name and a colour, and nothing else', async ({
+    party,
+  }) => {
     await party.openHost()
     const phone = await party.openPhone('/')
 
-    await expect(phone.locator('#screen-join')).toBeVisible()
-    await phone.fill('#name-input', 'Wilf')
-    await phone.click('#join-button')
-    await expect(phone.locator('#screen-play')).toBeVisible()
+    await pickAndJoin(phone, 'Wilf')
 
-    // And next time there is not even that: the name is remembered, so opening
-    // the page is the whole of it.
+    // And next time there is not even that: it is the same world and this
+    // phone is already its blob, so opening the page is the whole of it.
     await phone.goto('/')
     await expect(phone.locator('#screen-play')).toBeVisible()
+  })
+
+  /**
+   * Two children reaching for the same colour. There is one of each, so the
+   * second phone is simply shown who has it — greyed, with their name under
+   * it — and picks another. Nothing about it is a queue.
+   */
+  test('a colour somebody has is greyed on everybody else, with their name on it', async ({
+    party,
+  }) => {
+    const host = await party.openHost()
+    const phone = await party.openPhone('/')
+    await expect(phone.locator('#screen-join')).toBeVisible()
+    const going = await freeColours(phone)
+    const wanted = going[0] as string
+
+    const wilf = await party.joinAs('Wilf', wanted)
+
+    // The open join screen greys it out live, with nobody refreshing anything.
+    const taken = phone.locator(`#join-colours .swatch[data-colour="${wanted}"]`)
+    await expect(taken).toBeDisabled()
+    await expect(taken).toHaveText('Wilf')
+    await expect.poll(async () => (await freeColours(phone)).includes(wanted)).toBe(false)
+
+    // So the second child picks another one, and the two blobs are plainly
+    // different colours on the TV.
+    await pickAndJoin(phone, 'Ida')
+    const both = (await snapshot(host)).players
+    expect(both).toHaveLength(2)
+    expect(new Set(both.map((player) => player.colour)).size).toBe(2)
+    expect((await playerNamed(host, 'Wilf')).colour).toBe(wanted)
+    expect(wilf.name).toBe('Wilf')
+  })
+
+  /**
+   * And two children reaching for the same name. One blob per name, on the
+   * same terms as one blob per colour: two labels a child cannot tell apart
+   * are worse than being asked to think of another name.
+   */
+  test('a name somebody has is refused, and the phone is told so', async ({ party }) => {
+    const host = await party.openHost()
+    await party.joinAs('Ivy')
+    const phone = await party.openPhone('/')
+    await expect(phone.locator('#screen-join')).toBeVisible()
+
+    // Said while it is being typed, out of the palette the phone already has.
+    await phone.fill('#name-input', 'ivy')
+    await expect(phone.locator('#join-error')).toHaveText('Somebody is already called that.')
+
+    // And said again by the world, which is the only thing that decides. The
+    // phone lands back on the join screen rather than sitting on waiting.
+    await phone.locator('#join-colours .swatch:not(:disabled)').first().click()
+    await phone.click('#join-button')
+    await expect(phone.locator('#screen-join')).toBeVisible()
+    await expect(phone.locator('#join-error')).toHaveText('Somebody is already called that.')
+    expect((await snapshot(host)).players).toHaveLength(1)
+
+    // Another name and the same phone walks in.
+    await pickAndJoin(phone, 'Ida')
+    await expect
+      .poll(async () => (await snapshot(host)).players.map((player) => player.name).sort())
+      .toEqual(['Ida', 'Ivy'])
   })
 
   test('a phone that reloads keeps its blob', async ({ party }) => {

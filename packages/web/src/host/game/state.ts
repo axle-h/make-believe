@@ -1,3 +1,4 @@
+import { sameName } from '@make-believe/shared'
 import type { Rgb } from './colour.js'
 import { BLOB_SIZE, PALETTE, WORLD_HEIGHT, WORLD_WIDTH } from './constants.js'
 import { createDirector, type Director } from './objectives/director.js'
@@ -59,12 +60,6 @@ export interface GameState {
   world: World
   players: Map<string, Player>
   /**
-   * Where in the palette the next blob's colour comes from. It only ever goes
-   * forward, so a child who finishes and starts again comes back a different
-   * colour — which, from the sofa, is most of what starting again looks like.
-   */
-  nextColour: number
-  /**
    * What the world is currently asking everybody to do. It is a thing the
    * world wants, never a mode a phone is in: every tool on every phone is live
    * throughout, and a child who ignores it entirely is still playing.
@@ -81,7 +76,6 @@ export function createGame(seed?: number): GameState {
   return {
     world: { width: WORLD_WIDTH, height: WORLD_HEIGHT },
     players: new Map(),
-    nextColour: 0,
     objectives: createDirector(seed),
   }
 }
@@ -103,24 +97,36 @@ export function spawnPosition(state: GameState, slot: number): { x: number; y: n
 }
 
 /**
- * The colour for a brand new blob: the next one round the palette that nobody
- * is already wearing. The cursor only goes forward, which is the difference
- * between a phone that has reconnected — same blob, same colour — and one that
- * has finished and started again, which should plainly be somebody else.
+ * Is this colour one a blob may have, and is it going spare?
+ *
+ * Colours are asked for rather than handed out: a child picks one off a row of
+ * swatches and the world grants it or says who has it. There is no wrapping
+ * round the palette any more — past ten there is no colour to give, and the
+ * world says so rather than sitting two children in the same blue.
+ *
+ * An **away** blob still holds its colour. It is still standing on the floor
+ * waiting for its phone, and giving that away while it stood there would be
+ * giving its blob away.
  */
-export function takeColour(state: GameState): string {
-  const worn = new Set([...state.players.values()].map((player) => player.colour))
-  for (let step = 0; step < PALETTE.length; step++) {
-    const index = (state.nextColour + step) % PALETTE.length
-    const colour = PALETTE[index] as string
-    if (worn.has(colour)) continue
-    state.nextColour = index + 1
-    return colour
+export function claimColour(state: GameState, colour: string): boolean {
+  if (!PALETTE.includes(colour)) return false
+  return wearerOf(state, colour) === undefined
+}
+
+/** Whoever is wearing this colour, if anybody. */
+export function wearerOf(state: GameState, colour: string): Player | undefined {
+  for (const player of state.players.values()) {
+    if (player.colour === colour) return player
   }
-  // More blobs than there are colours: somebody has to share one.
-  const colour = PALETTE[state.nextColour % PALETTE.length] as string
-  state.nextColour += 1
-  return colour
+  return undefined
+}
+
+/** Whoever is already called this, if anybody. Case makes no difference. */
+export function namedAs(state: GameState, name: string): Player | undefined {
+  for (const player of state.players.values()) {
+    if (sameName(player.name, name)) return player
+  }
+  return undefined
 }
 
 /** Keep a position inside the walls, allowing for the blob's own width. */

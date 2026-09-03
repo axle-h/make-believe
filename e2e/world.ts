@@ -99,6 +99,8 @@ export interface DirectorSnapshot {
   level: number
   score: number
   streak: number
+  /** What the *world* has pinned to a blob, over and above the task's own. */
+  marks: MarkSnapshot[]
   objective: ObjectiveSnapshot | null
 }
 
@@ -156,7 +158,7 @@ export interface Party {
    * is served is the only world there is, and which session of it this is gets
    * settled on the socket.
    */
-  joinAs(name: string): Promise<Player>
+  joinAs(name: string, colour?: string): Promise<Player>
   /** A phone opened at an arbitrary address, for the cases that never join. */
   openPhone(path: string): Promise<Page>
 }
@@ -171,7 +173,7 @@ export const test = base.extend<{ party: Party }>({
     }
     await use({
       openHost: () => openHost(open),
-      joinAs: (name) => joinAs(open, name),
+      joinAs: (name, colour) => joinAs(open, name, colour),
       openPhone: async (path) => {
         const page = await open()
         await page.goto(path)
@@ -211,7 +213,7 @@ export function playerIdNow(page: Page): Promise<string | null> {
   return page.evaluate(() => window.localStorage.getItem('make-believe.playerId'))
 }
 
-async function joinAs(open: OpenPage, name: string): Promise<Player> {
+async function joinAs(open: OpenPage, name: string, colour?: string): Promise<Player> {
   const page = await open()
   // Watch the phone's sockets without standing in their way: everything is
   // forwarded to the real relay, so the phone cannot tell the difference.
@@ -223,12 +225,37 @@ async function joinAs(open: OpenPage, name: string): Promise<Player> {
   // Nothing but the address. A phone that has scanned the QR code once, or
   // installed the page, opens exactly this.
   await page.goto('/')
-  await page.fill('#name-input', name)
-  await page.click('#join-button')
-  await expect(page.locator('#screen-play')).toBeVisible()
+  await pickAndJoin(page, name, colour)
   const playerId = await playerIdNow(page)
   expect(playerId).toBeTruthy()
   return { page, playerId: playerId as string, name, sockets }
+}
+
+/**
+ * Type a name, tap a colour, and get in — which is the whole of getting in.
+ *
+ * The join screen waits for the TV before it can be filled in at all: the row
+ * of swatches is the palette the TV sent, so a phone with no world to talk to
+ * has nothing to choose from. With no colour named it takes the first one
+ * going, which is what a child does.
+ */
+export async function pickAndJoin(page: Page, name: string, colour?: string): Promise<void> {
+  await expect(page.locator('#screen-join')).toBeVisible()
+  await page.fill('#name-input', name)
+  const swatch = colour
+    ? page.locator(`#join-colours .swatch[data-colour="${colour}"]`)
+    : page.locator('#join-colours .swatch:not(:disabled)').first()
+  await expect(swatch).toBeEnabled()
+  await swatch.click()
+  await page.click('#join-button')
+  await expect(page.locator('#screen-play')).toBeVisible()
+}
+
+/** Every colour going on this phone's join screen, in palette order. */
+export function freeColours(page: Page): Promise<string[]> {
+  return page.locator('#join-colours .swatch:not(:disabled)').evaluateAll((nodes) =>
+    nodes.map((node) => (node as HTMLElement).dataset.colour ?? ''),
+  )
 }
 
 /**
@@ -481,9 +508,7 @@ export async function finishPlaying(player: Player): Promise<void> {
  * a different blob however familiar the child holding it is.
  */
 export async function joinAgainAs(player: Player, name: string): Promise<Player> {
-  await player.page.fill('#name-input', name)
-  await player.page.click('#join-button')
-  await expect(player.page.locator('#screen-play')).toBeVisible()
+  await pickAndJoin(player.page, name)
   const playerId = await playerIdNow(player.page)
   expect(playerId).toBeTruthy()
   return { ...player, playerId: playerId as string, name }

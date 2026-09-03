@@ -56,6 +56,7 @@ Everything ships as **one container running one Node process**. The two "modes" 
 - **A 4-letter session code, negotiated on the socket.** It names the world the current TV is running so that a phone can tell one world from the next — nothing more. It appears in **no URL**, nobody reads it, nobody types it and no QR code carries it: the relay mints one every time a TV attaches and tells whoever connects. A phone holding a different one held an identity from a world that is gone, so it drops that identity and comes back as a new player, keeping its name and its picture. **Multiple rooms are strictly out of scope**, and so is any way of choosing a world.
 - **The QR code carries the deployment's address and nothing else.** It is how a phone that has never been here finds the page; once it has, or once it is installed, opening the app is the whole of joining. There is no scan step to get in.
 - **Players get a persistent `playerId` in localStorage** so a refresh reattaches to the same blob.
+- **A colour each, picked on the phone, and ten of them.** The palette comes from the TV — the phone opens its socket before joining and is sent every colour with the name of whoever has it — so the taken ones are greyed with that name and the world is the only thing that decides. Ten colours is therefore a hard cap of **ten blobs**: the eleventh phone waits with its name typed and gets in the moment somebody quits. That is the only queue in the game and it is a physical limit, not a round — no phone that is *in* ever waits for anything. **Names are unique too**, on the same terms: two blobs called Ivy are two labels a child cannot tell apart, and `sameName` in `shared` is what both ends compare with.
 - **Server is bundled to a single file with esbuild** so the runtime image has no `node_modules` at all.
 
 ## Repo layout
@@ -96,7 +97,12 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 
 ```ts
 // player → host
-{ type: 'join',    playerId: string, name: string }
+{ type: 'join',    playerId: string, name: string, colour: string }
+//                                                              // the colour and the name are *asked for*, not
+//                                                              // handed out: one blob each of both, and the
+//                                                              // world grants or refuses. A `playerId` the
+//                                                              // world already knows is exempt from both —
+//                                                              // a blob may not be refused its own label.
 { type: 'input',   playerId: string, dx: number, dy: number }   // normalised -1..1, ~30/sec while touching, only on change
 { type: 'drawing', playerId: string, png: string }              // data:image/png;base64,... from canvas.toDataURL()
 { type: 'text',    playerId: string, value: string }            // cap ~60 chars
@@ -107,18 +113,39 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 //                                                              // A blob can never be renamed — the phone throws
 //                                                              // its own identity away at the same moment and
 //                                                              // comes back, if it comes back, as somebody new
-//                                                              // in a new colour.
+//                                                              // in whatever colour they pick.
 
 // host → player
 { type: 'assigned', colour: string, slot: number, hasDrawing: boolean }
 //                                                              // also the phone's cue to show its controller.
 //                                                              // hasDrawing false = "I haven't got your picture";
 //                                                              // the phone keeps the last one it sent and re-sends it.
+{ type: 'palette', colours: [{ hex, name, takenBy: string | null }] }
+//                                                              // every colour there is and who has it, which is
+//                                                              // the whole of what a join screen is made of.
+//                                                              // Sent to one phone the moment its socket
+//                                                              // attaches, and to '*' whenever the roster
+//                                                              // changes — an away blob keeps its colour, so
+//                                                              // only joining, quitting and being forgotten
+//                                                              // move it.
+{ type: 'refused', reason: 'colour' | 'name' | 'full' }         // that hello was not granted, and why. Its own
+//                                                              // message rather than something the phone works
+//                                                              // out from a palette, because a palette to '*'
+//                                                              // can arrive while a join is in flight. A
+//                                                              // refused phone goes back to the *join* screen.
 { type: 'brief', headline: string, detail?: string, colour?: string,
-  tone: 'task' | 'win' | 'miss' | 'level' }                     // what the world is asking for, echoed above the
+  emphasis?: string, tone: 'task' | 'win' | 'miss' | 'level' }  // what the world is asking for, echoed above the
 //                                                              // joystick. Information, never an instruction: it
 //                                                              // changes no screen and takes no tool away.
-//                                                              // headline '' takes the strip down.
+//                                                              // headline '' takes the strip down. `emphasis`
+//                                                              // is a word *of the headline* to paint in
+//                                                              // `colour`: "everybody go **green**".
+
+// relay → host only
+{ type: 'arrived', playerId: string }                           // a socket with nobody on it yet, so that the TV
+//                                                              // can answer with the palette. NOT the mirror of
+//                                                              // `left`: the game model has no case for it,
+//                                                              // because there is no blob to hear about.
 
 // relay → both roles (never sent by the host)
 { type: 'waiting' }                                             // no TV for you: wait and try again
@@ -142,6 +169,7 @@ Relay semantics:
 - A phone is never turned away for the code it is holding — it is told which world this is and works the rest out itself. The one refusal is that there is no TV yet.
 - Player messages are forwarded to the host, tagged with `playerId`. Host messages carry a `to: playerId` (or `to: '*'`) and are forwarded accordingly.
 - If the host disconnects, the world is torn down and players get a `{ type: 'waiting' }` so they show "waiting for TV".
+- If a player connects, the host gets `{ type: 'arrived', playerId }` — a socket, not yet a blob — and answers it with the palette.
 - If a player disconnects, the host gets `{ type: 'left', playerId }`.
 
 ## Server (packages/server)
@@ -176,7 +204,7 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 
 **`web` — host game model** (`src/host/game/`). This is the important one.
 - The game model is **pure TypeScript with no Phaser imports**: `createGame()`, `applyMessage(state, msg)`, `tick(state, dtMs)`, plus selectors. Phaser scenes only read from it and push messages into it.
-- Vitest (node environment, no jsdom needed): join spawns a player at a sane position; input then `tick` moves them by `velocity * dt`; world bounds clamp; `text` creates a bubble that expires after N ms of ticks; `drawing` sets a skin key and a fresh key on every redraw; a second `join` from a known `playerId` keeps everything it had; `finish` deletes the player, its drawing and its colour outright, and the next blob gets a colour nobody just gave up; `left` marks the player away.
+- Vitest (node environment, no jsdom needed): join spawns a player at a sane position; input then `tick` moves them by `velocity * dt`; world bounds clamp; `text` creates a bubble that expires after N ms of ticks; `drawing` sets a skin key and a fresh key on every redraw; a second `join` from a known `playerId` keeps everything it had; the colour and the name asked for are granted when free and refused with a reason when not, and a blob is never refused its own; `finish` deletes the player, its drawing and its name and puts its colour back on the palette; `left` marks the player away and keeps both.
 - **Phaser itself is not unit-tested.** It needs a canvas/WebGL and jsdom can't provide one. Keep the Phaser layer thin enough that it doesn't need to be. The same goes for the debug menu's DOM: the keyboard is a pure function in `src/host/debugMenu.ts` and that is what has tests.
 
 **`web` — player**
@@ -186,9 +214,9 @@ Vitest at the root with per-package projects (`vitest.workspace.ts`). `pnpm test
 
 **e2e (`/e2e`, Playwright)** — runs against `pnpm build && pnpm start`.
 - One browser context opens `/host/`. The session is read off the `window.__game` test hook when a test needs it; nothing on the TV shows it and no URL carries it.
-- Two more contexts open `/`, enter a name, and join. That is the whole of getting in.
+- Two more contexts open `/`, wait for the TV, type a name, tap a colour and join. That is the whole of getting in — and the join screen cannot be filled in before the TV answers, because the swatches *are* the palette it sent.
 - A TV reload gives every phone a new identity under the same name, with nobody touching them.
-- Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round-trips a PNG; a blob is redrawn mid-game without losing its place; a blob that finishes is forgotten by the TV and its phone comes back as somebody new in a new colour; the room solves the simple task until the level rises and the world starts asking for a different one, which is played by driving into each other. That one climbs the ladder for real rather than poking the model, so it takes about a minute, and nothing may replace it with a shortcut.
+- Assert: host shows two players with the right names; simulating a joystick drag on player 1 moves only player 1's sprite (assert via a `window.__game` test hook exposing model state on the host page — do not screenshot-diff Phaser); text from player 2 appears as a bubble; a drawing round-trips a PNG; a blob is redrawn mid-game without losing its place; a blob that finishes is forgotten by the TV and its phone comes back as somebody new, choosing again; a colour somebody has is greyed on every other phone with their name on it, and a name somebody has is refused in as many words; the room solves the simple task until the level rises and the world starts asking for a different one, which is played by driving into each other. That one climbs the ladder for real rather than poking the model, so it takes about a minute, and nothing may replace it with a shortcut.
 
   The tasks at the top of the ladder are covered too — sumo, and the crown taken by driving into whoever has it. Those unlock twelve and twenty-one solved tasks up, which is not a slow test but no test at all, so `askFor` in `e2e/world.ts` sets the level and puts tasks back until the director asks for the one wanted. It is the **only** thing in the suite that reaches past the UI, and everything after it is the real director, real joysticks and the real TV. Do not add a second such seam; do not use this one to skip the climb.
 - Uses Playwright's `webServer` option to start the built app. `pnpm test:e2e`. Not run on every `pnpm test` — it's slower and needs browsers installed.
@@ -304,8 +332,8 @@ code obeys everywhere but states nowhere.
 - Wake Lock API to stop phones sleeping (may be unavailable without HTTPS — degrade gracefully).
 - Mobile keyboards shift layout — test the Say sheet on a real phone early.
 - The player page is an installable PWA: `public/manifest.webmanifest`, `public/sw.js` (hand-written, ~60 lines, network-first, no Workbox and no build plugin), icons generated from `public/icons/blob.svg` by `scripts/icons.mjs` and committed. **Only the player page** — the host page links no manifest and the worker never touches `/host/`.
-- There are three screens: `join` (a name and nothing else), `waiting` (no TV yet) and `play`. A phone that has played before has its name in storage and goes straight to waiting, so opening the installed app is a single tap with nothing to read, type or scan. There is no scan screen and no QR reader on the phone — the code in the URL was the only thing one was ever for.
-- **A blob cannot be renamed.** Over the joystick are Say, Draw and a **menu** (☰), and in the menu is **Quit**: quitting sends `finish` (the message keeps its name; the child reads "Quit"), and the phone then clears its name, its drawing and its `playerId` and goes back to the join screen, so starting again is a new blob in a new colour rather than a new label on the old one. It is behind the menu because it is the one thing that undoes anything and no thumb should find it by accident. Nothing else on the phone ever throws anything away, and it asks before it does.
+- There are three screens: `waiting` (no TV yet), `join` (a name and a row of ten swatches) and `play`. The socket opens on load, before anybody has typed anything, because the join screen is made of the palette and only the TV knows it — so the order is waiting → join → play. A phone that has played before has its name and its colour in storage and gets in with one tap; a phone that is already in *this* world walks straight back into its blob without being asked anything, which is what makes a reload, a wifi blip and a TV coming back all non-events. There is no scan screen and no QR reader on the phone — the code in the URL was the only thing one was ever for.
+- **A blob cannot be renamed.** Over the joystick are Say, Draw and a **menu** (☰), and in the menu is **Quit**: quitting sends `finish` (the message keeps its name; the child reads "Quit"), and the phone then clears its name, its colour, its drawing and its `playerId` and goes back to the join screen, so starting again is a new blob picked from scratch rather than a new label on the old one. It is behind the menu because it is the one thing that undoes anything and no thumb should find it by accident. Nothing else on the phone ever throws anything away, and it asks before it does.
 - Which world it is in comes back on the socket, not from the page it was opened at. On a `session` that does not match the one in storage, the phone mints a fresh `playerId` and reconnects — the relay tags what a phone says with the id its *socket* arrived under, so a new identity has to arrive on a new socket. Its name and its last drawing are kept: only the identity was stale.
 - Staleness of the *build* is decided by one thing: `/version` against the page's own `__BUILD_VERSION__`, checked on every connect and whenever a new worker takes over. A mismatch reloads the phone — but only on the waiting screen, never mid-joystick (`src/player/updates.ts`, which is where that rule is unit-tested).
 

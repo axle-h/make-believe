@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_NAME_LENGTH } from './blobName.js'
 import {
+  ArrivedMessageSchema,
   AssignedMessageSchema,
   BriefMessageSchema,
   DrawingMessageSchema,
@@ -15,7 +16,9 @@ import {
   MAX_HEADLINE_LENGTH,
   MAX_PNG_LENGTH,
   MAX_TEXT_LENGTH,
+  PaletteMessageSchema,
   PlayerToHostMessageSchema,
+  RefusedMessageSchema,
   ServerToHostMessageSchema,
   SessionMessageSchema,
   TextMessageSchema,
@@ -27,32 +30,123 @@ const png = (length: number) => `data:image/png;base64,${'A'.repeat(length)}`
 
 describe('join', () => {
   it('accepts a valid message', () => {
-    expect(JoinMessageSchema.parse({ type: 'join', playerId: 'abc-123', name: 'Wilf' })).toEqual({
-      type: 'join',
-      playerId: 'abc-123',
-      name: 'Wilf',
-    })
+    expect(
+      JoinMessageSchema.parse({
+        type: 'join',
+        playerId: 'abc-123',
+        name: 'Wilf',
+        colour: '#4ea8ff',
+      }),
+    ).toEqual({ type: 'join', playerId: 'abc-123', name: 'Wilf', colour: '#4ea8ff' })
   })
 
   it('rejects a malformed message', () => {
     expect(JoinMessageSchema.safeParse({ type: 'join', playerId: 'abc' }).success).toBe(false)
-    expect(JoinMessageSchema.safeParse({ type: 'join', playerId: 'a b', name: 'x' }).success).toBe(
-      false,
-    )
-    expect(JoinMessageSchema.safeParse({ type: 'join', playerId: 'abc', name: '' }).success).toBe(
+    expect(
+      JoinMessageSchema.safeParse({ type: 'join', playerId: 'a b', name: 'x', colour: '#fff' })
+        .success,
+    ).toBe(false)
+    expect(
+      JoinMessageSchema.safeParse({ type: 'join', playerId: 'abc', name: '', colour: '#fff' })
+        .success,
+    ).toBe(false)
+  })
+
+  /** A child picks a colour, so a hello without one is not a hello. */
+  it('rejects a hello with no colour asked for', () => {
+    expect(JoinMessageSchema.safeParse({ type: 'join', playerId: 'abc', name: 'Wilf' }).success).toBe(
       false,
     )
   })
 
   it('rejects an oversize name', () => {
     const name = 'x'.repeat(MAX_NAME_LENGTH + 1)
-    expect(JoinMessageSchema.safeParse({ type: 'join', playerId: 'abc', name }).success).toBe(false)
+    expect(
+      JoinMessageSchema.safeParse({ type: 'join', playerId: 'abc', name, colour: '#fff' }).success,
+    ).toBe(false)
   })
 
   it('rejects a name that is only whitespace', () => {
-    expect(JoinMessageSchema.safeParse({ type: 'join', playerId: 'abc', name: '   ' }).success).toBe(
-      false,
+    expect(
+      JoinMessageSchema.safeParse({ type: 'join', playerId: 'abc', name: '   ', colour: '#fff' })
+        .success,
+    ).toBe(false)
+  })
+})
+
+/**
+ * The join screen, as the TV describes it: every colour there is and who has
+ * it. The phone draws exactly this and decides nothing.
+ */
+describe('palette', () => {
+  const swatches = [
+    { hex: '#ff5d5d', name: 'red', takenBy: 'Wilf' },
+    { hex: '#4ea8ff', name: 'blue', takenBy: null },
+  ]
+
+  it('accepts a colour, its word, and who has it', () => {
+    expect(PaletteMessageSchema.safeParse({ type: 'palette', colours: swatches }).success).toBe(true)
+  })
+
+  it('accepts a world with nobody in it', () => {
+    expect(PaletteMessageSchema.safeParse({ type: 'palette', colours: [] }).success).toBe(true)
+  })
+
+  it('rejects a swatch with no name for its colour, or no answer about who has it', () => {
+    expect(
+      PaletteMessageSchema.safeParse({ type: 'palette', colours: [{ hex: '#fff', takenBy: null }] })
+        .success,
+    ).toBe(false)
+    expect(
+      PaletteMessageSchema.safeParse({ type: 'palette', colours: [{ hex: '#fff', name: 'white' }] })
+        .success,
+    ).toBe(false)
+  })
+
+  it('is something a phone can be sent, and something the host can send', () => {
+    const message = { type: 'palette', colours: swatches }
+    expect(HostToPlayerMessageSchema.safeParse(message).success).toBe(true)
+    expect(HostOutboundMessageSchema.safeParse({ ...message, to: 'p1' }).success).toBe(true)
+  })
+})
+
+/**
+ * "Not that one." Its own message rather than something the phone works out
+ * from a palette, because a palette can arrive while a join is in flight.
+ */
+describe('refused', () => {
+  it('carries one of the three reasons there are', () => {
+    for (const reason of ['colour', 'name', 'full']) {
+      expect(RefusedMessageSchema.safeParse({ type: 'refused', reason }).success).toBe(true)
+    }
+    expect(RefusedMessageSchema.safeParse({ type: 'refused', reason: 'because' }).success).toBe(false)
+    expect(RefusedMessageSchema.safeParse({ type: 'refused' }).success).toBe(false)
+  })
+
+  it('is something a phone can be sent, and something the host can send', () => {
+    expect(HostToPlayerMessageSchema.safeParse({ type: 'refused', reason: 'name' }).success).toBe(
+      true,
     )
+    expect(
+      HostOutboundMessageSchema.safeParse({ type: 'refused', reason: 'name', to: 'p1' }).success,
+    ).toBe(true)
+  })
+})
+
+/**
+ * A socket with nobody on it yet. It reaches the TV and stops there: the game
+ * model has no case for it, because there is no blob to hear about.
+ */
+describe('arrived', () => {
+  it('is something the host socket can receive, and the world cannot', () => {
+    const message = { type: 'arrived', playerId: 'p1' }
+    expect(ArrivedMessageSchema.safeParse(message).success).toBe(true)
+    expect(HostInboundMessageSchema.safeParse(message).success).toBe(true)
+    expect(ServerToHostMessageSchema.safeParse(message).success).toBe(false)
+  })
+
+  it('rejects a malformed message', () => {
+    expect(ArrivedMessageSchema.safeParse({ type: 'arrived' }).success).toBe(false)
   })
 })
 
@@ -315,9 +409,14 @@ describe('left', () => {
 
 describe('unions', () => {
   it('accepts each player message and rejects unknown types', () => {
-    expect(PlayerToHostMessageSchema.safeParse({ type: 'join', playerId: 'p1', name: 'a' }).success).toBe(
-      true,
-    )
+    expect(
+      PlayerToHostMessageSchema.safeParse({
+        type: 'join',
+        playerId: 'p1',
+        name: 'a',
+        colour: '#4ea8ff',
+      }).success,
+    ).toBe(true)
     expect(PlayerToHostMessageSchema.safeParse({ type: 'finish', playerId: 'p1' }).success).toBe(
       true,
     )

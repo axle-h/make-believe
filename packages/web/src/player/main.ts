@@ -5,6 +5,7 @@ import {
   splitHeadline,
   type BriefMessage,
   type HostToPlayerMessage,
+  type PaletteEntry,
   type PlayerToHostMessage,
 } from '@make-believe/shared'
 import { connect, type WsClient } from '../lib/ws.js'
@@ -17,7 +18,15 @@ import {
   isSendablePng,
   pointerToCanvas,
 } from './drawing.js'
-import { evaluateJoinForm, joinFormError } from './joinForm.js'
+import {
+  choosableColours,
+  evaluateJoinForm,
+  joinFormError,
+  nameTaken,
+  refusalMessage,
+  TAKEN_NAME,
+  type Swatch,
+} from './joinForm.js'
 import { ZERO, createInputThrottle, vectorFromPointer, type Vector } from './joystick.js'
 import { isDifferentBuild, shouldReload, type Screen } from './updates.js'
 import './player.css'
@@ -33,6 +42,12 @@ import './player.css'
 
 const PLAYER_ID_KEY = 'make-believe.playerId'
 const NAME_KEY = 'make-believe.name'
+/**
+ * The colour this phone last had. A child comes back to their own blob colour
+ * already selected, so getting in is one tap — and if somebody else has taken
+ * it in the meantime the swatch is simply greyed and nothing is selected.
+ */
+const COLOUR_KEY = 'make-believe.colour'
 /**
  * The world this phone last belonged to. Nobody reads it and there is nowhere
  * to type it: it is kept only so that the next connect can tell "the same TV I
@@ -73,6 +88,8 @@ const sheets: Record<Sheet, HTMLElement> = {
   quit: requireElement<HTMLElement>('#sheet-quit'),
 }
 const joinForm = requireElement<HTMLFormElement>('#join-form')
+const joinColours = requireElement<HTMLElement>('#join-colours')
+const joinFull = requireElement<HTMLElement>('#join-full')
 const nameInput = requireElement<HTMLInputElement>('#name-input')
 const joinButton = requireElement<HTMLButtonElement>('#join-button')
 const joinError = requireElement<HTMLElement>('#join-error')
@@ -112,8 +129,16 @@ let playerId = loadPlayerId()
 const throttle = createInputThrottle()
 
 let client: WsClient | null = null
-/** The name we joined with, so a retry can use the same one. */
-let joined: { name: string } | null = null
+/** The name and colour we joined with, so a retry can use the same ones. */
+let joined: { name: string; colour: string } | null = null
+/**
+ * Every colour and who has it, as last sent by the TV. It is the whole of what
+ * the join screen is made of, and this phone never adds to it or reasons about
+ * it: the world decides who has what and this draws the answer.
+ */
+let palette: PaletteEntry[] = []
+/** The swatch this phone has picked, or `null` while none is. */
+let chosen: string | null = loadStored(COLOUR_KEY)
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 let retryMs = FIRST_WAIT_RETRY_MS
 let screen: Screen = 'join'
@@ -140,7 +165,11 @@ function loadSession(): string {
 }
 
 nameInput.addEventListener('input', () => {
-  joinError.textContent = ''
+  // A name somebody already has is worth saying while it is being typed, out
+  // of the palette this phone is already holding. It does not *stop* anything:
+  // the world is the only thing that decides, and this is showing what it last
+  // said rather than making a rule of its own.
+  joinError.textContent = nameTaken(palette, nameInput.value) ? TAKEN_NAME : ''
   refreshJoinButton()
 })
 
@@ -150,29 +179,68 @@ joinForm.addEventListener('submit', (event) => {
 })
 
 function refreshJoinButton(): void {
-  joinButton.disabled = !evaluateJoinForm(nameInput.value).canJoin
+  joinButton.disabled = !evaluateJoinForm(nameInput.value, chosen).canJoin
 }
 
-/** Ask who is holding the phone. */
+/**
+ * The row of swatches: every colour there is, the taken ones greyed with the
+ * name of whoever has it. Rebuilt whenever the TV says the roster has changed,
+ * so a child watching the screen sees a colour go live the moment somebody
+ * quits — and nothing is ever selected on their behalf.
+ */
+function renderColours(): void {
+  const choice = choosableColours(palette, chosen)
+  chosen = choice.chosen
+  joinColours.replaceChildren(...choice.colours.map((swatch) => swatchButton(swatch)))
+  joinFull.hidden = !choice.full
+  refreshJoinButton()
+}
+
+function swatchButton(swatch: Swatch): HTMLButtonElement {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'swatch'
+  button.style.setProperty('--swatch', swatch.hex)
+  button.disabled = !swatch.free
+  button.setAttribute('aria-pressed', String(swatch.hex === chosen))
+  button.setAttribute('aria-label', swatch.takenBy ? `${swatch.name}: ${swatch.takenBy}` : swatch.name)
+  button.dataset.colour = swatch.hex
+  // Whoever has it, written under it: a child looking for their own colour
+  // gets told why it will not take, without anybody reading a message.
+  const who = document.createElement('span')
+  who.className = 'swatch-who'
+  who.textContent = swatch.takenBy ?? ''
+  button.append(who)
+  button.addEventListener('click', () => {
+    chosen = swatch.hex
+    store(COLOUR_KEY, swatch.hex)
+    joinError.textContent = ''
+    renderColours()
+  })
+  return button
+}
+
+/** Ask who is holding the phone, and which blob they want to be. */
 function askForName(note = ''): void {
   joinError.textContent = note
-  refreshJoinButton()
+  renderColours()
   showScreen('join')
-  nameInput.focus()
 }
 
 function submitJoin(): void {
-  const state = evaluateJoinForm(nameInput.value)
+  const state = evaluateJoinForm(nameInput.value, chosen)
   if (!state.canJoin) {
     joinError.textContent = joinFormError(state)
     return
   }
   joinError.textContent = ''
   store(NAME_KEY, state.name)
-  joined = { name: state.name }
+  joined = { name: state.name, colour: state.colour as string }
   waitingName.textContent = state.name
-  showScreen('waiting')
-  openSocket()
+  // The socket has been open since the page loaded — the palette came down it
+  // — so this is a hello rather than a connection. The screen stays where it
+  // is until the TV answers with a blob or a refusal.
+  sayHello()
 }
 
 // --- the connection ------------------------------------------------------
@@ -181,9 +249,12 @@ function submitJoin(): void {
  * Open a socket. Nothing but the role and who we are goes in the query — which
  * world this is comes back from the relay a moment later, and until it does
  * there is nothing to say.
+ *
+ * It happens on load, before anybody has typed anything: the join screen is
+ * made of the palette, and the palette comes from the TV. A phone with no TV
+ * to talk to therefore waits before it asks for a name rather than after.
  */
 function openSocket(): void {
-  if (!joined) return
   client?.close()
   client = connect({
     query: { role: 'player', playerId },
@@ -205,6 +276,7 @@ function openSocket(): void {
         return
       }
       stop()
+      palette = []
       askForName('The TV would not let that in.')
     },
   })
@@ -232,28 +304,68 @@ function enterSession(code: string): void {
     openSocket()
     return
   }
-  sayHello()
+  // A phone that has already been in *this* world walks straight back into its
+  // blob: a wifi blip, a reload or a TV that came back must not put a child in
+  // front of a name box again. A phone opening on a world it has not been in
+  // picks a name and a colour, however well this page remembers the last one —
+  // its colour may be somebody else's by now, and only the TV knows.
+  const identity = joined ?? remembered()
+  if (previous === code && identity) {
+    joined = identity
+    waitingName.textContent = identity.name
+    sayHello()
+    return
+  }
+  askForName()
+}
+
+/** The name and colour this phone last played as, if it has played. */
+function remembered(): { name: string; colour: string } | null {
+  const name = loadStored(NAME_KEY) ?? ''
+  const colour = loadStored(COLOUR_KEY) ?? ''
+  if (!evaluateJoinForm(name, colour).canJoin) return null
+  return { name, colour }
 }
 
 /**
- * Tell the TV who this phone is. It is said on every socket, not just the
- * first: the client reconnects on its own after a blip, and the hello is how a
- * world that has never heard of this blob learns about it.
+ * Tell the TV who this phone is, what it is called and which colour it wants.
+ * It is said on every socket, not just the first: the client reconnects on its
+ * own after a blip, and the hello is how a world that has never heard of this
+ * blob learns about it.
+ *
+ * The world grants it or refuses it. This phone never assumes either.
  */
 function sayHello(): void {
   if (!joined) return
-  sendMessage({ type: 'join', playerId, name: joined.name })
+  sendMessage({ type: 'join', playerId, name: joined.name, colour: joined.colour })
 }
 
 /**
  * What comes down the socket. `session` says which world this is and is the
- * cue to say hello; `assigned` means "you are the blue one", and it doubles as
- * the way in, since it only ever arrives in answer to a hello and is therefore
- * proof the TV knows this phone; `waiting` means the TV has gone.
+ * cue to say hello; `palette` is what the join screen is made of; `refused` is
+ * the world saying no and why; `assigned` means "you are the blue one", and it
+ * doubles as the way in, since it only ever arrives in answer to a hello and is
+ * therefore proof the TV knows this phone; `waiting` means the TV has gone.
  */
 function applyMessage(message: HostToPlayerMessage): void {
   if (message.type === 'session') {
     enterSession(message.session)
+    return
+  }
+  // Who has which colour. It changes nothing about where this phone is: a
+  // blob already playing has a join screen it is not looking at.
+  if (message.type === 'palette') {
+    palette = message.colours
+    if (screen === 'join') renderColours()
+    return
+  }
+  // The world said no. Back to the join screen with the reason under the box —
+  // never left sitting on waiting, which would be a phone with nothing to do
+  // and nothing to read.
+  if (message.type === 'refused') {
+    const wanted = joined?.colour ?? chosen
+    joined = null
+    askForName(refusalMessage(message.reason, palette, wanted))
     return
   }
   // What the world is asking for. It is information and nothing else: no
@@ -508,7 +620,10 @@ quitConfirm.addEventListener('click', () => {
   closeSheet()
   stop()
   startOver()
-  askForName()
+  showScreen('waiting')
+  // Straight back onto a socket under the new identity: the join screen is
+  // made of the palette, and the palette only comes down a socket.
+  openSocket()
 })
 
 /** Throw away everything this phone knew about the blob it has just quit. */
@@ -517,6 +632,10 @@ function startOver(): void {
   store(PLAYER_ID_KEY, playerId)
   forget(NAME_KEY)
   forget(DRAWING_KEY)
+  // The colour goes back to the room along with the name: whoever picks this
+  // phone up next chooses their own blob rather than inheriting one.
+  forget(COLOUR_KEY)
+  chosen = null
   lastDrawing = null
   nameInput.value = ''
   showBrief(null)
@@ -831,10 +950,13 @@ async function checkForNewBuild(): Promise<void> {
   }
 }
 
-// A remembered name is the whole of what it takes to get in: there is one
-// world, this page is served by it, and the socket settles the rest. A phone
-// that has played before therefore goes straight to waiting for the TV, which
-// is what makes the installed app a single tap. Last, so every handler above
-// is wired before it can fire.
-if (evaluateJoinForm(nameInput.value).canJoin) submitJoin()
-else askForName()
+// The socket comes first now, before anybody has typed anything: a join screen
+// is a row of swatches with names under the taken ones, and only the TV knows
+// which those are. So the phone waits for a world, then asks for a name and a
+// colour — and a phone that was already in this world walks back into its blob
+// without being asked anything at all.
+//
+// Last, so every handler above is wired before it can fire.
+showScreen('waiting')
+waitingName.textContent = loadStored(NAME_KEY) ?? 'Your blob'
+openSocket()

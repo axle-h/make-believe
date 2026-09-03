@@ -80,6 +80,28 @@ describe('relay', () => {
   })
 
   /**
+   * A socket with nobody on it yet. The TV has to hear about it, because the
+   * join screen is made of the palette — every colour and who has it — and
+   * only the TV knows that. It is not the mirror of `left`: the world has
+   * nothing to hear here, and the game model has no case for it.
+   */
+  it('tells the TV a phone has turned up, before it has said who it is', () => {
+    relay.attachHost(host)
+    host.clear()
+
+    relay.attachPlayer('p1', fakeConnection())
+
+    expect(host.sent).toEqual([{ type: 'arrived', playerId: 'p1' }])
+  })
+
+  it('says nothing to a TV that is not there', () => {
+    const early = fakeConnection()
+
+    expect(relay.attachPlayer('p1', early)).toEqual({ ok: false, reason: 'no-host' })
+    expect(host.sent).toEqual([])
+  })
+
+  /**
    * The relay does not know or care what a phone was holding: it says which
    * world this is and the phone works out whether that makes it somebody new.
    * There is nothing left to be turned away for.
@@ -311,8 +333,9 @@ describe('relay', () => {
 
     // And what they say next reaches the new TV without reconnecting anything.
     second.clear()
-    relay.routeFromPlayer('p1', { type: 'join', playerId: 'p1', name: 'Wilf' })
-    expect(second.sent).toEqual([{ type: 'join', playerId: 'p1', name: 'Wilf' }])
+    const hello = { type: 'join', playerId: 'p1', name: 'Wilf', colour: '#4ea8ff' } as const
+    relay.routeFromPlayer('p1', hello)
+    expect(second.sent).toEqual([hello])
   })
 
   it('tells the TV it replaced why it was hung up on', () => {

@@ -20,7 +20,7 @@
           The whole of getting in. There is one world, this page came from it,
           and which session of it this is gets settled on the socket.
         -->
-        <p class="hint">Name your blob — 5 letters.</p>
+        <p class="hint">Name your blob — 5 letters — and pick a colour.</p>
         <form id="join-form" class="join-form">
           <input
             id="name-input"
@@ -35,6 +35,13 @@
             placeholder="Name"
             aria-label="Blob name"
           />
+          <!--
+            The swatches are built from the palette the TV sends: which colours
+            there are and who has them is the world's business, not this page's,
+            so there is nothing here to go stale.
+          -->
+          <div id="join-colours" class="swatches" role="group" aria-label="Blob colour"></div>
+          <p id="join-full" class="hint" hidden>All ten blobs are out playing.</p>
           <button id="join-button" class="button" type="submit" disabled>Join</button>
         </form>
         <p id="join-error" class="error" role="status"></p>

@@ -82,9 +82,14 @@ it('serves healthz and relays between a host and two players', async () => {
   expect(await one.next()).toEqual(session)
   expect(await two.next()).toEqual(session)
 
+  // and the TV is told a socket turned up, before it has a name on it
+  expect(await host.next()).toEqual({ type: 'arrived', playerId: 'p1' })
+  expect(await host.next()).toEqual({ type: 'arrived', playerId: 'p2' })
+
   // player → host, tagged with the playerId the socket connected with
-  one.send({ type: 'join', playerId: 'p1', name: 'Wilf' })
-  expect(await host.next()).toEqual({ type: 'join', playerId: 'p1', name: 'Wilf' })
+  const hello = { type: 'join', playerId: 'p1', name: 'Wilf', colour: '#4ea8ff' }
+  one.send(hello)
+  expect(await host.next()).toEqual(hello)
 
   // host → one player, with `to` stripped off
   host.send({ type: 'assigned', colour: '#ff0000', slot: 0, hasDrawing: false, to: 'p1' })
