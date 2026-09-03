@@ -4,6 +4,7 @@ import {
   LEVEL_UP_AFTER,
   askFor,
   briefTint,
+  chaseSomebody,
   driveTo,
   dropSocket,
   finishPlaying,
@@ -11,6 +12,7 @@ import {
   hostSession,
   isOn,
   joinAgainAs,
+  nearestBlob,
   objectiveNow,
   openTool,
   playerIdNow,
@@ -485,8 +487,11 @@ test.describe('an objective', () => {
 
     // Somebody is holding it, and every phone is told who.
     const holder = whoIsMarked(potato, crowd)
-    const chased = crowd.find((one) => one !== holder)
-    if (!chased) throw new Error('expected somebody to chase')
+    const others = crowd.filter((one) => one !== holder)
+    // Whoever is nearest, which is who a child would go for. There are walls on
+    // this floor now, and the blob furthest away may be round the wrong side of
+    // one — a chase that never arrives proves nothing about passing it on.
+    const chased = await nearestBlob(host, holder, others)
     await Promise.all(
       crowd.map(async (phone) => {
         await expect(phone.page.locator('#brief-headline')).toHaveText('Hot potato!')
@@ -504,16 +509,27 @@ test.describe('an objective', () => {
       await expect(chased.page.locator(`#tool-${tool}`)).toBeEnabled()
     }
 
-    // Driving into somebody is the whole of passing it on. The watch starts
-    // before the drive: they are still touching afterwards, so it can come
-    // straight back once the breather is over.
+    // Driving into somebody is the whole of passing it on — and it is *somebody*
+    // rather than one particular blob: a holder driving across a room of three
+    // may brush past the one it was not aiming at, which is the game working,
+    // not the test failing. The watch starts before the drive, because they are
+    // still touching afterwards and it can come straight back.
     const passed = expect
-      .poll(async () => (await objectiveNow(host))?.marks[0]?.playerId, { timeout: 60_000 })
-      .toBe(chased.playerId)
-    const target = await playerNamed(host, chased.name)
-    await driveTo(host, holder, { x: target.x, y: target.y }, BLOB_SIZE + 2)
+      .poll(
+        async () => {
+          const wearing = (await objectiveNow(host))?.marks[0]?.playerId
+          return others.some((one) => one.playerId === wearing)
+        },
+        { timeout: 60_000 },
+      )
+      .toBe(true)
+    await chaseSomebody(host, holder, others)
     await passed
-    await expect(holder.page.locator('#brief-detail')).toHaveText(`${chased.name} has it!`)
+
+    // The phone that had it is told it has gone, by name, like everybody else.
+    await expect
+      .poll(() => holder.page.locator('#brief-detail').textContent(), { timeout: 15_000 })
+      .not.toBe(`${holder.name} has it!`)
 
     // The buzzer is how this one *finishes*, so the score goes up like any
     // other and somebody is named as having been caught with it. Start

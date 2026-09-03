@@ -537,3 +537,48 @@ export async function zoneNow(host: Host, id: string): Promise<ZoneSnapshot> {
   if (!zone) throw new Error(`no zone ${id} on the floor`)
   return zone
 }
+
+/**
+ * Whichever of these blobs is nearest to `from`, on the floor as it stands.
+ *
+ * There are walls on the floor now, and the blob furthest away may be round
+ * the wrong side of one. A child chases whoever is closest, and so does a test
+ * that wants to prove what happens when one blob reaches another.
+ */
+export async function nearestBlob(host: Host, from: Player, others: Player[]): Promise<Player> {
+  const here = await playerNamed(host, from.name)
+  let closest: Player | null = null
+  let shortest = Number.POSITIVE_INFINITY
+  for (const other of others) {
+    const blob = await playerNamed(host, other.name)
+    const gap = Math.hypot(blob.x - here.x, blob.y - here.y)
+    if (gap >= shortest) continue
+    shortest = gap
+    closest = other
+  }
+  if (!closest) throw new Error('there is nobody to chase')
+  return closest
+}
+
+/**
+ * Drive one blob at the others until it reaches one of them, going again at
+ * whoever is nearest each time.
+ *
+ * A single run at somebody used to be enough on an empty floor. It is not any
+ * more: a blob can end up round the wrong side of a wall, and `driveTo` gives
+ * up after a while rather than steering for ever. Going again is what a child
+ * does about that, and it is still the joystick doing all of it.
+ */
+export async function chaseSomebody(
+  host: Host,
+  chaser: Player,
+  others: Player[],
+  goes = 5,
+): Promise<boolean> {
+  for (let go = 0; go < goes; go++) {
+    const quarry = await nearestBlob(host, chaser, others)
+    const target = await playerNamed(host, quarry.name)
+    if (await driveTo(host, chaser, { x: target.x, y: target.y }, BLOB_SIZE + 2)) return true
+  }
+  return false
+}
