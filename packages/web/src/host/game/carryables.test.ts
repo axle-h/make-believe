@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from './apply.js'
 import {
+  CRATE_SIZE,
   deliverInto,
   drop,
   stepCarryables,
@@ -9,6 +10,8 @@ import {
   type Crate,
   type Parcel,
 } from './carryables.js'
+import { SPEED } from './constants.js'
+import { insideObstacle, type Box } from './obstacles.js'
 import { createGame, type GameState } from './state.js'
 import type { CircleZone } from './zones.js'
 
@@ -38,6 +41,30 @@ function put(state: GameState, playerId: string, x: number, y: number, dx = 0, d
 }
 
 const DEPOT: CircleZone = { id: 'depot', shape: 'circle', x: 1000, y: 600, radius: 120, colour: '#8de0ff' }
+
+/** The crate as the rectangle the separation works on. */
+function boxOf(thing: Carryable): Box {
+  return { x: thing.x, y: thing.y, width: CRATE_SIZE, height: CRATE_SIZE }
+}
+
+/** Drive a blob across the floor exactly as `tick` would, a frame at a time. */
+function drive(
+  state: GameState,
+  things: Carryable[],
+  playerId: string,
+  dx: number,
+  dy: number,
+  frames: number,
+): void {
+  const player = state.players.get(playerId)!
+  player.dx = dx
+  player.dy = dy
+  for (let frame = 0; frame < frames; frame++) {
+    player.x += dx * SPEED * 0.016
+    player.y += dy * SPEED * 0.016
+    stepCarryables(state, things, 16)
+  }
+}
 
 describe('picking a parcel up', () => {
   it('is done by driving into it, with nothing to press', () => {
@@ -126,6 +153,26 @@ describe('picking a parcel up', () => {
   })
 })
 
+/**
+ * The crate is solid and a parcel is not, and that is on purpose: driving into
+ * a parcel is how you pick it up, and a parcel you bounce off is a parcel a
+ * three-year-old cannot collect.
+ */
+describe('a parcel is not solid', () => {
+  it('lets a blob drive right onto it and carry it away', () => {
+    const state = room(2)
+    const things: Carryable[] = [parcel(600, 400)]
+    put(state, 'p1', 300, 400, 1, 0)
+
+    drive(state, things, 'p1', 1, 0, 120)
+
+    const driver = state.players.get('p1')!
+    expect(driver.x).toBeGreaterThan(600)
+    expect((things[0] as Parcel).carriedBy).toBe('p1')
+    expect(things[0]!.x).toBe(driver.x)
+  })
+})
+
 describe('delivering it', () => {
   it('is home once it is in the right zone, and stays there', () => {
     const state = room(2)
@@ -188,6 +235,66 @@ describe('a crate', () => {
     stepCarryables(state, things, 1000)
 
     expect(things[0]).toMatchObject({ x: 600, y: 400 })
+  })
+
+  /**
+   * "Push it together" is the one task built on a thing being in the way, and
+   * for a while the thing was not in the way at all: blobs drove straight
+   * through the crate, which the second play test reported before anybody had
+   * managed to push one anywhere.
+   */
+  it('is solid: one blob driving flat out at it neither enters it nor shifts it', () => {
+    const state = room(2)
+    const things: Carryable[] = [crate(600, 400)]
+    put(state, 'p1', 300, 400, 1, 0)
+
+    drive(state, things, 'p1', 1, 0, 120)
+
+    expect(things[0]).toMatchObject({ x: 600, y: 400 })
+    expect(insideObstacle(boxOf(things[0]!), state.players.get('p1')!.x, 400)).toBe(false)
+  })
+
+  /**
+   * Two blobs drive at 420 and a crate goes at 200, so the separation is what
+   * keeps them leaning on it: it puts them exactly a half-blob and a half-crate
+   * off, and `touching` reaches a little past that. Without it they would be
+   * inside the crate one frame and past it the next.
+   */
+  it('keeps its pushers in contact the whole way across the floor', () => {
+    const state = room(2)
+    const things: Carryable[] = [crate(300, 400)]
+    put(state, 'p1', 200, 360, 1, 0)
+    put(state, 'p2', 200, 440, 1, 0)
+    let leaning = 0
+
+    for (let frame = 0; frame < 150; frame++) {
+      for (const id of ['p1', 'p2']) state.players.get(id)!.x += SPEED * 0.016
+      stepCarryables(state, things, 16)
+      // Once they are on it they stay on it: contact is never handed back.
+      if ((things[0] as Crate).pushedBy.length === 2) leaning += 1
+      else expect(leaning).toBe(0)
+    }
+
+    expect(leaning).toBeGreaterThan(120)
+    expect(things[0]!.x).toBeGreaterThan(600)
+  })
+
+  /** A crate shoves a blob aside rather than swallowing it. */
+  it('slides a blob standing in its way out rather than over it', () => {
+    const state = room(3)
+    const things: Carryable[] = [crate(300, 400)]
+    put(state, 'p1', 200, 360, 1, 0)
+    put(state, 'p2', 200, 440, 1, 0)
+    put(state, 'p3', 600, 400)
+
+    for (let frame = 0; frame < 150; frame++) {
+      for (const id of ['p1', 'p2']) state.players.get(id)!.x += SPEED * 0.016
+      stepCarryables(state, things, 16)
+    }
+
+    const shoved = state.players.get('p3')!
+    expect(things[0]!.x).toBeGreaterThan(600)
+    expect(insideObstacle(boxOf(things[0]!), shoved.x, shoved.y)).toBe(false)
   })
 
   it('stays on the floor, whatever they do to it', () => {

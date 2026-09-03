@@ -1,4 +1,5 @@
 import { BLOB_SIZE } from './constants.js'
+import { pushOutOfBox, PUSH_OUT_SPEED, type Box } from './obstacles.js'
 import { pointInBounds, type Rng } from './rng.js'
 import { activePlayers } from './selectors.js'
 import { clamp, type GameState, type Player, type World } from './state.js'
@@ -68,10 +69,23 @@ export function stepCarryables(state: GameState, carryables: Carryable[], dtMs: 
     ),
   )
 
+  // A crate is solid, so the same push-out the walls use runs against its box.
+  // The order matters: the crate moves first and the blobs are separated
+  // afterwards, which is a crate shoving a blob rather than swallowing one.
+  const limit = PUSH_OUT_SPEED * (Math.max(0, dtMs) / 1000)
   for (const thing of carryables) {
-    if (thing.kind === 'crate') shove(state, thing, present, dtMs)
-    else carry(thing, present, carrying)
+    if (thing.kind === 'crate') {
+      shove(state, thing, present, dtMs)
+      // The pushers stay pushers: separation leaves a blob exactly a half-crate
+      // and a half-blob away, and `touching` reaches `REACH_SLACK` past that.
+      for (const player of present) pushOutOfBox(state, player, boxOf(thing), limit)
+    } else carry(thing, present, carrying)
   }
+}
+
+/** A crate as a plain rectangle, for the separation that keeps blobs out of it. */
+function boxOf(crate: Crate): Box {
+  return { x: crate.x, y: crate.y, width: CRATE_SIZE, height: CRATE_SIZE }
 }
 
 /** Put a thing down where it stands, whatever was happening to it. */

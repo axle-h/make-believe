@@ -15,13 +15,22 @@ import { clampToWorld, type GameState, type Player } from './state.js'
  * they overlap least on and give way along it.
  */
 
-export interface Obstacle {
-  /** Stable for the life of the objective; the renderer keeps its views by it. */
-  id: string
+/**
+ * A rectangle blobs are kept out of. Walls are the obvious ones; a crate is
+ * the other, which is why the separation below works on a plain box rather
+ * than on an `Obstacle` — "push it together" is the one task built on a thing
+ * being in the way, and the thing has to actually be in the way.
+ */
+export interface Box {
   x: number
   y: number
   width: number
   height: number
+}
+
+export interface Obstacle extends Box {
+  /** Stable for the life of the objective; the renderer keeps its views by it. */
+  id: string
 }
 
 /**
@@ -48,20 +57,24 @@ export function pushOutOfObstacles(
   // it is not really there for the other blobs.
   for (const player of players(state)) {
     if (player.away) continue
-    for (const obstacle of obstacles) pushOut(state, player, obstacle, limit)
+    for (const obstacle of obstacles) pushOutOfBox(state, player, obstacle, limit)
   }
 }
 
-/** Whether a blob is standing in this wall. */
-export function insideObstacle(obstacle: Obstacle, x: number, y: number): boolean {
+/** Whether a blob is standing in this wall — or in anything else solid. */
+export function insideObstacle(obstacle: Box, x: number, y: number): boolean {
   return (
     Math.abs(x - obstacle.x) < (BLOB_SIZE + obstacle.width) / 2 &&
     Math.abs(y - obstacle.y) < (BLOB_SIZE + obstacle.height) / 2
   )
 }
 
-/** One blob, one wall: out along whichever way is shortest, but not instantly. */
-function pushOut(state: GameState, player: Player, obstacle: Obstacle, limit: number): void {
+/**
+ * One blob, one rectangle: out along whichever way is shortest, but not
+ * instantly. `limit` is how far it may be moved this step — see
+ * `PUSH_OUT_SPEED` for why it is a few frames rather than one.
+ */
+export function pushOutOfBox(state: GameState, player: Player, obstacle: Box, limit: number): void {
   const gapX = player.x - obstacle.x
   const gapY = player.y - obstacle.y
   const overlapX = (BLOB_SIZE + obstacle.width) / 2 - Math.abs(gapX)
