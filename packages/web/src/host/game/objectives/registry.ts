@@ -5,6 +5,7 @@ import { findYourColour } from './findYourColour.js'
 import { followTheChain } from './followTheChain.js'
 import { hotPotato } from './hotPotato.js'
 import { inOrder } from './inOrder.js'
+import { maze } from './maze.js'
 import { movingPad } from './movingPad.js'
 import { keepTheCrown } from './keepTheCrown.js'
 import { onTheSpot } from './onTheSpot.js'
@@ -36,6 +37,7 @@ export const TEMPLATES: readonly ObjectiveTemplate<Objective>[] = [
   fetch,
   sorting,
   inOrder,
+  maze,
   tooHeavyForOne,
   sumo,
   keepTheCrown,

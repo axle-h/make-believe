@@ -10,6 +10,7 @@ import type { FetchObjective } from './fetch.js'
 import type { FindYourColourObjective } from './findYourColour.js'
 import type { FollowTheChainObjective } from './followTheChain.js'
 import type { HotPotatoObjective } from './hotPotato.js'
+import type { MazeObjective } from './maze.js'
 import type { MovingPadObjective } from './movingPad.js'
 import type { InOrderObjective } from './inOrder.js'
 import type { KeepTheCrownObjective } from './keepTheCrown.js'
@@ -121,6 +122,7 @@ export type Objective =
   | FetchObjective
   | SortingObjective
   | InOrderObjective
+  | MazeObjective
   | TooHeavyObjective
   | SumoObjective
   | KeepTheCrownObjective
