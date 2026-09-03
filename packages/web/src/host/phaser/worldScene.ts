@@ -894,17 +894,28 @@ function zoneFoot(zone: Zone): number {
  * and this is a place to go round.
  */
 function drawWall(floor: Phaser.GameObjects.Graphics, wall: Obstacle): void {
-  const left = wall.x - wall.width / 2
-  const top = wall.y - wall.height / 2
+  const left = -wall.width / 2
+  const top = -wall.height / 2
   floor.fillStyle(WALL_FILL, 1)
   floor.lineStyle(WALL_EDGE_WIDTH, WALL_EDGE, 1)
+  // Drawn about its own middle, so that a bar which is turned is drawn turned
+  // — the model and the screen must not disagree about where a wall is.
+  floor.save()
+  floor.translateCanvas(wall.x, wall.y)
+  if (wall.angle !== undefined) floor.rotateCanvas(wall.angle)
   floor.fillRoundedRect(left, top, wall.width, wall.height, WALL_CORNER)
   floor.strokeRoundedRect(left, top, wall.width, wall.height, WALL_CORNER)
+  floor.restore()
 }
 
-/** Walls never move, so their signature is only about which ones there are. */
+/**
+ * Enough of a wall to tell whether the floor needs redrawing. A bar that bobs
+ * or turns changes by nothing else, so both are in here — leave the angle out
+ * and a turning bar is drawn once and never again.
+ */
 function wallSignature(wall: Obstacle): string {
-  return `${wall.id}:${Math.round(wall.x)}:${Math.round(wall.y)}:${wall.width}x${wall.height}`
+  const turn = Math.round((wall.angle ?? 0) * 100)
+  return `${wall.id}:${Math.round(wall.x)}:${Math.round(wall.y)}:${wall.width}x${wall.height}:${turn}`
 }
 
 /** Enough of a zone to tell whether the floor needs redrawing. */

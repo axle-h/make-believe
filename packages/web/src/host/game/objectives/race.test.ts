@@ -33,6 +33,33 @@ function make(state: GameState, level = 3, seed = 4): RaceObjective {
   })
 }
 
+/**
+ * How far across the floor a wall ever reaches from its own middle. A bar that
+ * turns sweeps a circle and reaches its own half-length in every direction; a
+ * bar that stands still or bobs up and down is only ever as wide as it is.
+ */
+function reachAcross(wall: ObstacleSweep): number {
+  if (wall.motion?.kind === 'spin') return Math.hypot(wall.width, wall.height) / 2
+  const bob = wall.motion?.kind === 'bob' ? Math.abs(wall.motion.reachX) : 0
+  return wall.width / 2 + bob
+}
+
+/** The topmost and bottommost this wall ever gets, at each end of its travel. */
+function sweeps(wall: ObstacleSweep): { top: number; bottom: number }[] {
+  if (wall.motion?.kind === 'spin') {
+    const reach = Math.hypot(wall.width, wall.height) / 2
+    return [{ top: wall.y - reach, bottom: wall.y + reach }]
+  }
+  const half = wall.height / 2
+  const bob = wall.motion?.kind === 'bob' ? Math.abs(wall.motion.reachY) : 0
+  return [
+    { top: wall.y - bob - half, bottom: wall.y - bob + half },
+    { top: wall.y + bob - half, bottom: wall.y + bob + half },
+  ]
+}
+
+type ObstacleSweep = RaceObjective['obstacles'][number]
+
 const startOf = (objective: RaceObjective) => objective.zones[0]!
 const finishOf = (objective: RaceObjective) => objective.zones[1]!
 const gateOf = (objective: RaceObjective) =>
@@ -90,6 +117,50 @@ describe('laying out the course', () => {
           const above = wall.y - wall.height / 2
           const below = WORLD_HEIGHT - (wall.y + wall.height / 2)
           expect(Math.max(above, below)).toBeGreaterThan(BLOB_SIZE * 1.5)
+        }
+      }
+    }
+  })
+
+  it('sets the course moving as the level goes up', () => {
+    const easy = make(room(3), 1)
+    const hard = make(room(3), MAX_LEVEL)
+
+    expect(easy.obstacles.every((wall) => wall.motion === undefined)).toBe(true)
+    expect(hard.obstacles.some((wall) => wall.motion?.kind === 'bob')).toBe(true)
+    expect(hard.obstacles.some((wall) => wall.motion?.kind === 'spin')).toBe(true)
+  })
+
+  /**
+   * A blob that cannot drive out of where it has been put is the one thing
+   * this must never do, and the course is what guarantees it rather than the
+   * push-out code hoping. So: nothing that moves ever comes within a blob's
+   * width of a wall, and no two things in the way can reach each other.
+   */
+  it('never puts a moving thing where it could pin a blob', () => {
+    for (let level = 1; level <= MAX_LEVEL; level++) {
+      for (let seed = 0; seed < 10; seed++) {
+        const objective = make(room(4), level, seed)
+        const walls = objective.obstacles.filter((wall) => !wall.id.endsWith('-gate'))
+
+        for (const wall of walls) {
+          for (const reach of sweeps(wall)) {
+            // A hair of slack: a bar hung against the top wall is exactly on
+            // it, and arithmetic does not always come out at exactly zero.
+            expect(reach.top).toBeGreaterThanOrEqual(-0.001)
+            expect(reach.bottom).toBeLessThanOrEqual(WORLD_HEIGHT + 0.001)
+            // A gap the other way round, always: somewhere to be.
+            const gap = Math.max(reach.top, WORLD_HEIGHT - reach.bottom)
+            expect(gap).toBeGreaterThan(BLOB_SIZE * 1.4)
+          }
+        }
+        // And no two of them can ever touch each other.
+        for (const [index, wall] of walls.entries()) {
+          for (const other of walls.slice(index + 1)) {
+            expect(Math.abs(wall.x - other.x)).toBeGreaterThan(
+              reachAcross(wall) + reachAcross(other) + BLOB_SIZE,
+            )
+          }
         }
       }
     }

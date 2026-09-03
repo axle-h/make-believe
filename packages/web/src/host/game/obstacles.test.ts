@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { applyMessage } from './apply.js'
 import { BLOB_SIZE } from './constants.js'
-import { insideObstacle, pushOutOfObstacles, PUSH_OUT_SPEED, type Obstacle } from './obstacles.js'
+import {
+  insideObstacle,
+  pushOutOfObstacles,
+  stepObstacles,
+  PUSH_OUT_SPEED,
+  type Obstacle,
+} from './obstacles.js'
 import { createGame, type GameState, type Player } from './state.js'
 import { joinPlayer } from './testRoom.js'
 
@@ -103,5 +109,129 @@ describe('pushing a blob out of a wall', () => {
     pushOutOfObstacles(state, [WALL], 1_000)
 
     expect({ x: player.x, y: player.y }).toEqual({ x: 640, y: 360 })
+  })
+})
+
+
+/** A bar that slides up and down its own line. */
+function bobbingBar(): Obstacle {
+  return {
+    id: 'bar',
+    x: 400,
+    y: 300,
+    width: 40,
+    height: 200,
+    motion: { kind: 'bob', homeX: 400, homeY: 300, reachX: 0, reachY: 100, periodMs: 4_000, atMs: 0 },
+  }
+}
+
+/**
+ * Walls that move. The bar the race puts in the middle of its course is the
+ * only thing in the game with an angle, and it is a real oriented box rather
+ * than a row of little squares pretending to be a bar: the model is what the
+ * e2e reads and what the TV draws, and the two must not disagree about where a
+ * wall is.
+ */
+describe('a wall that moves', () => {
+  it('comes back to where it started after a whole period', () => {
+    const bar = bobbingBar()
+
+    for (let step = 0; step < 40; step++) stepObstacles([bar], 100)
+
+    expect(bar.x).toBeCloseTo(400, 6)
+    expect(bar.y).toBeCloseTo(300, 6)
+  })
+
+  it('hangs at each end rather than turning round sharply', () => {
+    const bar = bobbingBar()
+    const travelled: number[] = []
+
+    for (let step = 0; step < 40; step++) {
+      stepObstacles([bar], 100)
+      travelled.push(Math.abs(bar.drift?.dy ?? 0))
+    }
+
+    // A quarter of the way round is the far end: it is barely moving there,
+    // and moving fastest through the middle. A sine is the whole of it.
+    expect(Math.min(...travelled)).toBeLessThan(Math.max(...travelled) / 3)
+  })
+
+  it('never leaves its own line', () => {
+    const bar = bobbingBar()
+
+    for (let step = 0; step < 200; step++) {
+      stepObstacles([bar], 50)
+      expect(bar.x).toBe(400)
+      expect(bar.y).toBeGreaterThanOrEqual(200 - 0.001)
+      expect(bar.y).toBeLessThanOrEqual(400 + 0.001)
+    }
+  })
+
+  it('turns steadily, and says how far it turned', () => {
+    const bar: Obstacle = {
+      id: 'turner',
+      x: 400,
+      y: 300,
+      width: 40,
+      height: 300,
+      angle: 0,
+      motion: { kind: 'spin', radiansPerSecond: 1 },
+    }
+
+    stepObstacles([bar], 500)
+
+    expect(bar.angle).toBeCloseTo(0.5, 6)
+    expect(bar.drift?.spin).toBeCloseTo(0.5, 6)
+  })
+})
+
+describe('a wall that is turned', () => {
+  /**
+   * At every angle it can be at, and from every direction: the separation
+   * works in the bar's own frame and turns the answer back out again.
+   */
+  it('puts a blob outside it, whichever way round it is', () => {
+    for (let turn = 0; turn < 16; turn++) {
+      const angle = (turn / 16) * Math.PI * 2
+      const bar: Obstacle = { id: 'bar', x: 640, y: 360, width: 40, height: 300, angle }
+      const state = room(1)
+      const blob = state.players.get('p1') as Player
+
+      for (let spot = 0; spot < 8; spot++) {
+        const at = (spot / 8) * Math.PI * 2
+        blob.x = 640 + Math.cos(at) * 40
+        blob.y = 360 + Math.sin(at) * 40
+        for (let frame = 0; frame < 60; frame++) pushOutOfObstacles(state, [bar], 50)
+        expect(insideObstacle(bar, blob.x, blob.y)).toBe(false)
+      }
+    }
+  })
+
+  /** A blob standing where a turning bar sweeps is moved along, not through. */
+  it('sweeps a blob along rather than leaving it inside', () => {
+    const bar: Obstacle = {
+      id: 'turner',
+      x: 640,
+      y: 360,
+      width: 40,
+      height: 400,
+      angle: 0,
+      motion: { kind: 'spin', radiansPerSecond: 0.8 },
+    }
+    const state = room(1)
+    const blob = state.players.get('p1') as Player
+    blob.x = 640
+    blob.y = 360 - 150
+
+    for (let frame = 0; frame < 40; frame++) {
+      stepObstacles([bar], 50)
+      pushOutOfObstacles(state, [bar], 50)
+      // The first few frames are it being slid out of where it was standing,
+      // which is deliberately not instant; after that it stays out.
+      if (frame > 4) expect(insideObstacle(bar, blob.x, blob.y)).toBe(false)
+    }
+
+    // And it has been carried somewhere, rather than left where it stood.
+    expect(Math.hypot(blob.x - 640, blob.y - (360 - 150))).toBeGreaterThan(20)
   })
 })

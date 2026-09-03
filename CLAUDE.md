@@ -293,8 +293,10 @@ code obeys everywhere but states nowhere.
     own pad, colour hunt, draw it, fetch, sorting, in order, a crate too heavy
     for one, sumo, and keep the crown. Underneath
     them: the seeded RNG, zones and pads, carryables, obstacles (walls a blob
-    cannot drive through, which only hot potato uses — anybody standing where
-    one appears is slid out over a few frames rather than teleported), the
+    cannot drive through — anybody standing where one appears is slid out over
+    a few frames rather than teleported, and higher up the race's course they
+    bob along their own line or turn about their middle, carrying whoever is
+    caught inside along with them), the
     director and the ladder (`minLevel` gates what a room may be asked for, it
     never asks for the same thing twice running, and going up a rung queues
     whatever that rung unlocked to be played next — a level that unlocks

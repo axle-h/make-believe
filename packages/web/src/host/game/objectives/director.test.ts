@@ -281,9 +281,7 @@ describe('a ladder of tasks', () => {
   it('lets a task say for itself how it ended', () => {
     const state = room(['Wilf', 'Ida', 'Ted'], 5)
     state.objectives.level = 2
-    state.objectives.lastKind = 'onTheSpot'
-    const objective = started(state)
-    expect(objective.kind).toBe('hotPotato')
+    const objective = startedKind(state, 'hotPotato')
 
     runUntilFinished(state, 1_000)
 
@@ -296,8 +294,7 @@ describe('a ladder of tasks', () => {
   it('puts what the task has pinned to a blob into the snapshot', () => {
     const state = room(['Wilf', 'Ida', 'Ted'], 5)
     state.objectives.level = 2
-    state.objectives.lastKind = 'onTheSpot'
-    const objective = started(state)
+    const objective = startedKind(state, 'hotPotato')
 
     const shown = objectives(state).objective
     expect(shown?.marks).toEqual(objective.marks)

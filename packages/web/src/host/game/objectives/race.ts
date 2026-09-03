@@ -69,6 +69,15 @@ const BLOCKS = { easy: 2, hard: 4 }
 /** How wide a block is, and how much of the floor's height it takes. */
 const BLOCK_WIDTH = 34
 const BLOCK_SHARE = { easy: 0.42, hard: 0.58 }
+/** How hard the world has to be before the course starts moving, and turning. */
+const BOBBING_FROM = 0.4
+const SPINNING_FROM = 0.8
+/** How far a bobbing bar slides each way, and how long it takes to come back. */
+const BOB_REACH = 110
+const BOB_PERIOD_MS = 3_600
+/** How long the turning bar is, and how fast it goes round. */
+const SPIN_LENGTH = 420
+const SPIN_SPEED = { easy: 0.5, hard: 0.9 }
 
 export const race: ObjectiveTemplate<RaceObjective> = {
   kind: 'race',
@@ -249,6 +258,12 @@ function gate(id: string, start: RectZone): Obstacle {
  * height, alternately hung from the top and the bottom. Whatever else they
  * are, there is always a gap the other way round — a course a blob cannot get
  * through is a race nobody finishes.
+ *
+ * Higher up the ladder they move. First they **bob**, sliding along their own
+ * line; at the very top the middle of the course is a **turning bar** with a
+ * bobbing bar at each end of the course. Which is also why the turning one
+ * gets the middle to itself: it sweeps a circle, and two things in the way
+ * that can reach each other are two things that could pin a blob between them.
  */
 function course(
   context: GenerateContext,
@@ -257,24 +272,92 @@ function course(
   finish: RectZone,
 ): Obstacle[] {
   const { rng, world } = context
-  const count = Math.round(scale(BLOCKS.easy, BLOCKS.hard, hard))
-  const share = scale(BLOCK_SHARE.easy, BLOCK_SHARE.hard, hard)
-  const height = world.height * share
   const from = start.x + start.width / 2 + BLOB_SIZE * 1.5
   const to = finish.x - finish.width / 2 - BLOB_SIZE * 1.5
-  const lane = (to - from) / count
+  const share = scale(BLOCK_SHARE.easy, BLOCK_SHARE.hard, hard)
+  const height = world.height * share
 
+  if (hard >= SPINNING_FROM) {
+    // One at each end of the course and a turning bar between them, well clear
+    // of both. Nothing here can reach anything else.
+    return [
+      bar(context, 0, from, height, true, true),
+      spinner(context, (from + to) / 2, world.height / 2, hard),
+      bar(context, 1, to, height, false, true),
+    ]
+  }
+
+  const count = Math.round(scale(BLOCKS.easy, BLOCKS.hard, hard))
+  const lane = (to - from) / count
+  const moving = hard >= BOBBING_FROM
   return Array.from({ length: count }, (_, index): Obstacle => {
-    const middle = from + lane * (index + 0.5)
+    const middle = from + lane * (index + 0.5) + range(rng, -lane * 0.15, lane * 0.15)
     // Hung from the top or from the bottom, alternately, with a jiggle so two
     // goes at the same level are not twins.
     const top = (index + intRange(rng, 0, 1)) % 2 === 0
-    return {
-      id: `${context.id}-block-${index}`,
-      x: middle + range(rng, -lane * 0.15, lane * 0.15),
-      y: top ? height / 2 : world.height - height / 2,
-      width: BLOCK_WIDTH,
-      height,
-    }
+    return bar(context, index, middle, height, top, moving)
   })
+}
+
+/**
+ * A bar hung from the top or the bottom of the floor, bobbing along its own
+ * line if it is a moving one. It never bobs further than the room it has: the
+ * gap the other side stays at least a blob and a half wide at both ends of the
+ * travel, so there is always somewhere to be, which is the one thing this
+ * must never take away.
+ */
+function bar(
+  context: GenerateContext,
+  index: number,
+  x: number,
+  height: number,
+  top: boolean,
+  moving: boolean,
+): Obstacle {
+  const world = context.world
+  const room = world.height - height - BLOB_SIZE * 1.5
+  const reach = moving ? Math.min(BOB_REACH, room / 2) : 0
+  const homeY = top ? height / 2 + reach : world.height - height / 2 - reach
+  const obstacle: Obstacle = {
+    id: `${context.id}-block-${index}`,
+    x,
+    y: homeY,
+    width: BLOCK_WIDTH,
+    height,
+  }
+  if (reach <= 0) return obstacle
+  obstacle.motion = {
+    kind: 'bob',
+    homeX: x,
+    homeY,
+    reachX: 0,
+    reachY: reach,
+    periodMs: BOB_PERIOD_MS,
+    // Started somewhere along the way, so a row of them is not a chorus line.
+    atMs: range(context.rng, 0, BOB_PERIOD_MS),
+  }
+  return obstacle
+}
+
+/**
+ * A bar turning slowly about its middle. Its sweep is kept a blob's width off
+ * the top and bottom walls, so there is always a lane above and below it
+ * whichever way round it is: nothing may pin a child, and the course is what
+ * guarantees that rather than the push-out code hoping.
+ */
+function spinner(context: GenerateContext, x: number, y: number, hard: number): Obstacle {
+  const world = context.world
+  const sweep = Math.min(SPIN_LENGTH / 2, world.height / 2 - BLOB_SIZE * 1.5)
+  return {
+    id: `${context.id}-turner`,
+    x,
+    y,
+    width: BLOCK_WIDTH,
+    height: sweep * 2,
+    angle: range(context.rng, 0, Math.PI),
+    motion: {
+      kind: 'spin',
+      radiansPerSecond: scale(SPIN_SPEED.easy, SPIN_SPEED.hard, hard) * (context.rng.next() < 0.5 ? 1 : -1),
+    },
+  }
 }

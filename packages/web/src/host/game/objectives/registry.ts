@@ -26,8 +26,8 @@ import type { Objective, ObjectiveTemplate } from './types.js'
 export const TEMPLATES: readonly ObjectiveTemplate<Objective>[] = [
   onTheSpot,
   race,
-  movingPad,
   hotPotato,
+  movingPad,
   pairs,
   followTheChain,
   findYourColour,

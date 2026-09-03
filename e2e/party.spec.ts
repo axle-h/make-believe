@@ -610,7 +610,7 @@ test.describe('an objective', () => {
     await expect(wilf.page.locator('#tool-draw')).toBeEnabled()
 
     // ...and now there is something else, with nobody having chosen it: the
-    // one thing level 2 just unlocked, which is the point of a level.
+    // first thing level 2 unlocked, which is the point of a level.
     const potato = await runningObjective(host)
     expect(potato.kind).toBe('hotPotato')
     // No spot to stand on: this one is entirely about who is touching whom.

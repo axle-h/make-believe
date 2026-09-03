@@ -3,7 +3,7 @@ import { AWAY_TIMEOUT_MS, SPEED } from './constants.js'
 import { forgetPlayer, stepObjectives } from './objectives/director.js'
 import type { Sound } from './objectives/cues.js'
 import type { Brief } from './objectives/types.js'
-import { pushOutOfObstacles } from './obstacles.js'
+import { pushOutOfObstacles, stepObstacles } from './obstacles.js'
 import { clampToWorld, type GameState } from './state.js'
 
 /**
@@ -63,7 +63,9 @@ export function tick(state: GameState, dtMs: number): TickResult {
   // Everybody has moved; now out of the walls, and then out of each other.
   // The walls come first because a blob squeezed out of one has to end up
   // beside its neighbours rather than inside them.
-  pushOutOfObstacles(state, state.objectives.current?.obstacles ?? [], step)
+  const walls = state.objectives.current?.obstacles ?? []
+  stepObstacles(walls, step)
+  pushOutOfObstacles(state, walls, step)
   resolveCollisions(state)
 
   // And last, with everybody where they have ended up, ask whether the world

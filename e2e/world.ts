@@ -59,6 +59,8 @@ export interface ObstacleSnapshot {
   y: number
   width: number
   height: number
+  /** Turned about its own middle, for the one bar in the game that turns. */
+  angle?: number
 }
 
 /** Something the world has pinned to one blob: the potato, and the crown. */
