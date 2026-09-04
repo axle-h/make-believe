@@ -84,7 +84,7 @@ Everything ships as **one container running one Node process**. The two "modes" 
   Dockerfile
   k8s/                      # deployment, service, traefik ingress + middleware
   e2e/                      # Playwright tests (root-level, exercise the built app)
-  androidtv/                # Android TV (Kotlin) WebView wrapper for the host. Gradle project, not a pnpm package. Not built yet — docs/android-tv.md.
+  androidtv/                # Android TV (Kotlin) WebView wrapper for the host. Gradle project, not a pnpm package. Built and running on the Fire TV — androidtv/README.md.
   packages/
     shared/                 # message types + zod schemas, session-code helpers. Zero runtime deps except zod.
     web/                    # ONE Vite project
@@ -288,11 +288,12 @@ Conventions: `*.test.ts` next to the code. No mocking of `shared` — it's tiny 
 
 ## Milestones
 
-Milestones 1 to 9 are **done and deployed**: the workspace and relay, join and
+Milestones 1 to 10 are **done and deployed**: the workspace and relay, join and
 names, the pure game model under Phaser, speech bubbles, drawings as blob skins,
 the QR code and reconnect handling with a Playwright suite, k3s, HTTPS at the
-edge, and the phone PWA. What they built is described by the code, the commit
-history and `k8s/README.md` — don't go looking for a plan document for any of it.
+edge, the phone PWA, and the Android TV app. What they built is described by the
+code, the commit history, `k8s/README.md` and `androidtv/README.md` — don't go
+looking for a plan document for any of it.
 
 Milestone 11 is built, and so are 12 to 17, which came out of the second play
 test: the repairs it asked for, picking your own colour, the grown-up's menu on
@@ -301,9 +302,22 @@ a plan document left — what they built is the code, and why is the commit
 history. 11's entry below is kept only for the rules it decided by, which the
 code obeys everywhere but states nowhere.
 
-**What is left is milestone 10.**
+**Nothing is left.** The milestones below are kept for the rules they decided
+by, not as work to do.
 
-10. **The one that is left.** Android TV app: minimal native Kotlin WebView wrapper in `/androidtv`, leanback launcher entry, loads the host page remotely so it updates itself. Not Capacitor, not a browser. Target device is a Fire TV Stick 4K Max (Fire OS 7, Android 9, API 28); nothing Fire-specific. Planned in [`docs/android-tv.md`](docs/android-tv.md).
+10. The TV is an app: a native Kotlin WebView wrapper in `/androidtv`, leanback
+    launcher entry, running on a Fire TV Stick 4K Max. It **loads the host page
+    from the network on every launch and bundles nothing**, which is the whole
+    of it: deploying the web app is how the TV is updated, and the APK only
+    changes when the wrapper does. Not Capacitor, not a Trusted Web Activity,
+    not a browser. `minSdk = 28` for the stick, but nothing in it is
+    Fire-specific. It is a Gradle project outside `pnpm build` and `pnpm test`,
+    it holds no game state and no game logic, and the two remote keys it binds
+    (Back exits, Menu reloads) are the only input anything on the TV takes —
+    the D-pad is left alone because the host page has nothing to aim at.
+    Building, signing and installing it are in
+    [`androidtv/README.md`](androidtv/README.md); the release keystore lives
+    outside the repo and must never be replaced.
 11. Objectives: something to actually do. Zones, then carryables; one task
     running at all times, procedurally parameterised and levelled up as the
     room gets good at them. Never rounds — no phone ever waits its turn.

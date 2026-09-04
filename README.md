@@ -4,7 +4,7 @@ A party game for the living room, played on the TV with phones as controllers. T
 
 Everything ships as one Node process: it serves the host page at `/host/`, the player page at `/`, and relays WebSocket messages between them at `/ws`. The host owns all game state; phones are dumb controllers. There is only ever one world per deployment. A 4-letter session code names the world the TV is currently running, but it appears in no URL and nobody ever reads it: the relay hands it out on connect, and a phone holding an older one comes back in as a new player.
 
-The full design brief lives in [`CLAUDE.md`](./CLAUDE.md). Everything already built is described by the code and its comments; the two pieces still to come are planned in [`docs/`](./docs).
+The full design brief lives in [`CLAUDE.md`](./CLAUDE.md). All of it is built: what each piece does is described by the code and its comments, and why it is that way is in the commit history.
 
 ## Prerequisites
 
@@ -60,9 +60,13 @@ There is a small Android TV app in [`androidtv/`](./androidtv): a native Kotlin
 wrapper around one fullscreen WebView pointed at the deployed host page, so the
 TV gets every update without reinstalling anything. It puts MAKE believe on the
 Fire TV home screen with its own banner, keeps the screen awake, and retries by
-itself when the server is not up yet. Building and installing it is in
-[`androidtv/README.md`](./androidtv/README.md); it needs the Android SDK and is
-deliberately outside `pnpm build` and `pnpm test`.
+itself when the server is not up yet.
+
+**Building it, signing it and installing it onto the stick over `adb` is all in
+[`androidtv/README.md`](./androidtv/README.md)**, along with how to read the host
+page's console off the TV with `adb logcat`. It needs the Android SDK, so it is
+deliberately outside `pnpm build` and `pnpm test`; the game itself is deployed to
+k3s exactly as before, and a deploy *is* the TV's update.
 
 ## Test
 
@@ -91,8 +95,7 @@ packages/shared   message schemas (zod) and session-code helpers, shared by web 
 packages/web      one Vite project with two pages: player (/) and host (/host/)
 packages/server   Node http + ws relay, serves the built web app
 e2e/              Playwright tests
-androidtv/        Android TV app: a Kotlin WebView wrapper around the host page
+androidtv/        Android TV app: a Kotlin WebView wrapper around the host page, and how to install it
 .github/          CI: tests on every push, and the image build that publishes to ghcr.io
 k8s/              deployment, service, ingress and TLS manifests
-docs/             the plans for what is not built yet: the Android TV app, and objectives
 ```
