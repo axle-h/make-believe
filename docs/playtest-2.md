@@ -735,6 +735,24 @@ puts a moving obstacle where it could pin a blob against a wall.
 
 ### 17.3 The maze
 
+**Amended after building it: the maze is a course, not a task.** Built as its
+own task it turned out to be the race with the ritual taken off — both are
+*drive across the floor, past rectangles, to a place*, both were sold on
+needing no reading, and the hardest race course, four bars alternating top and
+bottom, is a maze with wide corridors. The idea that was meant to tell them
+apart is not knowing the way, and that does not survive a television: the whole
+of a maze small enough to fit on one screen is visible from anywhere on it, so
+a child can see the carrot and the route from where they stand.
+
+So the carve lives in `src/host/game/mazes.ts` and the race runs through one at
+the top of its ladder: bars, then bobbing bars, then a turning bar, then a
+maze. It arrives with the gate, the countdown and the rule that it is not over
+until the last child is home, which is more than it had on its own. The carrot
+goes; the finish line was already there.
+
+What follows is the section as it was planned, and everything in it about the
+carve still holds.
+
 A small grid maze carved by a seeded recursive backtracker and emitted as
 `Obstacle` rectangles — which already exist, are already solid, and already
 slide a blob out of a wall that appears on top of it. Everybody starts at the

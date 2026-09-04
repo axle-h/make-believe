@@ -1,4 +1,5 @@
 import { BLOB_SIZE, MAX_LEVEL, ZONE_COLOURS } from '../constants.js'
+import { carveMaze } from '../mazes.js'
 import type { Obstacle } from '../obstacles.js'
 import { intRange, range } from '../rng.js'
 import { activePlayers } from '../selectors.js'
@@ -62,16 +63,26 @@ const HOME_BADGE = '🏁'
 const PATIENCE_MS = 20_000
 /** Three, two, one, go: one second each. */
 const COUNTDOWN_MS = 4_000
-/** How long the race itself gets, once it has started. */
-const TIME_LIMIT = { easy: 45_000, hard: 35_000 }
+/**
+ * How long the race itself gets, once it has started. It is the one limit in
+ * the game that *grows* with the level rather than tightening, because what
+ * grows with the level here is the course — and it is not over until the last
+ * child is home.
+ */
+const TIME_LIMIT = { easy: 45_000, hard: 50_000 }
 /** How many things are in the way. */
 const BLOCKS = { easy: 2, hard: 4 }
 /** How wide a block is, and how much of the floor's height it takes. */
 const BLOCK_WIDTH = 34
 const BLOCK_SHARE = { easy: 0.42, hard: 0.58 }
-/** How hard the world has to be before the course starts moving, and turning. */
+/**
+ * How hard the world has to be before the course starts moving, then turning,
+ * then stops being a handful of bars and becomes a maze. On an eight-rung
+ * ladder that is bars up to level 5, a turning bar at 6, and a maze at 7 and 8.
+ */
 const BOBBING_FROM = 0.4
-const SPINNING_FROM = 0.8
+const SPINNING_FROM = 0.65
+const MAZE_FROM = 0.85
 /** How far a bobbing bar slides each way, and how long it takes to come back. */
 const BOB_REACH = 110
 const BOB_PERIOD_MS = 3_600
@@ -254,16 +265,26 @@ function gate(id: string, start: RectZone): Obstacle {
 }
 
 /**
- * Something in the way: a few bars, each covering about half the floor's
- * height, alternately hung from the top and the bottom. Whatever else they
- * are, there is always a gap the other way round — a course a blob cannot get
- * through is a race nobody finishes.
+ * Something in the way, and four rungs of it.
  *
- * Higher up the ladder they move. First they **bob**, sliding along their own
- * line; at the very top the middle of the course is a **turning bar** with a
- * bobbing bar at each end of the course. Which is also why the turning one
- * gets the middle to itself: it sweeps a circle, and two things in the way
- * that can reach each other are two things that could pin a blob between them.
+ * At the bottom it is a few **bars**, each covering about half the floor's
+ * height, alternately hung from the top and the bottom — whatever else they
+ * are, there is always a gap the other way round. Then they **bob**, sliding
+ * along their own line. Then the middle of the course is a **turning bar**
+ * with a bobbing bar at each end, and the turning one gets the middle to
+ * itself because it sweeps a circle: two things in the way that can reach each
+ * other are two things that could pin a blob between them.
+ *
+ * And at the top it is a **maze**, which is the most there can be in the way.
+ * A maze is not a game of its own on a television — the whole of it is on
+ * screen at once and a child can see the way through from where they are
+ * standing — but as the hardest thing between a start line and a finish line
+ * it is exactly right, and it arrives with the gate, the countdown and the
+ * rule that it is not over until the last child is home.
+ *
+ * Whatever the rung, there is always a way through: a maze is carved so that
+ * every cell reaches every other, and a bar always leaves a lane the other
+ * side of it. A course a blob cannot get through is a race nobody finishes.
  */
 function course(
   context: GenerateContext,
@@ -276,6 +297,17 @@ function course(
   const to = finish.x - finish.width / 2 - BLOB_SIZE * 1.5
   const share = scale(BLOCK_SHARE.easy, BLOCK_SHARE.hard, hard)
   const height = world.height * share
+
+  if (hard >= MAZE_FROM) {
+    // Everything between the pads, carved up. The top and bottom of it are the
+    // floor's own edges; the way in and the way out are the ends.
+    return carveMaze(context.id, rng, {
+      x: from,
+      y: 0,
+      width: to - from,
+      height: world.height,
+    })
+  }
 
   if (hard >= SPINNING_FROM) {
     // One at each end of the course and a turning bar between them, well clear

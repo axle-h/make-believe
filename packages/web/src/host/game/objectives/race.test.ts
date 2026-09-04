@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { BLOB_SIZE, MAX_LEVEL, WORLD_HEIGHT, WORLD_WIDTH } from '../constants.js'
+import { MAZE_CORRIDOR } from '../mazes.js'
 import { insideObstacle } from '../obstacles.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { joinPlayer } from '../testRoom.js'
 import { tick } from '../tick.js'
-import { contains } from '../zones.js'
+import { contains, type RectZone } from '../zones.js'
 import { race, type RaceObjective } from './race.js'
 
 /**
@@ -60,7 +61,56 @@ function sweeps(wall: ObstacleSweep): { top: number; bottom: number }[] {
 
 type ObstacleSweep = RaceObjective['obstacles'][number]
 
-const startOf = (objective: RaceObjective) => objective.zones[0]!
+/** Whether this wall goes anywhere at all. */
+function moves(wall: ObstacleSweep): boolean {
+  return wall.motion !== undefined
+}
+
+/**
+ * Whether a blob could actually drive from one patch of floor to another,
+ * worked out on a fine grid of the world: it is the walls as they were
+ * emitted that a blob meets, not the reasoning that produced them.
+ */
+function reachable(
+  walls: readonly ObstacleSweep[],
+  from: { x: number; y: number },
+): (spot: { x: number; y: number }) => boolean {
+  const step = BLOB_SIZE / 2
+  const across = Math.floor(WORLD_WIDTH / step)
+  const down = Math.floor(WORLD_HEIGHT / step)
+  const key = (column: number, row: number) => row * across + column
+  const blocked = (column: number, row: number) =>
+    walls.some((wall) => insideObstacle(wall, column * step + step / 2, row * step + step / 2))
+
+  const seen = new Set<number>()
+  const start: [number, number] = [Math.floor(from.x / step), Math.floor(from.y / step)]
+  const queue: [number, number][] = [start]
+  seen.add(key(...start))
+  while (queue.length > 0) {
+    const [column, row] = queue.shift() as [number, number]
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      const next: [number, number] = [column + dx, row + dy]
+      if (next[0] < 0 || next[1] < 0 || next[0] >= across || next[1] >= down) continue
+      if (seen.has(key(...next)) || blocked(...next)) continue
+      seen.add(key(...next))
+      queue.push(next)
+    }
+  }
+  return (spot) => seen.has(key(Math.floor(spot.x / step), Math.floor(spot.y / step)))
+}
+
+/** The start pad, as the rectangle it is. */
+function startOf(objective: RaceObjective): RectZone {
+  const zone = objective.zones[0]
+  if (!zone || zone.shape !== 'rect') throw new Error('expected a start pad')
+  return zone
+}
+
 const finishOf = (objective: RaceObjective) => objective.zones[1]!
 const gateOf = (objective: RaceObjective) =>
   objective.obstacles.find((wall) => wall.id.endsWith('-gate'))
@@ -107,28 +157,81 @@ describe('laying out the course', () => {
     expect(hard.obstacles.length).toBeGreaterThan(easy.obstacles.length)
   })
 
-  /** A course a blob cannot get through is a race nobody finishes. */
-  it('always leaves a way past everything in the way', () => {
+  /**
+   * The one thing that has to be true of every course there is, whether it is
+   * two bars or a whole maze: a course a blob cannot get through is a race
+   * nobody finishes.
+   *
+   * It floods the *floor* rather than reasoning about the walls, because it is
+   * the walls as they were emitted that a blob meets — and it floods with the
+   * gate gone, which is the course as it is actually run.
+   */
+  it('always leaves a way from the start line to the finish', () => {
     for (let level = 1; level <= MAX_LEVEL; level++) {
-      for (let seed = 0; seed < 12; seed++) {
+      for (let seed = 0; seed < 10; seed++) {
         const objective = make(room(4), level, seed)
-        for (const wall of objective.obstacles) {
-          if (wall.id.endsWith('-gate')) continue
-          const above = wall.y - wall.height / 2
-          const below = WORLD_HEIGHT - (wall.y + wall.height / 2)
-          expect(Math.max(above, below)).toBeGreaterThan(BLOB_SIZE * 1.5)
-        }
+        const open = objective.obstacles.filter((wall) => !wall.id.endsWith('-gate'))
+        const canReach = reachable(open, startOf(objective))
+
+        expect(canReach(finishOf(objective))).toBe(true)
       }
     }
   })
 
-  it('sets the course moving as the level goes up', () => {
+  /**
+   * The gate closes the whole mouth of the start pad, which is the whole of
+   * what it has to do. There is floor above and below it — a wall as tall as
+   * the world is a wall that shuts the world in half — and going round it
+   * means leaving the pad, which is what stops the countdown. Nobody is
+   * stopped from trying; it simply costs more than it gains.
+   */
+  it('closes the mouth of the start line, top to bottom', () => {
+    const objective = make(room(4))
+    const gate = gateOf(objective)!
+    const start = startOf(objective)
+
+    expect(gate.height).toBe(start.height)
+    expect(gate.y).toBe(start.y)
+    expect(gate.x).toBeGreaterThan(start.x)
+    expect(gate.x - gate.width / 2).toBeLessThanOrEqual(start.x + start.width / 2)
+  })
+
+  it('sets the course moving as the level goes up, and then turning', () => {
     const easy = make(room(3), 1)
-    const hard = make(room(3), MAX_LEVEL)
+    const moving = make(room(3), 5)
+    const turning = make(room(3), 6)
 
     expect(easy.obstacles.every((wall) => wall.motion === undefined)).toBe(true)
-    expect(hard.obstacles.some((wall) => wall.motion?.kind === 'bob')).toBe(true)
-    expect(hard.obstacles.some((wall) => wall.motion?.kind === 'spin')).toBe(true)
+    expect(moving.obstacles.some((wall) => wall.motion?.kind === 'bob')).toBe(true)
+    expect(turning.obstacles.some((wall) => wall.motion?.kind === 'spin')).toBe(true)
+  })
+
+  /**
+   * And at the top it is a maze, which is the most there can be in the way.
+   * It is not a game of its own — the whole of it is on screen at once — but
+   * as the hardest thing between a start line and a finish line it arrives
+   * with the gate, the countdown, and the last child home.
+   */
+  it('becomes a maze at the top of the ladder', () => {
+    for (let seed = 0; seed < 10; seed++) {
+      const maze = make(room(4), MAX_LEVEL, seed)
+      const before = make(room(4), MAX_LEVEL - 2, seed)
+      const walls = maze.obstacles.filter((wall) => !wall.id.endsWith('-gate'))
+
+      // Corners rather than a handful of gates, and it stands still: there is
+      // enough to do in a maze without any of it moving.
+      expect(walls.length).toBeGreaterThan(5)
+      expect(walls.length).toBeGreaterThan(before.obstacles.length * 1.5)
+      expect(maze.obstacles.every((wall) => wall.motion === undefined)).toBe(true)
+    }
+    // Every corridor in it is wide enough for two blobs to pass, which in a
+    // race — where the whole room goes through together — is the difference
+    // between a maze and a jam.
+    expect(MAZE_CORRIDOR).toBeGreaterThanOrEqual(BLOB_SIZE * 2)
+  })
+
+  it('gives the room longer for a course there is more of', () => {
+    expect(make(room(4), MAX_LEVEL).totalMs).toBeGreaterThan(make(room(4), 3).totalMs)
   })
 
   /**
@@ -143,7 +246,7 @@ describe('laying out the course', () => {
         const objective = make(room(4), level, seed)
         const walls = objective.obstacles.filter((wall) => !wall.id.endsWith('-gate'))
 
-        for (const wall of walls) {
+        for (const wall of walls.filter(moves)) {
           for (const reach of sweeps(wall)) {
             // A hair of slack: a bar hung against the top wall is exactly on
             // it, and arithmetic does not always come out at exactly zero.
@@ -154,9 +257,11 @@ describe('laying out the course', () => {
             expect(gap).toBeGreaterThan(BLOB_SIZE * 1.4)
           }
         }
-        // And no two of them can ever touch each other.
-        for (const [index, wall] of walls.entries()) {
-          for (const other of walls.slice(index + 1)) {
+        // And no two things that move can ever touch each other. Walls that
+        // stand still are allowed to: a maze is made of walls that meet.
+        const moving = walls.filter(moves)
+        for (const [index, wall] of moving.entries()) {
+          for (const other of moving.slice(index + 1)) {
             expect(Math.abs(wall.x - other.x)).toBeGreaterThan(
               reachAcross(wall) + reachAcross(other) + BLOB_SIZE,
             )

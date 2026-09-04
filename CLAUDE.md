@@ -293,16 +293,17 @@ code obeys everywhere but states nowhere.
 11. Objectives: something to actually do. Zones, then carryables; one task
     running at all times, procedurally parameterised and levelled up as the
     room gets good at them. Never rounds — no phone ever waits its turn.
-    **All of it is built.** Seventeen tasks, in `src/host/game/objectives/`,
+    **All of it is built.** Sixteen tasks, in `src/host/game/objectives/`,
     each a file and a line in `registry.ts`: stand on the spot, the spot that
     runs away, the race, hot potato, two to a pad, follow the lights, find your
-    own pad, colour hunt, dodge, draw it, fetch, sorting, in order, the maze, a
-    crate too heavy for one, sumo, and keep the crown. Underneath
+    own pad, colour hunt, dodge, draw it, fetch, sorting, in order, a crate too
+    heavy for one, sumo, and keep the crown. Underneath
     them: the seeded RNG, zones and pads, carryables, obstacles (walls a blob
     cannot drive through — anybody standing where one appears is slid out over
-    a few frames rather than teleported, and higher up the race's course they
-    bob along their own line or turn about their middle, carrying whoever is
-    caught inside along with them), the
+    a few frames rather than teleported; higher up the race's course they bob
+    along their own line or turn about their middle, carrying whoever is caught
+    inside along with them, and at the top of it they are a **maze**, carved in
+    `mazes.ts` and emitted as plain obstacle rectangles), the
     director and the ladder (`minLevel` gates what a room may be asked for, it
     never asks for the same thing twice running, and going up a rung queues
     whatever that rung unlocked to be played next — a level that unlocks
@@ -352,7 +353,7 @@ code obeys everywhere but states nowhere.
       with six bowed heads.
 
     `registry.test.ts` asserts what has to be true of every task; adding the
-    eighteenth inherits it. The e2e for the two at the top of the ladder is
+    seventeenth inherits it. The e2e for the two at the top of the ladder is
     described under Testing.
 
 ## Phaser notes (host)
