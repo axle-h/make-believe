@@ -110,6 +110,20 @@ Only `shared/` is cross-imported. `web` and `server` never import each other.
 
 All messages are JSON over one WebSocket. Define them as **zod schemas** and derive the TS types — the server validates every inbound message and drops anything invalid; the host and player trust nothing that hasn't been parsed.
 
+**There are five unions and they are not interchangeable.** A message left out of one is dropped in silence rather than refused loudly, which is the single easiest thing to get wrong here:
+
+| Union | Who parses with it | What it is |
+|---|---|---|
+| `PlayerToHostMessageSchema` | the **server**, on every phone message | what a phone may say |
+| `HostOutboundMessageSchema` | the **server**, on every TV message | what the TV may say, each entry carrying `to` |
+| `HostToPlayerMessageSchema` | the **phone** | the same messages with `to` stripped off by the relay |
+| `ServerToHostMessageSchema` | nothing — it is the **game model's** input type | what the world hears |
+| `HostInboundMessageSchema` | the **TV socket** | everything that can arrive at the TV |
+
+- **Every host → player message needs both halves.** `routeFromHost` does `const { to, ...rest } = message` and forwards the rest, so each one is written twice: in `HostToPlayerMessageSchema`, and in `HostOutboundMessageSchema` as `…Schema.extend({ to: RecipientSchema })`.
+- **`ServerToHostMessageSchema` is the smallest of them on purpose**: join / input / drawing / text / finish / left, and nothing else. `session`, `arrived` and `command` are all deliberately out of it — `route()` in `apply.ts` switches exhaustively over it, and none of the three is something the *world* hears.
+- **The socket decides who is speaking, not the payload.** `routeFromPlayer` tags everything with the id its connection arrived under, which is what makes the grown-up's `command` safe: a phone cannot claim to be somebody else's `playerId`.
+
 ```ts
 // player → host
 { type: 'join',    playerId: string, name: string, colour: string }
@@ -281,10 +295,10 @@ edge, and the phone PWA. What they built is described by the code, the commit
 history and `k8s/README.md` — don't go looking for a plan document for any of it.
 
 Milestone 11 is built, and so are 12 to 17, which came out of the second play
-test and are planned in [`docs/playtest-2.md`](docs/playtest-2.md): the repairs
-that play test asked for, picking your own colour, the grown-up's menu on a
-phone, the noises, themes and collecting, and four new games. 11 has no plan
-document; its entry below is kept only for the rules it decided by, which the
+test: the repairs it asked for, picking your own colour, the grown-up's menu on
+a phone, the noises, themes and collecting, and the new games. None of them has
+a plan document left — what they built is the code, and why is the commit
+history. 11's entry below is kept only for the rules it decided by, which the
 code obeys everywhere but states nowhere.
 
 **What is left is milestone 10.**
@@ -304,8 +318,9 @@ code obeys everywhere but states nowhere.
     along their own line or turn about their middle, carrying whoever is caught
     inside along with them, and at the top of it they are a **maze**, carved in
     `mazes.ts` and emitted as plain obstacle rectangles), the
-    director and the ladder (`minLevel` gates what a room may be asked for, it
-    never asks for the same thing twice running, and going up a rung queues
+    director and the ladder (`minLevel` gates what a room may be asked for and
+    `suits` gates what *shape* of room may — two to a pad only in an even one —
+    it never asks for the same thing twice running, and going up a rung queues
     whatever that rung unlocked to be played next — a level that unlocks
     something and then asks for the same old spot has not visibly done
     anything; a queued task the room is too small for waits for another blob
@@ -335,7 +350,10 @@ code obeys everywhere but states nowhere.
 
     - **A task can only ever change what the world is asking for**, never what
       a phone offers. Drive, say, draw and finish are live in every task, for
-      everybody, throughout.
+      everybody, throughout. Where a task seems to need a joystick held still —
+      "no false starts" in the race — it gets a **wall** instead: a gate across
+      the mouth of the start pad, taken away on GO. A child understands a gate
+      without being told. Do not replace one with ignored input.
     - **A task is judged against whoever is present right now**, so a child who
       wanders off never leaves the others with something they cannot finish.
     - **Nobody is ever eliminated**, and no task may put a child in a state

@@ -37,6 +37,8 @@ export interface FetchObjective extends ObjectiveBase {
   /** What they are, plural, for the one word of the headline that is painted. */
   things: string
   thingColour: string
+  /** And where they go — a basket, a postbox — for the line underneath it. */
+  home: string
 }
 
 /** Big enough to read across a room: the picture on the house *is* the answer. */
@@ -100,6 +102,7 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
       headline: `Take the ${theme.things} home!`,
       things: theme.things,
       thingColour: theme.colour,
+      home: theme.home,
       remainingMs: totalMs,
       totalMs,
       zones: [depot],
@@ -129,7 +132,7 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
       detail:
         left === 0
           ? 'All of it!'
-          : `${home} of ${objective.parcels} home. Drive into one to pick it up`,
+          : `${home} of ${objective.parcels} in the ${objective.home}. Drive into one to pick it up`,
       colour: objective.thingColour,
       emphasis: objective.things,
       tone: 'task',

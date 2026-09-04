@@ -506,6 +506,38 @@ describe('coming and going', () => {
     expect(state.objectives.current).toBe(running)
   })
 
+  /**
+   * A task can hold the clock while there is something to do before the timed
+   * part of it starts. The race gathers everybody on the start line that way,
+   * because a countdown already running while people arrive is a countdown
+   * that punishes whoever was slowest to pick their phone up.
+   */
+  it('does not count the clock down while a task is holding it', () => {
+    const state = room(['Wilf', 'Ida'])
+    expect(askFor(state, 'race')).toBe(true)
+    const gathering = state.objectives.current
+    expect(gathering?.clock).toBe('held')
+
+    for (let elapsed = 0; elapsed < 10_000; elapsed += 100) stepObjectives(state, 100)
+
+    expect(gathering?.clock).toBe('held')
+    expect(gathering?.remainingMs).toBe(gathering?.totalMs)
+  })
+
+  /** And a held clock at zero is not a task that has run out of time. */
+  it('does not run a held task out of time', () => {
+    const state = room(['Wilf', 'Ida'])
+    askFor(state, 'race')
+    const gathering = state.objectives.current
+    if (!gathering) throw new Error('expected a race')
+    gathering.remainingMs = 0
+
+    stepObjectives(state, 100)
+
+    expect(gathering.outcome).toBe('running')
+    expect(state.objectives.current).toBe(gathering)
+  })
+
   it('abandons quietly when the room drops below what the task needs', () => {
     const state = room(['Wilf', 'Ida'])
     started(state)

@@ -141,6 +141,8 @@ describe('fetching', () => {
 
     expect(brief?.to).toBe('*')
     expect(brief?.detail).toContain(`1 of ${objective.parcels}`)
+    // Where they go, said in the word for it: apples go in the basket.
+    expect(brief?.detail).toContain(objective.home)
     // The strip is the colour of the things, not of the house: it is what to
     // go and look for that a child who cannot read the sentence needs.
     expect(brief?.colour).toBe(objective.thingColour)
@@ -176,6 +178,7 @@ describe('what is being carried', () => {
       expect(objective.carryables[0]?.glyph).toBe(theme?.glyph)
       expect(objective.zones[0]?.label).toBe(theme?.homeGlyph)
       expect(objective.headline).toBe(`Take the ${theme?.things} home!`)
+      expect(objective.home).toBe(theme?.home)
     }
   })
 
