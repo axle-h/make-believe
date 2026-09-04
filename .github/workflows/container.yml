@@ -125,7 +125,12 @@ jobs:
 
           const player = await open(`${base}?role=player&playerId=ci-1`)
           const playerSession = await awaitType(player, 'session', 'the session on the phone socket')
-          player.send(JSON.stringify({ type: 'join', playerId: 'ci-1', name: 'Wilf' }))
+          // ⚠️ A join asks for a colour as well as a name, and the relay drops a message
+          // that misses a field its schema requires *in silence* rather than refusing it
+          // loudly — so this payload has to keep up with `JoinMessageSchema` in `shared`,
+          // and the colour is asserted below so that it cannot quietly stop mattering.
+          // `#ff5d5d` is red, the first of the ten in `BLOB_COLOURS`.
+          player.send(JSON.stringify({ type: 'join', playerId: 'ci-1', name: 'Wilf', colour: '#ff5d5d' }))
 
           const message = await heard
           host.close()
@@ -138,7 +143,7 @@ jobs:
             console.log(`::error::the phone was told '${playerSession.session}' and the TV '${hostSession.session}'`)
             process.exit(1)
           }
-          if (message.type !== 'join' || message.playerId !== 'ci-1' || message.name !== 'Wilf') {
+          if (message.type !== 'join' || message.playerId !== 'ci-1' || message.name !== 'Wilf' || message.colour !== '#ff5d5d') {
             console.log(`::error::the host heard ${JSON.stringify(message)}, not the join`)
             process.exit(1)
           }
