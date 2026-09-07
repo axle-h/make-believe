@@ -465,9 +465,20 @@ function paintHeadline(headline: string, emphasis?: string): void {
   briefHeadline.append(painted, after)
 }
 
-/** Sit on the waiting screen and try again shortly, until a TV answers. */
+/**
+ * Sit on the waiting screen and try again shortly, until a TV answers.
+ *
+ * Nothing here asks whether this phone has ever been in, and that is the point:
+ * a phone that has joined nothing is precisely the one that must keep knocking,
+ * because it is a phone that was opened before the TV was. `attachHost`
+ * announces a new world only to phones still holding a socket, so one that
+ * stops knocking is never spoken to again — and an installed phone has no
+ * address bar to reload it with and nobody watching it.
+ *
+ * Giving up for good is `stop()`, which clears this timer. That is what a
+ * precondition here would have been for, and it is already somewhere else.
+ */
 function retryLater(): void {
-  if (!joined) return
   client?.close()
   client = null
   release()

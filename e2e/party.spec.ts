@@ -462,6 +462,53 @@ test.describe('a party', () => {
   })
 
   /**
+   * The TV was switched on after the house — or swapped over mid-evening, which
+   * is what installing a new one on the stick is. A phone that loads while
+   * there is no world at all has never been anybody in this one, so there is no
+   * blob standing there waiting for it; all it has is the name it remembers.
+   *
+   * It still has to get itself in when a TV finally answers. Nothing else can:
+   * an installed phone has no address bar, no reload and nobody watching it, so
+   * a phone that gives up knocking is a phone somebody has to clear the storage
+   * of to play at all.
+   */
+  test('a phone opened while there is no TV gets in when one arrives', async ({ party }) => {
+    const first = await party.openHost()
+    const wilf = await party.joinAs('Wilf')
+    await expect.poll(async () => (await snapshot(first)).players.length).toBe(1)
+
+    // The TV goes off. Not a reload — that comes straight back with a new world
+    // a moment later, and the whole point here is a while with no world at all.
+    await first.page.close()
+    await expect(wilf.page.locator('#screen-waiting')).toBeVisible()
+
+    // And the phone is opened again while it is off, as Android does to an app
+    // whose memory it has taken back. It is holding a name and nothing to say
+    // it to.
+    await wilf.page.reload()
+    await expect(wilf.page.locator('#screen-waiting')).toBeVisible()
+    await expect(wilf.page.locator('#waiting-name')).toHaveText('Wilf')
+
+    // Nobody touches the phone from here: a TV arrives, and the phone is on its
+    // own to notice.
+    const second = await party.openHost()
+    await expect(wilf.page.locator('#screen-play')).toBeVisible({ timeout: 20_000 })
+    await expect
+      .poll(async () => (await snapshot(second)).players.map((player) => player.name), {
+        timeout: 20_000,
+      })
+      .toEqual(['Wilf'])
+
+    // Somebody new in a new world, under the name the phone remembered — and
+    // driving, which is the only proof that getting in actually worked.
+    const back = await playerNamed(second, 'Wilf')
+    expect(back.playerId).not.toBe(wilf.playerId)
+    expect(await playerIdNow(wilf.page)).toBe(back.playerId)
+    await pushJoystick(wilf, { dx: 0, dy: 1 }, 400)
+    expect((await playerNamed(second, 'Wilf')).y).toBeGreaterThan(back.y + 20)
+  })
+
+  /**
    * Walking out of wifi is not finishing. The blob waits where it was, the
    * phone comes back on its own with nobody touching it, and what it walks
    * back into is the blob it left — same identity, same name, same colour.
