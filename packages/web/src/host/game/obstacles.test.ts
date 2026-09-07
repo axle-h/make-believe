@@ -3,6 +3,7 @@ import { applyMessage } from './apply.js'
 import { BLOB_SIZE } from './constants.js'
 import {
   insideObstacle,
+  mergeWalls,
   pushOutOfObstacles,
   stepObstacles,
   PUSH_OUT_SPEED,
@@ -233,5 +234,80 @@ describe('a wall that is turned', () => {
 
     // And it has been carried somewhere, rather than left where it stood.
     expect(Math.hypot(blob.x - 640, blob.y - (360 - 150))).toBeGreaterThan(20)
+  })
+})
+
+const wall = (id: string, x: number, y: number, width: number, height: number): Obstacle => ({
+  id,
+  x,
+  y,
+  width,
+  height,
+})
+
+/**
+ * One wall, drawn as one wall. A maze emits a rectangle per cell wall, and a
+ * straight run of four of them brought four sets of rounded corners and four
+ * outlines with it — which is what the messy joins in the third play test
+ * were. Merging changes how many rectangles there are and not one pixel of
+ * where the wall lies.
+ */
+describe('folding a run of walls into one', () => {
+  it('joins two that abut along the same line', () => {
+    const merged = mergeWalls([wall('a', 100, 50, 18, 100), wall('b', 100, 150, 18, 100)])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0]).toMatchObject({ id: 'a', x: 100, y: 100, width: 18, height: 200 })
+  })
+
+  it('joins two that overlap, without counting the overlap twice', () => {
+    const merged = mergeWalls([wall('a', 100, 50, 18, 100), wall('b', 100, 130, 18, 100)])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0]).toMatchObject({ y: 90, height: 180 })
+  })
+
+  it('joins a run left to right as readily as top to bottom', () => {
+    const merged = mergeWalls([wall('a', 50, 200, 100, 18), wall('b', 150, 200, 100, 18)])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0]).toMatchObject({ x: 100, y: 200, width: 200, height: 18 })
+  })
+
+  /** A gap between two walls is the corridor, and it stays a corridor. */
+  it('leaves two on the same line with a gap between them alone', () => {
+    const merged = mergeWalls([wall('a', 100, 50, 18, 100), wall('b', 100, 300, 18, 100)])
+
+    expect(merged).toHaveLength(2)
+  })
+
+  /** A vertical meeting a horizontal is two walls, and the renderer's problem. */
+  it('leaves a T-junction as the two walls it is', () => {
+    const merged = mergeWalls([wall('post', 100, 100, 18, 200), wall('arm', 200, 100, 200, 18)])
+
+    expect(merged).toHaveLength(2)
+  })
+
+  /**
+   * Two walls in the same place *now* are not the same wall if one of them is
+   * about to move, or is turned so that its edges are not where they look.
+   */
+  it('never folds anything that moves or is turned', () => {
+    const bobbing: Obstacle = {
+      ...wall('b', 100, 150, 18, 100),
+      motion: { kind: 'bob', homeX: 100, homeY: 150, reachX: 0, reachY: 40, periodMs: 1_000, atMs: 0 },
+    }
+    const turned: Obstacle = { ...wall('c', 100, 250, 18, 100), angle: 0.4 }
+
+    const merged = mergeWalls([wall('a', 100, 50, 18, 100), bobbing, turned])
+
+    expect(merged).toHaveLength(3)
+    // `map` is already a fresh array, so sorting it mutates nothing.
+    // oxlint-disable-next-line unicorn/no-array-sort
+    expect(merged.map((one) => one.id).sort()).toEqual(['a', 'b', 'c'])
+  })
+
+  it('shrugs at an empty floor', () => {
+    expect(mergeWalls([])).toEqual([])
   })
 })

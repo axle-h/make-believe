@@ -1,4 +1,5 @@
 import { nearestTouching } from '../collisions.js'
+import { walls } from './arena.js'
 import { CROWN_BADGE, MAX_LEVEL } from '../constants.js'
 import { pick, range } from '../rng.js'
 import { activePlayers } from '../selectors.js'
@@ -20,6 +21,8 @@ import {
  *
  * It is hot potato inside out, and that is the point of having both: there
  * everybody runs from the blob holding the thing, here everybody runs at them.
+ * It gets the same arena for the same reason — a chase across an empty room is
+ * a straight line, and a chase around a block is a game.
  * The crown is a mark rather than anything on the floor — the same badge worn
  * beside a blob's name that the potato is — because a thing you keep by
  * running away with it is a thing that has to move exactly as fast as you do.
@@ -85,7 +88,9 @@ export const keepTheCrown: ObjectiveTemplate<KeepTheCrownObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [],
-      obstacles: [],
+      // The same floor hot potato gets, for the same reason: a chase across an
+      // empty room is a straight line and whoever is quickest wins it.
+      obstacles: walls(context, hard),
       marks: marksFor(start.playerId),
       carryables: [],
       outcome: 'running',

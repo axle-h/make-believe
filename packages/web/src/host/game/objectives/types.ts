@@ -5,7 +5,6 @@ import type { Obstacle } from '../obstacles.js'
 import type { Rng } from '../rng.js'
 import type { GameState, Player, World } from '../state.js'
 import type { Zone } from '../zones.js'
-import type { ColourHuntObjective } from './colourHunt.js'
 import type { DrawItObjective } from './drawIt.js'
 import type { FetchObjective } from './fetch.js'
 import type { FindYourColourObjective } from './findYourColour.js'
@@ -115,6 +114,17 @@ export interface ObjectiveBase {
    * task is over.
    */
   fuzzy?: string[]
+  /**
+   * Blobs the task wants the room to *notice*: the one holding the potato, and
+   * nothing else so far. The TV draws a pulsing ring behind them — behind, not
+   * over, because the middle of a blob is the child's own drawing and that is
+   * the one thing in the game they made.
+   *
+   * It exists because a three-year-old who cannot read was looking at a screen
+   * where nothing said *away*: a badge beside a name and a headline in
+   * somebody's colour is not enough on its own.
+   */
+  danger?: string[]
   outcome: Outcome
   /**
    * What the TV says once it is over — cheerful either way, because running
@@ -132,7 +142,6 @@ export type Objective =
   | PairsObjective
   | FollowTheChainObjective
   | FindYourColourObjective
-  | ColourHuntObjective
   | DrawItObjective
   | FetchObjective
   | SortingObjective

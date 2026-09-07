@@ -1,5 +1,4 @@
 import { normaliseName, type RefusedReason, type ServerToHostMessage } from '@make-believe/shared'
-import type { Rgb } from './colour.js'
 import { BUBBLE_MS, MAX_BLOBS } from './constants.js'
 import { forgetPlayer, observeMessage } from './objectives/director.js'
 import {
@@ -145,30 +144,8 @@ function drawing(state: GameState, playerId: string, png: string): ApplyResult {
   const player = state.players.get(playerId)
   if (!player) return { applied: false, reason: 'unknown-player' }
   player.skinCount += 1
-  player.skin = { key: `skin-${playerId}-${player.skinCount}`, png, average: null }
+  player.skin = { key: `skin-${playerId}-${player.skinCount}`, png }
   return { applied: true, kind: 'drawing', player }
-}
-
-/**
- * What colour a drawing turned out, from whoever decoded it. This is the one
- * thing that comes into the model from the renderer rather than from a phone:
- * reading pixels needs a canvas, so the Phaser layer samples the texture it is
- * already building and hands back a single colour.
- *
- * It is keyed by the drawing rather than the blob, because a child who redraws
- * twice in a second has two decodes in flight and the older one must not land
- * on the newer picture.
- */
-export function noteSkinColour(
-  state: GameState,
-  playerId: string,
-  key: string,
-  average: Rgb,
-): boolean {
-  const skin = state.players.get(playerId)?.skin
-  if (!skin || skin.key !== key) return false
-  skin.average = average
-  return true
 }
 
 /** Steer a blob the world knows about. Input from a stranger is ignored. */

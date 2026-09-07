@@ -34,19 +34,20 @@ export interface MovingPadObjective extends ObjectiveBase {
 }
 
 /** Elbow room for the whole room at once: it has to hold everybody. */
-const ROOMINESS = { easy: 2.0, hard: 1.5 }
+const ROOMINESS = { easy: 2.8, hard: 2.2 }
 /**
  * How long it takes to cross its own width, in seconds — which is the number
- * that matters rather than a speed. Below the hold, and standing still cannot
- * work: the pad passes over anybody who does not move and is gone again before
- * the count is up. A speed on its own would break that promise the moment a
- * room of ten made the pad bigger.
+ * that matters rather than a speed, because the pad also gets wider as the room
+ * fills. Bigger is slower, and it is set slow enough that the smallest child in
+ * the room can keep up with it on foot. The room still has to move to stay on
+ * it; a blob that happens to be standing where the pad is going, and is still
+ * there when the count is up, is a lucky blob rather than a bug.
  */
-const CROSSING = { easy: 2.6, hard: 1.2 }
+const CROSSING = { easy: 4.0, hard: 2.6 }
 /** However big the pad gets, it never outruns the room chasing it. */
-const MAX_DRIFT = 300
-/** How long everybody has to keep up with it. Longer than a crossing, always. */
-const HOLD = { easy: 4_000, hard: 5_000 }
+export const MAX_DRIFT = 180
+/** How long everybody has to keep up with it. */
+const HOLD = { easy: 2_500, hard: 3_500 }
 const TIME_LIMIT = { easy: 50_000, hard: 40_000 }
 
 export const movingPad: ObjectiveTemplate<MovingPadObjective> = {

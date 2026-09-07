@@ -29,6 +29,14 @@ export const SOUND_CUES = [
   'go',
   /** Something hit you. */
   'hit',
+  /**
+   * You drove into something: another blob, a wall, the edge of the floor.
+   *
+   * The only cue that is about a blob rather than about the game, and the only
+   * one that is a different noise on every phone — a blob's landing voice is
+   * its `slot`, so six phones around a sofa are a chorus of six.
+   */
+  'bounce',
 ] as const
 
 export type SoundCue = (typeof SOUND_CUES)[number]

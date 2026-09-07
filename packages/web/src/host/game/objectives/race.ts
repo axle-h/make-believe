@@ -3,7 +3,7 @@ import { carveMaze } from '../mazes.js'
 import type { Obstacle } from '../obstacles.js'
 import { intRange, range } from '../rng.js'
 import { activePlayers } from '../selectors.js'
-import type { GameState, Player } from '../state.js'
+import type { GameState, Player, World } from '../state.js'
 import { blobsIn, type RectZone } from '../zones.js'
 import {
   difficulty,
@@ -51,7 +51,7 @@ export interface RaceObjective extends ObjectiveBase {
 }
 
 /** Worn beside the name of everybody who is home. */
-const HOME_BADGE = '🏁'
+export const HOME_BADGE = '🏁'
 
 /**
  * How long the world waits for a room to gather before it counts down anyway.
@@ -105,9 +105,9 @@ export const race: ObjectiveTemplate<RaceObjective> = {
   generate(context: GenerateContext): RaceObjective {
     const hard = difficulty(context.level, MAX_LEVEL)
     const { world } = context
-    // Tall pads down each edge, but not the whole height: a wall as tall as
-    // the floor is a wall that shuts the floor in half, and the way round one
-    // is never worth taking — leaving the start pad stops the countdown.
+    // Tall pads down each edge, but not the whole height: a blob has to be
+    // able to get round the end of one to reach the course, and a pad that
+    // reaches the top and bottom walls is one nobody can leave sideways.
     const tall = world.height - BLOB_SIZE * 3
     const wide = BLOB_SIZE * 2.2
     const start: RectZone = {
@@ -139,7 +139,10 @@ export const race: ObjectiveTemplate<RaceObjective> = {
       // arrive is a countdown that punishes whoever was slowest.
       clock: 'held',
       zones: [start, finish],
-      obstacles: [gate(context.id, start), ...course(context, hard, start, finish)],
+      // No gate yet: it goes up when the room is gathered. The course itself
+      // is down from the start, because it is the thing children look at
+      // while they gather and taking it away and putting it back is worse.
+      obstacles: course(context, hard, start, finish),
       marks: [],
       carryables: [],
       outcome: 'running',
@@ -156,7 +159,7 @@ export const race: ObjectiveTemplate<RaceObjective> = {
   step(objective, state, dtMs) {
     const present = activePlayers(state)
     if (present.length === 0) return
-    if (objective.phase === 'gathering') return gather(objective, present, dtMs)
+    if (objective.phase === 'gathering') return gather(objective, present, state.world, dtMs)
     if (objective.phase === 'counting') return countIn(objective, state, dtMs)
 
     const finish = objective.zones[1]
@@ -216,14 +219,30 @@ export const race: ObjectiveTemplate<RaceObjective> = {
   },
 }
 
-/** Waiting for the room, with no clock and nothing taken away from anybody. */
-function gather(objective: RaceObjective, present: Player[], dtMs: number): void {
+/**
+ * Waiting for the room, with no clock and nothing taken away from anybody.
+ *
+ * The gate goes up here rather than at the start, on both branches: there is
+ * nothing for it to do while the room is still arriving, and a wall standing
+ * across the floor is a wall somebody has to be let through. A blob dawdling
+ * off the pad when patience runs out ends up on the far side of it — that is a
+ * late arrival starting from where they stood, not a false start.
+ */
+function gather(
+  objective: RaceObjective,
+  present: Player[],
+  world: World,
+  dtMs: number,
+): void {
   objective.gatheredMs += dtMs
   const start = objective.zones[0]
   const everybody = start !== undefined && blobsIn(start, present).length === present.length
   if (!everybody && objective.gatheredMs < PATIENCE_MS) return
   objective.phase = 'counting'
   objective.countdownMs = COUNTDOWN_MS
+  if (start?.shape === 'rect') {
+    objective.obstacles = [gate(objective.id, start, world), ...objective.obstacles]
+  }
 }
 
 /** Three, two, one — and the gate goes. */
@@ -253,14 +272,29 @@ function counting(objective: RaceObjective): number {
 /**
  * The gate across the mouth of the start pad. It is what makes "no false
  * starts" a thing on the floor rather than a rule about joysticks.
+ *
+ * It spans the **whole floor**, top to bottom. The start pad is shorter than
+ * the floor, so a gate the pad's own height left a lane over the top of it and
+ * another under the bottom, and a gate with a lane past it is not a gate.
+ *
+ * Where it sits matters for one reason. `pushOutOfObstacles` slides a blob out
+ * of a wall that appears on top of it along the shortest axis, so its centre is
+ * at the pad's right edge: every blob that triggered the gate has its own
+ * centre inside the pad, therefore left of the gate's centre, therefore slides
+ * back into the pad over a few frames rather than being squeezed onto the
+ * course.
+ *
+ * It is the one wall in the game that does shut the floor in half, and it is
+ * allowed to because it lasts four seconds with the whole room already on the
+ * near side of it. Nothing else may.
  */
-function gate(id: string, start: RectZone): Obstacle {
+function gate(id: string, start: RectZone, world: World): Obstacle {
   return {
     id: `${id}-gate`,
     x: start.x + start.width / 2,
-    y: start.y,
+    y: world.height / 2,
     width: BLOCK_WIDTH,
-    height: start.height,
+    height: world.height,
   }
 }
 

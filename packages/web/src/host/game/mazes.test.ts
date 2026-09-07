@@ -65,14 +65,47 @@ describe('carving one', () => {
     }
   })
 
+  /**
+   * Measured in wall rather than in walls. A straight run of cell walls comes
+   * back as one rectangle now, so counting them counts how the maze was drawn
+   * rather than how much of it there is — and merging moves not one pixel of
+   * where the wall actually lies.
+   */
   it('makes corners rather than a field, but leaves a loop or two', () => {
+    // A four by four grid has nine cell walls left standing in a perfect maze,
+    // each about a cell long. A knocked-through one is a field, and nine of
+    // nine is a maze with no way round a wrong turn.
+    const cell = AREA.height / 4
+    for (let seed = 0; seed < 20; seed++) {
+      const wall = maze(seed).reduce((sum, one) => sum + Math.max(one.width, one.height), 0)
+
+      expect(wall / cell).toBeGreaterThan(5)
+      expect(wall / cell).toBeLessThanOrEqual(10)
+    }
+  })
+
+  /**
+   * One wall drawn as one wall. A straight run of cell walls used to come out
+   * as a rectangle each, and every one of them brought its own rounded corners
+   * and its own outline — which is what the messy joins in the third play test
+   * were. Nothing left in a carved maze is collinear with a neighbour it
+   * touches.
+   */
+  it('gives back one rectangle per run rather than one per cell wall', () => {
     for (let seed = 0; seed < 20; seed++) {
       const walls = maze(seed)
-      // A four by four grid has nine walls in a perfect maze; a knocked-
-      // through one is a field, and nine of nine is a maze with no way round
-      // a wrong turn.
-      expect(walls.length).toBeGreaterThan(5)
-      expect(walls.length).toBeLessThanOrEqual(9)
+      for (const one of walls) {
+        for (const other of walls) {
+          if (one === other) continue
+          const sameColumn = one.x === other.x && one.width === other.width
+          const sameRow = one.y === other.y && one.height === other.height
+          if (!sameColumn && !sameRow) continue
+          const gap = sameColumn
+            ? Math.abs(one.y - other.y) - (one.height + other.height) / 2
+            : Math.abs(one.x - other.x) - (one.width + other.width) / 2
+          expect(gap).toBeGreaterThan(0)
+        }
+      }
     }
   })
 

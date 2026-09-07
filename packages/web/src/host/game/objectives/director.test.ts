@@ -18,7 +18,7 @@ import { tick } from '../tick.js'
 import { contains } from '../zones.js'
 import { askFor, banner, briefFor, setLevel, stepObjectives } from './director.js'
 import { eligibleTemplates, unlockedAt } from './registry.js'
-import type { ColourHuntObjective } from './colourHunt.js'
+import type { FetchObjective } from './fetch.js'
 import type { KeepTheCrownObjective } from './keepTheCrown.js'
 import type { DrawItObjective } from './drawIt.js'
 import type { Brief, Objective } from './types.js'
@@ -636,12 +636,12 @@ describe('what the phones are told', () => {
    */
   it('says it again when only the painted word changes', () => {
     const state = room(['Wilf', 'Ida'])
-    askFor(state, 'colourHunt')
+    askFor(state, 'fetch')
     stepObjectives(state, 16)
     expect(briefsFrom(state, 16)).toEqual([])
 
-    const hunt = state.objectives.current as ColourHuntObjective
-    hunt.paint = 'indigo'
+    const errand = state.objectives.current as FetchObjective
+    errand.things = 'kumquats'
 
     expect(briefsFrom(state, 16)).toHaveLength(1)
   })

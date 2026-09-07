@@ -132,3 +132,125 @@ describe('speech bubbles', () => {
     expect(player.bubble).toBeNull()
   })
 })
+
+/** Every bounce in one step, whoever it was for. */
+const bouncesIn = (result: ReturnType<typeof tick>) =>
+  result.sounds.filter((sound) => sound.cue === 'bounce')
+
+/** A room where nobody is near anybody, so a test can place them itself. */
+function scattered(count: number): GameState {
+  const state = createGame(1)
+  for (let index = 1; index <= count; index++) {
+    const player = joinPlayer(state, `p${index}`, `B${index}`)
+    if (!player.applied) throw new Error('join should apply')
+    player.player.x = 200 + index * BLOB_SIZE * 4
+    player.player.y = 200
+  }
+  return state
+}
+
+/**
+ * The bounce. Every blob has a landing voice of its own — its `slot`, played
+ * by its own phone — and the noise is worked out here by looking at what
+ * changed, exactly as every other cue is: no task reports anything.
+ *
+ * It is an **edge**, not a state. A blob shoved up against a wall makes one
+ * noise and then goes quiet; it has to come off and go back to make another.
+ * Six blobs droning at each other would be unbearable.
+ */
+describe('bouncing off things', () => {
+  it('says nothing at all while everybody is driving about in the open', () => {
+    const state = scattered(2)
+    applyMessage(state, { type: 'input', playerId: 'p1', dx: 0, dy: 1 })
+
+    expect(bouncesIn(tick(state, 16))).toEqual([])
+  })
+
+  it('makes exactly one noise when two blobs drive into each other', () => {
+    const state = scattered(2)
+    const one = state.players.get('p1')!
+    const other = state.players.get('p2')!
+    other.x = one.x + BLOB_SIZE - 4
+    other.y = one.y
+
+    const first = bouncesIn(tick(state, 16))
+    // And not one a frame after it: they are still touching, and still quiet.
+    const rest = [tick(state, 16), tick(state, 16)].flatMap((step) => bouncesIn(step))
+
+    // `map` is already a fresh array, so sorting it mutates nothing.
+    // oxlint-disable-next-line unicorn/no-array-sort
+    expect(first.map((sound) => sound.to).sort()).toEqual(['p1', 'p2'])
+    expect(rest).toEqual([])
+  })
+
+  it('makes a second when they come apart and touch again', () => {
+    const state = scattered(2)
+    const one = state.players.get('p1')!
+    const other = state.players.get('p2')!
+    other.x = one.x + BLOB_SIZE - 4
+    other.y = one.y
+    expect(bouncesIn(tick(state, 16))).not.toEqual([])
+
+    other.x = one.x + BLOB_SIZE * 6
+    // Far apart for a moment — long enough to clear the bounce limiter too.
+    for (let frame = 0; frame < 20; frame++) tick(state, 16)
+    other.x = one.x + BLOB_SIZE - 4
+
+    expect(bouncesIn(tick(state, 16))).not.toEqual([])
+  })
+
+  it('makes one noise for a blob held against the edge of the floor, then none', () => {
+    const state = scattered(1)
+    applyMessage(state, { type: 'input', playerId: 'p1', dx: -1, dy: 0 })
+    // Driving left until it can go no further; the bounce is the moment it
+    // stops, not every frame it spends leaning there.
+    let heard = 0
+    for (let frame = 0; frame < 200; frame++) heard += bouncesIn(tick(state, 16)).length
+
+    expect(heard).toBe(1)
+    expect(state.players.get('p1')?.x).toBe(BLOB_SIZE / 2)
+  })
+
+  it('bounces a blob a wall has appeared on top of', () => {
+    // Two, because a room of one is a room the world will not ask anything of
+    // — and there has to be a running task to put a wall into.
+    const state = scattered(2)
+    tick(state, 16)
+    const blob = state.players.get('p1')!
+    const objective = state.objectives.current
+    if (!objective) throw new Error('expected the world to be asking for something')
+    objective.obstacles = [{ id: 'wall', x: blob.x, y: blob.y, width: 120, height: 120 }]
+
+    expect(bouncesIn(tick(state, 16)).map((sound) => sound.to)).toEqual(['p1'])
+  })
+
+  /** An away blob is a ghost: it collides with nothing, so it bounces off nothing. */
+  it('never bounces a blob whose phone has gone', () => {
+    const state = scattered(2)
+    const one = state.players.get('p1')!
+    const other = state.players.get('p2')!
+    other.x = one.x + BLOB_SIZE - 4
+    other.y = one.y
+    applyMessage(state, { type: 'left', playerId: 'p2' })
+
+    expect(bouncesIn(tick(state, 16))).toEqual([])
+  })
+
+  /**
+   * A bounce keeps a budget of its own, so a blob scraping along a wall cannot
+   * starve the delivery its owner is actually waiting to hear.
+   */
+  it('lets a bounce and a real cue through in the same step', () => {
+    const state = scattered(2)
+    const one = state.players.get('p1')!
+    const other = state.players.get('p2')!
+    other.x = one.x + BLOB_SIZE - 4
+    other.y = one.y
+    state.objectives.sounds.push({ to: 'p1', cue: 'deliver' })
+
+    const heard = tick(state, 16).sounds.filter((sound) => sound.to === 'p1')
+
+    // oxlint-disable-next-line unicorn/no-array-sort
+    expect(heard.map((sound) => sound.cue).sort()).toEqual(['bounce', 'deliver'])
+  })
+})

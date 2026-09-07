@@ -85,6 +85,8 @@ export interface ObjectiveSnapshot {
   hazards: Hazard[]
   /** Blobs this task has made insubstantial: drawn faint, and not hittable. */
   fuzzy: string[]
+  /** Blobs the task wants the room to notice: a pulsing ring behind them. */
+  danger: string[]
 }
 
 export interface DirectorSnapshot {
@@ -138,6 +140,7 @@ export function objectives(state: GameState): DirectorSnapshot {
             carryables: objective.carryables,
             hazards: objective.hazards ?? [],
             fuzzy: objective.fuzzy ?? [],
+            danger: objective.danger ?? [],
           },
   }
 }

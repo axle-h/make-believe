@@ -1,9 +1,10 @@
 import { THEMES } from '@make-believe/shared'
 import { describe, expect, it } from 'vitest'
 import { stillOut, type Parcel } from '../carryables.js'
+import { insideObstacle } from '../obstacles.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
-import { WORLD_HEIGHT, WORLD_WIDTH } from '../constants.js'
+import { MAX_LEVEL, WORLD_HEIGHT, WORLD_WIDTH } from '../constants.js'
 import { createGame, type GameState } from '../state.js'
 import { contains, roofHeight } from '../zones.js'
 import { fetch, type FetchObjective } from './fetch.js'
@@ -141,7 +142,7 @@ describe('fetching', () => {
 
     expect(brief?.to).toBe('*')
     expect(brief?.detail).toContain(`1 of ${objective.parcels}`)
-    // Where they go, said in the word for it: apples go in the basket.
+    // Where they go, said in the word for it: apples go in the pie.
     expect(brief?.detail).toContain(objective.home)
     // The strip is the colour of the things, not of the house: it is what to
     // go and look for that a child who cannot read the sentence needs.
@@ -152,7 +153,7 @@ describe('fetching', () => {
 })
 
 /**
- * Apples in a basket rather than parcels in a depot. It is the same game and a
+ * Apples into a pie rather than parcels in a depot. It is the same game and a
  * good deal easier to understand without reading: the thing has a picture on
  * it, the house has one too, and the word for what they are is painted in the
  * colour they are.
@@ -185,5 +186,35 @@ describe('what is being carried', () => {
   /** The picture on the house *is* the instruction, so it is drawn like one. */
   it('draws the house picture big enough to read across a room', () => {
     expect(make(room(2)).zones[0]?.labelSize).toBeGreaterThan(40)
+  })
+})
+
+/**
+ * Carrying an apple across an empty floor is a straight line; carrying it round
+ * a corner is a game. Not on the first outing, though — fetch unlocks at level
+ * 4, and a four-year-old who cannot find the corner is not playing anything.
+ */
+describe('fetching: what is in the way', () => {
+  it('gives a room at the top of the ladder something to carry things round', () => {
+    let seen = 0
+    for (let seed = 0; seed < 20; seed++) seen += make(room(3), MAX_LEVEL, seed).obstacles.length
+    expect(seen).toBeGreaterThan(0)
+  })
+
+  it('gives a room on its first outing a clear floor', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      expect(make(room(3), 4, seed).obstacles).toEqual([])
+    }
+  })
+
+  it('never starts a parcel inside a wall', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const objective = make(room(3), MAX_LEVEL, seed)
+      for (const thing of objective.carryables) {
+        for (const wall of objective.obstacles) {
+          expect(insideObstacle(wall, thing.x, thing.y)).toBe(false)
+        }
+      }
+    }
   })
 })

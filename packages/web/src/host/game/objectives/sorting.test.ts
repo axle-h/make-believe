@@ -1,6 +1,8 @@
 import { THEMES } from '@make-believe/shared'
 import { describe, expect, it } from 'vitest'
 import { stillOut, type Parcel } from '../carryables.js'
+import { insideObstacle } from '../obstacles.js'
+import { MAX_LEVEL } from '../constants.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
@@ -131,6 +133,32 @@ describe('what is being sorted', () => {
 
       expect(theme).toBeDefined()
       expect(objective.headline).toBe(`Every ${theme?.one} in its own colour!`)
+    }
+  })
+})
+
+/** The same corners fetch gets, for the same reason. Sorting unlocks at 6. */
+describe('sorting: what is in the way', () => {
+  it('gives a room at the top of the ladder something to carry things round', () => {
+    let seen = 0
+    for (let seed = 0; seed < 20; seed++) seen += make(room(3), MAX_LEVEL, seed).obstacles.length
+    expect(seen).toBeGreaterThan(0)
+  })
+
+  it('gives a room low down the ladder a clear floor', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      expect(make(room(3), 4, seed).obstacles).toEqual([])
+    }
+  })
+
+  it('never starts a parcel inside a wall', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const objective = make(room(3), MAX_LEVEL, seed)
+      for (const thing of objective.carryables) {
+        for (const wall of objective.obstacles) {
+          expect(insideObstacle(wall, thing.x, thing.y)).toBe(false)
+        }
+      }
     }
   })
 })

@@ -1,5 +1,5 @@
 import { BLOB_SIZE } from './constants.js'
-import { pushOutOfBox, PUSH_OUT_SPEED, type Box } from './obstacles.js'
+import { insideObstacle, pushOutOfBox, PUSH_OUT_SPEED, type Box } from './obstacles.js'
 import { pointInBounds, type Rng } from './rng.js'
 import { activePlayers } from './selectors.js'
 import { clamp, type GameState, type Player, type World } from './state.js'
@@ -122,6 +122,10 @@ export function deliverInto(
  * Somewhere to drop a handful of things: on the floor, off the walls, and out
  * of the zones they are meant to be brought to — a parcel that starts in the
  * depot is a parcel nobody got to carry.
+ *
+ * `walls` is whatever the task has put in the way, if anything. A parcel
+ * dropped inside a wall is a parcel nobody can fetch, which is worse than a
+ * parcel that starts at home: at least that one is *visibly* already done.
  */
 export function scatter(
   rng: Rng,
@@ -129,15 +133,27 @@ export function scatter(
   count: number,
   avoid: readonly Zone[],
   size: number,
+  walls: readonly Box[] = [],
 ): { x: number; y: number }[] {
   const margin = size / 2 + BLOB_SIZE / 2
+  // A wall counts as wider than it is by the thing being dropped and the blob
+  // that has to reach it: a parcel wedged against a wall is nearly as bad as
+  // one inside it.
+  const clear = walls.map((wall) => ({
+    ...wall,
+    width: wall.width + size + BLOB_SIZE,
+    height: wall.height + size + BLOB_SIZE,
+  }))
   const spots: { x: number; y: number }[] = []
   while (spots.length < count) {
     let spot = pointInBounds(rng, world, margin)
     // A few goes at missing the zones, then take what we have: a parcel that
     // starts already home is a shame, and a generator that can hang is not.
     for (let attempt = 0; attempt < 12; attempt++) {
-      if (!avoid.some((zone) => contains(zone, spot.x, spot.y))) break
+      const clash =
+        avoid.some((zone) => contains(zone, spot.x, spot.y)) ||
+        clear.some((wall) => insideObstacle(wall, spot.x, spot.y))
+      if (!clash) break
       spot = pointInBounds(rng, world, margin)
     }
     spots.push(spot)

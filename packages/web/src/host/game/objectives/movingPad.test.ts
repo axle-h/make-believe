@@ -5,7 +5,7 @@ import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
 import { joinPlayer } from '../testRoom.js'
 import { radiusFor } from '../zones.js'
-import { movingPad, type MovingPadObjective } from './movingPad.js'
+import { MAX_DRIFT, movingPad, type MovingPadObjective } from './movingPad.js'
 
 /**
  * The spot, with legs. The pad is the first thing in the game that moves the
@@ -97,18 +97,19 @@ describe('the pad that will not stay still', () => {
   })
 
   /**
-   * The promise the whole task rests on: it crosses its own width in less
-   * time than the hold, so a room that stands still is passed over and left
-   * behind rather than counted. A speed on its own would break that the
-   * moment a room of ten made the pad bigger, which is why it is written the
-   * other way round.
+   * The promise the task rests on now: it is slow enough for the smallest
+   * child in the room to keep up with on foot, however big the pad gets. It
+   * used to be the other way round — the hold was always longer than a
+   * crossing, so that standing still could never work — and that sentence was
+   * protecting a rule about how the task ought to be played while the play
+   * test said it was not being played at all, because the pad outran a
+   * four-year-old.
    */
-  it('crosses itself faster than the hold, however big the room', () => {
+  it('never drifts faster than a blob can walk, however big the room', () => {
     for (let level = 1; level <= MAX_LEVEL; level++) {
       for (let present = 2; present <= 10; present++) {
         const objective = make(room(present), level, present)
-        const crossing = (pad(objective).radius * 2) / Math.hypot(objective.vx, objective.vy)
-        expect(crossing * 1000).toBeLessThan(objective.holdMs)
+        expect(Math.hypot(objective.vx, objective.vy)).toBeLessThanOrEqual(MAX_DRIFT + 0.001)
       }
     }
   })
@@ -118,6 +119,16 @@ describe('the pad that will not stay still', () => {
     for (let present = 2; present <= 10; present++) {
       const objective = make(room(present), MAX_LEVEL, present)
       expect(Math.hypot(objective.vx, objective.vy)).toBeLessThanOrEqual(SPEED * 0.75)
+    }
+  })
+
+  /** However long the hold, there is time to get onto it and see it through. */
+  it('asks for a hold that fits inside the time limit with room to spare', () => {
+    for (let level = 1; level <= MAX_LEVEL; level++) {
+      for (let present = 2; present <= 10; present++) {
+        const objective = make(room(present), level, present)
+        expect(objective.holdMs).toBeLessThan(objective.totalMs / 2)
+      }
     }
   })
 
@@ -143,22 +154,25 @@ describe('standing on it', () => {
   })
 
   /**
-   * It has to leave anybody standing still before the hold is up, or it is
-   * the spot again with extra steps.
+   * The room still has to move. A blob left where the pad *was* is off it by
+   * the time the count is up — which is the task — though a blob that happens
+   * to be standing where the pad is going, and is still there at the end, is a
+   * lucky blob rather than a bug. That is the whole of what changed when the
+   * pad was slowed down for the smallest child in the room.
    */
-  it('is not done by standing where it used to be, at any level', () => {
-    for (let level = 1; level <= MAX_LEVEL; level++) {
-      const state = room(3)
-      const objective = make(state, level)
-      for (const player of activePlayers(state)) {
-        player.x = pad(objective).x
-        player.y = pad(objective).y
-      }
-
-      for (let frame = 0; frame < 400; frame++) movingPad.step(objective, state, 50)
-
-      expect(objective.outcome).toBe('running')
+  it('leaves a blob that stands where the pad used to be', () => {
+    const state = room(3)
+    const objective = make(state, MAX_LEVEL)
+    const stayed = { x: pad(objective).x, y: pad(objective).y }
+    for (const player of activePlayers(state)) {
+      player.x = stayed.x
+      player.y = stayed.y
     }
+
+    for (let frame = 0; frame < 200; frame++) movingPad.step(objective, state, 50)
+
+    const zone = pad(objective)
+    expect(Math.hypot(zone.x - stayed.x, zone.y - stayed.y)).toBeGreaterThan(zone.radius)
   })
 
   it('waits for the last blob rather than the first', () => {
@@ -191,11 +205,20 @@ describe('what the phones are told', () => {
   it('counts who is on it, in the colour of the pad', () => {
     const state = room(3)
     const objective = make(state)
+    const [first, ...rest] = activePlayers(state)
+    first!.x = pad(objective).x
+    first!.y = pad(objective).y
+    // The pad is wide enough for the whole room, so the others have to be put
+    // somewhere it plainly is not for the count to mean anything.
+    for (const player of rest) {
+      player.x = WORLD_WIDTH - pad(objective).x
+      player.y = WORLD_HEIGHT - pad(objective).y
+    }
 
     const [brief] = movingPad.briefs(objective, state)
 
     expect(brief?.to).toBe('*')
-    expect(brief?.detail).toContain('0 of 3')
+    expect(brief?.detail).toContain('1 of 3')
     expect(brief?.colour).toBe(pad(objective).colour)
   })
 

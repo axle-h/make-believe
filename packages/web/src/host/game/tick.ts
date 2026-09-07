@@ -36,6 +36,8 @@ export function tick(state: GameState, dtMs: number): TickResult {
   const step = Math.max(0, dtMs)
   const seconds = step / 1000
   const removed: string[] = []
+  /** Everybody who has ended this step pressed against something. */
+  const leaning = new Set<string>()
 
   for (const player of state.players.values()) {
     if (player.bubble) {
@@ -51,11 +53,14 @@ export function tick(state: GameState, dtMs: number): TickResult {
       }
       continue
     }
-    const moved = clampToWorld(
-      state,
-      player.x + player.dx * SPEED * seconds,
-      player.y + player.dy * SPEED * seconds,
-    )
+    const wantX = player.x + player.dx * SPEED * seconds
+    const wantY = player.y + player.dy * SPEED * seconds
+    const moved = clampToWorld(state, wantX, wantY)
+    // A blob whose drive was cut short is leaning on the edge of the floor,
+    // which is a thing to bounce off exactly as a wall is.
+    if (Math.abs(moved.x - wantX) > EDGE_SLACK || Math.abs(moved.y - wantY) > EDGE_SLACK) {
+      leaning.add(player.playerId)
+    }
     player.x = moved.x
     player.y = moved.y
   }
@@ -65,12 +70,39 @@ export function tick(state: GameState, dtMs: number): TickResult {
   // beside its neighbours rather than inside them.
   const walls = state.objectives.current?.obstacles ?? []
   stepObstacles(walls, step)
-  pushOutOfObstacles(state, walls, step)
-  resolveCollisions(state)
+  for (const id of pushOutOfObstacles(state, walls, step)) leaning.add(id)
+  for (const id of resolveCollisions(state)) leaning.add(id)
+
+  // Whoever has just started leaning on something, handed to the director so
+  // that it goes through the same limiter everything else does.
+  state.objectives.sounds.push(...bounces(state, leaning))
 
   // And last, with everybody where they have ended up, ask whether the world
   // has got what it wanted.
   const { briefs, sounds } = stepObjectives(state, step)
 
   return { removed, briefs, sounds }
+}
+
+/**
+ * How far short of where it was driving a blob has to end up before it counts
+ * as leaning on something. Floating point, and nothing more.
+ */
+const EDGE_SLACK = 0.001
+
+/**
+ * One bounce each for everybody who has *just* started leaning on something.
+ *
+ * It is an edge rather than a state, which is the whole trick: a blob held
+ * against a wall makes one noise and is then quiet, and only lets go and comes
+ * back to make another. Worked out by looking at what changed, exactly as
+ * every other cue is — no task reports anything.
+ */
+function bounces(state: GameState, leaning: Set<string>): Sound[] {
+  const sounds: Sound[] = []
+  for (const playerId of leaning) {
+    if (!state.bumping.has(playerId)) sounds.push({ to: playerId, cue: 'bounce' })
+  }
+  state.bumping = leaning
+  return sounds
 }

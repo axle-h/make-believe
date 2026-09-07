@@ -11,6 +11,8 @@ import {
 import { MAX_LEVEL, ZONE_COLOURS } from '../constants.js'
 import { pick } from '../rng.js'
 import { contains, placeZone, radiusFor, zoneReach, type HouseZone } from '../zones.js'
+import { mergeWalls } from '../obstacles.js'
+import { litter } from './arena.js'
 import {
   difficulty,
   scale,
@@ -31,17 +33,26 @@ import {
  * where it stands**, with a blip for whoever was carrying it. Not a penalty,
  * not a reset, nothing lost. Just not yet.
  *
- * Matching is by picture rather than by which parcel it is, because a sandwich
- * has two slices of bread and a child who fetched the far one has not made a
- * mistake.
+ * Matching is by what a thing *looks like* rather than by which parcel it is,
+ * because a sandwich has two slices of bread and a child who fetched the far
+ * one has not made a mistake. That is its picture and its colour together: a
+ * traffic light has no pictures on it at all — it is red, amber and green, and
+ * a glyph drawn over a red circle said nothing the circle did not — so the
+ * house shows what it wants next by turning that colour.
  */
+
+/** One thing the house is waiting for, as it is drawn on the floor. */
+export interface Step {
+  glyph?: string
+  colour: string
+}
 
 export interface InOrderObjective extends ObjectiveBase {
   kind: 'inOrder'
   /** What it is making, for the headline. */
   making: string
-  /** The pictures it wants, in order. */
-  steps: string[]
+  /** What it wants, in order: a picture and a colour, or a colour alone. */
+  steps: Step[]
   /** How many of them have arrived. */
   position: number
 }
@@ -62,7 +73,7 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
     const hard = difficulty(context.level, MAX_LEVEL)
     const { rng } = context
     const sequence = pick(rng, SEQUENCES)
-    const steps = sequence.steps.map((step) => step.glyph)
+    const steps: Step[] = sequence.steps.map((step) => ({ ...step }))
 
     const across = radiusFor(Math.max(2, context.players.length), 1.3) * 2
     const house: HouseZone = {
@@ -72,14 +83,20 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
       height: across * 0.8,
       x: 0,
       y: 0,
-      colour: pick(rng, ZONE_COLOURS).hex,
-      // What it wants next, and nothing else. It is the instruction.
-      label: steps[0] ?? '',
+      // Both of these say what it wants next, and nothing else says anything.
+      // They are the instruction.
+      colour: steps[0]?.colour ?? pick(rng, ZONE_COLOURS).hex,
+      label: steps[0]?.glyph ?? '',
       labelSize: WANTED_SIZE,
     }
     const at = placeZone(rng, context.world, zoneReach(house), [])
     house.x = at.x
     house.y = at.y
+
+    // A few small things in the way, once the room is well up the ladder.
+    // Placed after the house and before the pieces, so that nothing is put
+    // inside a wall and no wall lands on the house.
+    const walls = mergeWalls(litter(context, hard, [house]))
 
     const carryables: Carryable[] = scatter(
       rng,
@@ -87,18 +104,24 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
       sequence.steps.length,
       [house],
       PARCEL_SIZE,
-    ).map(
-      (spot, index): Parcel => ({
+      walls,
+    ).map((spot, index): Parcel => {
+      const step = steps[index]
+      const piece: Parcel = {
         kind: 'parcel',
         id: `${context.id}-piece-${index}`,
         x: spot.x,
         y: spot.y,
-        colour: sequence.steps[index]?.colour ?? '#f6f0e2',
-        glyph: sequence.steps[index]?.glyph ?? '',
+        colour: step?.colour ?? '#f6f0e2',
         home: null,
         carriedBy: null,
-      }),
-    )
+      }
+      // Left off entirely rather than set to nothing: the renderer makes no
+      // text object at all for a thing with no picture, and a traffic light is
+      // three plain coloured squares.
+      if (step?.glyph !== undefined) piece.glyph = step.glyph
+      return piece
+    })
 
     const totalMs = Math.round(scale(TIME_LIMIT.easy, TIME_LIMIT.hard, hard))
     return {
@@ -108,7 +131,7 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [house],
-      obstacles: [],
+      obstacles: walls,
       marks: [],
       carryables,
       outcome: 'running',
@@ -138,7 +161,11 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
     // The house only ever accepts the thing it is showing, so how far along
     // the room is is simply how much of it has arrived.
     objective.position = objective.carryables.filter((thing) => thing.home !== null).length
-    house.label = objective.steps[objective.position] ?? house.label ?? ''
+    const next = objective.steps[objective.position]
+    if (next) {
+      house.label = next.glyph ?? ''
+      house.colour = next.colour
+    }
     if (objective.position >= objective.steps.length) objective.outcome = 'done'
   },
 
@@ -158,7 +185,9 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
   },
 }
 
-/** Is this the picture the house is asking for right now? */
+/** Does this look like the thing the house is asking for right now? */
 function wanted(objective: InOrderObjective, thing: Carryable): boolean {
-  return thing.glyph !== undefined && thing.glyph === objective.steps[objective.position]
+  const next = objective.steps[objective.position]
+  if (!next) return false
+  return thing.colour === next.colour && (thing.glyph ?? '') === (next.glyph ?? '')
 }

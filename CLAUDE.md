@@ -187,7 +187,7 @@ All messages are JSON over one WebSocket. Define them as **zod schemas** and der
 //                                                              // changes no screen and takes no tool away.
 //                                                              // headline '' takes the strip down. `emphasis`
 //                                                              // is a word *of the headline* to paint in
-//                                                              // `colour`: "everybody go **green**".
+//                                                              // `colour`: "bring back the **apples**".
 
 // relay → host only
 { type: 'arrived', playerId: string }                           // a socket with nobody on it yet, so that the TV
@@ -321,10 +321,10 @@ by, not as work to do.
 11. Objectives: something to actually do. Zones, then carryables; one task
     running at all times, procedurally parameterised and levelled up as the
     room gets good at them. Never rounds — no phone ever waits its turn.
-    **All of it is built.** Sixteen tasks, in `src/host/game/objectives/`,
+    **All of it is built.** Fifteen tasks, in `src/host/game/objectives/`,
     each a file and a line in `registry.ts`: stand on the spot, the spot that
     runs away, the race, hot potato, two to a pad, follow the lights, find your
-    own pad, colour hunt, dodge, draw it, fetch, sorting, in order, a crate too
+    own pad, dodge, draw it, fetch, sorting, in order, a crate too
     heavy for one, sumo, and keep the crown. Underneath
     them: the seeded RNG, zones and pads, carryables, obstacles (walls a blob
     cannot drive through — anybody standing where one appears is slid out over
@@ -366,8 +366,11 @@ by, not as work to do.
       a phone offers. Drive, say, draw and finish are live in every task, for
       everybody, throughout. Where a task seems to need a joystick held still —
       "no false starts" in the race — it gets a **wall** instead: a gate across
-      the mouth of the start pad, taken away on GO. A child understands a gate
-      without being told. Do not replace one with ignored input.
+      the mouth of the start pad, put up when the room is gathered and taken
+      away on GO. It spans the **whole floor**, top to bottom: the start pad is
+      shorter than the floor, and a gate with a lane over the top of it is not
+      a gate. A child understands a gate without being told. Do not replace one
+      with ignored input.
     - **A task is judged against whoever is present right now**, so a child who
       wanders off never leaves the others with something they cannot finish.
     - **Nobody is ever eliminated**, and no task may put a child in a state
@@ -396,6 +399,7 @@ by, not as work to do.
 - Drawing: `this.textures.addBase64(key, png)`, then on the `addtexture-<key>` event call `sprite.setTexture(key)`.
 - Names and speech bubbles are `this.add.text(...)` objects positioned relative to the sprite each frame; fade bubbles with a tween then `destroy()`.
 - Verify Phaser 4 APIs against `node_modules/phaser/types/phaser.d.ts` if unsure; don't guess from Phaser 3 memory.
+- **Every picture in the game is an emoji character drawn in `system-ui`**, so what appears is whatever emoji font the device has — and the device is a stick behind a television running Fire OS 7, which is Android 9, which is **Emoji 11 (2018)**. A picture its font has never heard of is a tofu box, which is worse than no picture at all. The vocabulary is therefore capped at **Emoji 5.0 (2017)** and `SAFE_GLYPHS` in `shared/src/glyphs.ts` is what holds it there — tests in both `shared` and the host walk everything the game draws and check it against the list. Adding a picture means adding it there and checking its Emoji version first. **No font is shipped**: a colour emoji font is megabytes, and the whole point of a glyph is that it costs nothing. And no keycap sequences (1️⃣), which render inconsistently even where their parts exist — plain digits instead. A list in a test says a glyph is *allowed*; only the television says it renders, so the debug panel draws the whole of `SAFE_GLYPHS` at the bottom of itself: press `d` on the stick and look, and anything that is a box comes off the list.
 
 ## Player notes
 
@@ -414,7 +418,7 @@ by, not as work to do.
 - Mobile keyboards shift layout — test the Say sheet on a real phone early.
 - The player page is an installable PWA: `public/manifest.webmanifest`, `public/sw.js` (hand-written, ~60 lines, network-first, no Workbox and no build plugin), icons generated from `public/icons/blob.svg` by `scripts/icons.mjs` and committed. **Only the player page** — the host page links no manifest and the worker never touches `/host/`.
 - **What is being carried is themed** (`shared/src/themes.ts`): apples into a basket, bones to the dog, socks to the washing. A theme gives fetch and sorting their headline, the picture drawn over each thing and the picture on the house — the same game, funnier, and a good deal easier to understand without reading. The renderer keeps a glyph per carryable id, exactly as it keeps a tally per zone id. `SEQUENCES` is the same idea in an order: bread, cheese, bread.
-- **The phone makes the noises, never the TV.** Cues come out of the model — `stepObjectives` returns `Sound[]` beside its briefs — and are worked out by looking at what *changed*, so a task earns its cues without reporting anything and nothing can repeat every frame. They are rate-limited to about one per phone per 250ms. The synth is `src/player/sounds.ts`: sixty lines of WebAudio, no files and no dependency, and it lives under `src/player/` because an `AudioContext` is a `window` and `purity.test.ts` would say so. A context must be woken inside a gesture, and the Join tap is that gesture; if it is still asleep the cues are dropped in silence, because nothing depends on being heard. There is a **mute switch in the ☰ menu**, remembered in storage.
+- **The phone makes the noises, never the TV.** Cues come out of the model — `stepObjectives` returns `Sound[]` beside its briefs — and are worked out by looking at what *changed*, so a task earns its cues without reporting anything and nothing can repeat every frame. They are rate-limited to about one per phone per 250ms. The synth is `src/player/sounds.ts`: sixty lines of WebAudio, no files and no dependency, and it lives under `src/player/` because an `AudioContext` is a `window` and `purity.test.ts` would say so. **The `bounce` cue is the one exception**: ten short `.ogg`s in `src/player/bounce/`, one per blob **by `slot`**, because a synthesiser has nothing to say about the sound of something landing and every blob in the room should land differently. A context must be woken inside a gesture. The Join tap is one, but **most phones never see the join screen** — a phone that has played before walks straight back into its blob — so the first touch anywhere on the page is what actually catches them, and every cue re-wakes a context the OS put back to sleep. The waking lives in `src/player/audio.ts` behind an injected context factory, which is what makes it testable. If it is still asleep the cues are dropped in silence, because nothing depends on being heard. There is a **mute switch in the ☰ menu**, remembered in storage.
 - Over the joystick, on **one** phone in the room, the ☰ menu holds one dull extra line built at runtime when a `grownup` message arrives: pick any task, or start the ladder again (which asks first, exactly as Quit does). Nothing else about that phone changes — it drives, says things and draws like every other phone.
 - There are three screens: `waiting` (no TV yet), `join` (a name and a row of ten swatches) and `play`. The socket opens on load, before anybody has typed anything, because the join screen is made of the palette and only the TV knows it — so the order is waiting → join → play. A phone that has played before has its name and its colour in storage and gets in with one tap; a phone that is already in *this* world walks straight back into its blob without being asked anything, which is what makes a reload, a wifi blip and a TV coming back all non-events. There is no scan screen and no QR reader on the phone — the code in the URL was the only thing one was ever for.
 - **A blob cannot be renamed.** Over the joystick are Say, Draw and a **menu** (☰), and in the menu is **Quit**: quitting sends `finish` (the message keeps its name; the child reads "Quit"), and the phone then clears its name, its colour, its drawing and its `playerId` and goes back to the join screen, so starting again is a new blob picked from scratch rather than a new label on the old one. It is behind the menu because it is the one thing that undoes anything and no thumb should find it by accident. Nothing else on the phone ever throws anything away, and it asks before it does.

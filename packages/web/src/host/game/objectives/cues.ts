@@ -77,6 +77,16 @@ export function cuesFrom(before: CueSnapshot, objective: Objective | null): Soun
 export const CUE_GAP_MS = 250
 
 /**
+ * And the same for bounces, which get a budget of their own.
+ *
+ * A blob shoving its way along a wall bounces constantly, and if that shared
+ * the limit above it would starve the delivery a child is actually waiting to
+ * hear. They are two different kinds of noise: one is the world telling you
+ * something and one is your own blob making a sound as it moves.
+ */
+export const BOUNCE_GAP_MS = 200
+
+/**
  * Who was last told to make a noise and when. `'*'` is a key like any other,
  * which is a simplification: a room cue and a private one in the same frame
  * both get through. That is one beep and one blip a quarter of a second, which
@@ -94,9 +104,14 @@ export function createCueLimiter(): CueLimiter {
 export function rateLimit(limiter: CueLimiter, sounds: Sound[], atMs: number): Sound[] {
   const allowed: Sound[] = []
   for (const sound of sounds) {
-    const last = limiter.lastAt[sound.to]
-    if (last !== undefined && atMs - last < CUE_GAP_MS) continue
-    limiter.lastAt[sound.to] = atMs
+    const bounce = sound.cue === 'bounce'
+    // A bounce keeps its own budget, so a blob scraping along a wall cannot
+    // starve the delivery its owner is waiting to hear.
+    const key = bounce ? `${sound.to}#bounce` : sound.to
+    const gap = bounce ? BOUNCE_GAP_MS : CUE_GAP_MS
+    const last = limiter.lastAt[key]
+    if (last !== undefined && atMs - last < gap) continue
+    limiter.lastAt[key] = atMs
     allowed.push(sound)
   }
   return allowed

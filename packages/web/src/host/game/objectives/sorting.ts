@@ -12,6 +12,8 @@ import { MAX_LEVEL } from '../constants.js'
 import { intRange, pick } from '../rng.js'
 import type { CircleZone } from '../zones.js'
 import { makePads, MAX_NAMED_PADS, nameOfColour } from './pads.js'
+import { mergeWalls } from '../obstacles.js'
+import { litter } from './arena.js'
 import {
   difficulty,
   scale,
@@ -62,8 +64,20 @@ export const sorting: ObjectiveTemplate<SortingObjective> = {
     // Socks, or eggs, or presents. The colour is still the rule and the glyph
     // rides on top of it: a blue sock is a sock on a blue square.
     const theme = pick(rng, THEMES)
+    // A few small things in the way, once the room is well up the ladder.
+    // Placed after the depots and before the parcels, so that nothing is put
+    // inside a wall and no wall lands on a depot.
+    const walls = mergeWalls(litter(context, hard, depots))
+
     const count = Math.round(scale(PARCELS.easy, PARCELS.hard, hard))
-    const carryables: Carryable[] = scatter(rng, context.world, count, depots, PARCEL_SIZE).map(
+    const carryables: Carryable[] = scatter(
+      rng,
+      context.world,
+      count,
+      depots,
+      PARCEL_SIZE,
+      walls,
+    ).map(
       (spot, index): Parcel => ({
         kind: 'parcel',
         id: `${context.id}-parcel-${index}`,
@@ -92,7 +106,7 @@ export const sorting: ObjectiveTemplate<SortingObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: depots,
-      obstacles: [],
+      obstacles: walls,
       marks: [],
       carryables,
       outcome: 'running',

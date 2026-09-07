@@ -1,5 +1,4 @@
 import { sameName } from '@make-believe/shared'
-import type { Rgb } from './colour.js'
 import { BLOB_SIZE, PALETTE, WORLD_HEIGHT, WORLD_WIDTH } from './constants.js'
 import { createDirector, type Director } from './objectives/director.js'
 
@@ -26,13 +25,6 @@ export interface Skin {
   /** Stable per drawing; the renderer uses it as the Phaser texture key. */
   key: string
   png: string
-  /**
-   * Roughly what colour it came out, once somebody has looked. Reading pixels
-   * needs a canvas and the model has none, so the renderer decodes the drawing
-   * it is already turning into a texture and hands the answer back. `null`
-   * until then, and `null` for a drawing nobody has got round to yet.
-   */
-  average: Rgb | null
 }
 
 export interface Player {
@@ -65,6 +57,13 @@ export interface GameState {
    * throughout, and a child who ignores it entirely is still playing.
    */
   objectives: Director
+  /**
+   * Who was leaning on something last step: another blob, a wall, the edge of
+   * the floor. Transient, and the whole of what makes a bounce an *edge*
+   * rather than a drone — a blob held against a wall bounces once and is then
+   * quiet until it comes off and goes back.
+   */
+  bumping: Set<string>
 }
 
 /**
@@ -77,6 +76,7 @@ export function createGame(seed?: number): GameState {
     world: { width: WORLD_WIDTH, height: WORLD_HEIGHT },
     players: new Map(),
     objectives: createDirector(seed),
+    bumping: new Set(),
   }
 }
 

@@ -22,9 +22,15 @@ import { clampToWorld, type GameState, type Player } from './state.js'
  */
 export const COLLISION_PASSES = 4
 
-export function resolveCollisions(state: GameState): void {
+/**
+ * Everybody out of everybody, and the ids of whoever had to be moved — which
+ * is what a bounce is worked out from. An away blob is a ghost and is never in
+ * it, because it collides with nothing in the first place.
+ */
+export function resolveCollisions(state: GameState): Set<string> {
+  const touched = new Set<string>()
   const solid = players(state).filter((player) => !player.away)
-  if (solid.length < 2) return
+  if (solid.length < 2) return touched
 
   for (let pass = 0; pass < COLLISION_PASSES; pass++) {
     let anyMoved = false
@@ -33,11 +39,15 @@ export function resolveCollisions(state: GameState): void {
         const a = solid[i]
         const b = solid[j]
         if (!a || !b) continue
-        if (separate(state, a, b)) anyMoved = true
+        if (!separate(state, a, b)) continue
+        anyMoved = true
+        touched.add(a.playerId)
+        touched.add(b.playerId)
       }
     }
-    if (!anyMoved) return
+    if (!anyMoved) return touched
   }
+  return touched
 }
 
 /** Push one overlapping pair apart. Returns true if they were overlapping. */

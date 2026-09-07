@@ -123,6 +123,19 @@ function onTheStart(state: GameState, objective: RaceObjective): void {
   }
 }
 
+/**
+ * Gather the room and stop the moment the countdown begins — which is the
+ * moment the gate goes up, and the only moment there is a gate to look at.
+ */
+function gathered(state: GameState, objective: RaceObjective): RaceObjective {
+  onTheStart(state, objective)
+  for (let frame = 0; frame < 200 && objective.phase === 'gathering'; frame++) {
+    race.step(objective, state, 100)
+  }
+  expect(objective.phase).toBe('counting')
+  return objective
+}
+
 /** Gather, count in, and hand back a race that has actually started. */
 function started(state: GameState, objective: RaceObjective): RaceObjective {
   onTheStart(state, objective)
@@ -143,11 +156,16 @@ describe('laying out the course', () => {
     expect(finishOf(objective).label).toBe('FINISH')
   })
 
-  it('closes the start with a gate, and puts things in the way', () => {
+  /**
+   * A fresh race has a course and no gate. There is nothing for a gate to do
+   * while the room is still arriving, and a wall standing across the floor is
+   * a wall somebody has to be let through.
+   */
+  it('puts things in the way, and no gate until the room is gathered', () => {
     const objective = make(room(3))
 
-    expect(gateOf(objective)).toBeDefined()
-    expect(objective.obstacles.length).toBeGreaterThan(1)
+    expect(gateOf(objective)).toBeUndefined()
+    expect(objective.obstacles.length).toBeGreaterThan(0)
   })
 
   it('puts more in the way as the level goes up', () => {
@@ -179,19 +197,19 @@ describe('laying out the course', () => {
   })
 
   /**
-   * The gate closes the whole mouth of the start pad, which is the whole of
-   * what it has to do. There is floor above and below it — a wall as tall as
-   * the world is a wall that shuts the world in half — and going round it
-   * means leaving the pad, which is what stops the countdown. Nobody is
-   * stopped from trying; it simply costs more than it gains.
+   * The gate seals. The start pad is shorter than the floor, so a gate the
+   * pad's own height left a lane over the top of it and another under the
+   * bottom — which is the false start the third play test found. It spans the
+   * whole floor now, top to bottom, and there is no way past it at all.
    */
-  it('closes the mouth of the start line, top to bottom', () => {
-    const objective = make(room(4))
+  it('seals the floor from top to bottom when it goes up', () => {
+    const state = room(4)
+    const objective = gathered(state, make(state))
     const gate = gateOf(objective)!
     const start = startOf(objective)
 
-    expect(gate.height).toBe(start.height)
-    expect(gate.y).toBe(start.y)
+    expect(gate.y - gate.height / 2).toBeLessThanOrEqual(0)
+    expect(gate.y + gate.height / 2).toBeGreaterThanOrEqual(WORLD_HEIGHT)
     expect(gate.x).toBeGreaterThan(start.x)
     expect(gate.x - gate.width / 2).toBeLessThanOrEqual(start.x + start.width / 2)
   })
@@ -219,9 +237,11 @@ describe('laying out the course', () => {
       const walls = maze.obstacles.filter((wall) => !wall.id.endsWith('-gate'))
 
       // Corners rather than a handful of gates, and it stands still: there is
-      // enough to do in a maze without any of it moving.
-      expect(walls.length).toBeGreaterThan(5)
-      expect(walls.length).toBeGreaterThan(before.obstacles.length * 1.5)
+      // enough to do in a maze without any of it moving. A straight run of
+      // cell walls comes back as one rectangle, so this is fewer things than
+      // it looks and every one of them is longer.
+      expect(walls.length).toBeGreaterThan(3)
+      expect(walls.length).toBeGreaterThan(before.obstacles.length)
       expect(maze.obstacles.every((wall) => wall.motion === undefined)).toBe(true)
     }
     // Every corridor in it is wide enough for two blobs to pass, which in a
@@ -285,9 +305,40 @@ describe('laying out the course', () => {
  * should.
  */
 describe('the gate', () => {
+  it('goes up as the room finishes gathering, not before', () => {
+    const state = room(3)
+    const objective = make(state)
+    expect(gateOf(objective)).toBeUndefined()
+
+    gathered(state, objective)
+
+    expect(objective.phase).toBe('counting')
+    expect(gateOf(objective)).toBeDefined()
+  })
+
+  /**
+   * The other way into counting: patience runs out with the room still
+   * scattered. The gate goes up on that branch too — a blob left on the far
+   * side of it is a late arrival starting from where they stood.
+   */
+  it('goes up when patience runs out as well', () => {
+    const state = room(3)
+    const objective = make(state)
+    const dawdler = state.players.get('p3')!
+    dawdler.x = WORLD_WIDTH / 2
+    dawdler.y = WORLD_HEIGHT / 2
+
+    for (let frame = 0; frame < 400 && objective.phase === 'gathering'; frame++) {
+      race.step(objective, state, 100)
+    }
+
+    expect(objective.phase).toBe('counting')
+    expect(gateOf(objective)).toBeDefined()
+  })
+
   it('holds a blob driving flat at it', () => {
     const state = room(2)
-    const objective = make(state)
+    const objective = gathered(state, make(state))
     state.objectives.current = objective
     const runner = state.players.get('p1')!
     runner.x = startOf(objective).x
@@ -295,14 +346,40 @@ describe('the gate', () => {
     runner.dx = 1
     runner.dy = 0
 
-    for (let frame = 0; frame < 120; frame++) tick(state, 16)
-
     const gate = gateOf(objective)!
+    for (let frame = 0; frame < 40; frame++) tick(state, 16)
+
     expect(insideObstacle(gate, runner.x, runner.y)).toBe(false)
     expect(runner.x).toBeLessThan(gate.x)
   })
 
-  it('is gone the moment the countdown is', () => {
+  /**
+   * A blob standing exactly where the gate appears is slid *back into the pad*
+   * rather than squeezed out onto the course: its centre is inside the pad,
+   * therefore left of the gate's centre, and `pushOutOfObstacles` takes the
+   * shortest way out. Over a few frames, and never a teleport.
+   */
+  it('slides a blob it appears on top of back onto the pad', () => {
+    const state = room(2)
+    const objective = make(state)
+    state.objectives.current = objective
+    const runner = state.players.get('p1')!
+    const start = startOf(objective)
+    // Just inside the pad's right edge, which is where a blob that has driven
+    // up to the mouth of the start is standing when the gate goes up.
+    runner.x = start.x + start.width / 2 - 8
+    runner.y = start.y
+
+    gathered(state, objective)
+    const gate = gateOf(objective)!
+    for (let frame = 0; frame < 60; frame++) tick(state, 16)
+
+    expect(insideObstacle(gate, runner.x, runner.y)).toBe(false)
+    expect(runner.x).toBeLessThan(gate.x)
+    expect(contains(start, runner.x, runner.y)).toBe(true)
+  })
+
+  it('is gone the moment the countdown is, and the course is not', () => {
     const state = room(2)
     const objective = started(state, make(state))
 

@@ -6,7 +6,6 @@ import {
   MAX_STEP_MS,
   banner,
   CRATE_SIZE,
-  noteSkinColour,
   PARCEL_SIZE,
   objectives,
   players,
@@ -33,7 +32,6 @@ import {
   type Pose,
   type Squelch,
 } from './squelch.js'
-import { colourOfImage } from './skinColour.js'
 
 /**
  * The one scene. It renders the model and nothing else: the model moves the
@@ -89,6 +87,8 @@ const TALLY_GAP = 10
 
 /** The floor is under everything; blobs, names and bubbles stack over it. */
 const DEPTH_ZONE = -10
+/** Over the floor markings but under everything else: the ring in hot potato. */
+const DEPTH_DANGER = -8
 /** Things lying about are on the floor; things being carried are held up. */
 const DEPTH_THING_DOWN = -5
 const DEPTH_BLOB = 0
@@ -97,6 +97,19 @@ const DEPTH_NAME = 10
 const DEPTH_BUBBLE = 20
 /** What the world is asking for goes over the lot; it is the point of looking up. */
 const DEPTH_BANNER = 30
+
+/**
+ * The ring behind a blob the task wants the room to notice. A hot red-orange
+ * that is in neither `BLOB_COLOURS` nor `ZONE_COLOURS`, so it can never be
+ * mistaken for somebody's blob or for a spot to stand on.
+ */
+const DANGER_COLOUR = 0xff_2a_1c
+const DANGER_ALPHA = 0.85
+const DANGER_WIDTH = 6
+/** How big it is, and how much it grows and shrinks by, around the blob. */
+const DANGER_RADIUS = BLOB_SIZE * 0.9
+const DANGER_SWELL = BLOB_SIZE * 0.22
+const DANGER_PERIOD_MS = 900
 
 const NAME_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'system-ui, sans-serif',
@@ -263,6 +276,12 @@ export class WorldScene extends Phaser.Scene {
   private readonly tallies = new Map<string, Phaser.GameObjects.Text>()
   /** What each thing on the floor actually is — an apple, a bone — by its id. */
   private readonly glyphs = new Map<string, Phaser.GameObjects.Text>()
+  /**
+   * The ring behind whoever the task wants the room to notice. Redrawn every
+   * frame rather than cached like the floor, because the whole of it is that
+   * it pulses.
+   */
+  private danger: Phaser.GameObjects.Graphics | null = null
   /** Parcels and crates: on the floor, and in somebody's arms. */
   private thingsDown: Phaser.GameObjects.Graphics | null = null
   private thingsHeld: Phaser.GameObjects.Graphics | null = null
@@ -309,6 +328,7 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5)
 
     this.floor = this.add.graphics().setDepth(DEPTH_ZONE)
+    this.danger = this.add.graphics().setDepth(DEPTH_DANGER)
     this.thingsDown = this.add.graphics().setDepth(DEPTH_THING_DOWN)
     this.thingsHeld = this.add.graphics().setDepth(DEPTH_THING_HELD)
     this.timer = this.add.graphics().setDepth(DEPTH_BANNER)
@@ -395,6 +415,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.waiting?.setVisible(list.length === 0)
+    this.renderDanger(director.objective, list)
     this.renderFloor(director.objective)
     this.renderThings(director.objective)
     this.renderTallies(director.objective)
@@ -408,6 +429,37 @@ export class WorldScene extends Phaser.Scene {
     if (!score) return
     const line = `Level ${director.level} · ${director.score}`
     if (score.text !== line) score.setText(line)
+  }
+
+  /**
+   * A pulsing ring behind whoever the task wants the room to notice — which so
+   * far is only the blob holding the potato.
+   *
+   * **Behind, never over.** The middle of a blob is the child's own drawing and
+   * that is the one thing in the game they made; nothing may be painted on top
+   * of it and its texture is never swapped for a state.
+   *
+   * It exists because a three-year-old who cannot read was looking at a screen
+   * where nothing said *away*. A badge beside a name says who has it; a ring
+   * that grows and shrinks says to get away from them, and the TV is where
+   * heads are up.
+   */
+  private renderDanger(objective: ObjectiveSnapshot | null, list: readonly Player[]): void {
+    const ring = this.danger
+    if (!ring) return
+    ring.clear()
+    const marked = new Set(objective?.danger ?? [])
+    if (marked.size === 0) return
+
+    // A sine on the frame clock: it hangs at each end for free, which reads as
+    // breathing rather than as a strobe.
+    const along = Math.sin((this.time.now / DANGER_PERIOD_MS) * Math.PI * 2)
+    const radius = DANGER_RADIUS + along * DANGER_SWELL
+    ring.lineStyle(DANGER_WIDTH, DANGER_COLOUR, DANGER_ALPHA)
+    for (const player of list) {
+      if (!marked.has(player.playerId) || player.away) continue
+      ring.strokeCircle(player.x, player.y, radius)
+    }
   }
 
   /**
@@ -426,7 +478,12 @@ export class WorldScene extends Phaser.Scene {
     if (!floor) return
     floor.clear()
     for (const zone of zones) this.drawZone(floor, zone)
-    for (const wall of objective?.obstacles ?? []) drawWall(floor, wall)
+    // Every outline first, then every fill. Even merged, a maze has T-junctions
+    // where one wall's outline crosses another's middle, and an outline that
+    // falls inside another wall is painted over by the second pass — so only
+    // the outer silhouette of a run of walls survives.
+    for (const wall of walls) strokeWall(floor, wall)
+    for (const wall of walls) fillWall(floor, wall)
     this.renderZoneLabels(zones)
   }
 
@@ -794,19 +851,6 @@ export class WorldScene extends Phaser.Scene {
     if (view.skinKey !== key) return
     view.image.setTexture(key).setDisplaySize(BLOB_SIZE, BLOB_SIZE).clearTint()
     if (previous !== key) this.forgetSkin(previous)
-    this.tellTheModelItsColour(playerId, key)
-  }
-
-  /**
-   * What colour that drawing came out, back into the model. It is the one
-   * thing that goes that way from here — a task that asks a room to paint
-   * itself green has to know, and only the side with a canvas can say.
-   */
-  private tellTheModelItsColour(playerId: string, key: string): void {
-    const image = this.textures.get(key)?.getSourceImage()
-    if (!image || image instanceof Phaser.GameObjects.RenderTexture) return
-    const colour = colourOfImage(image)
-    if (colour) noteSkinColour(this.state, playerId, key, colour)
   }
 
   /** Drawings are one per player at a time; the old one leaves the GPU. */
@@ -902,21 +946,48 @@ function zoneFoot(zone: Zone): number {
 }
 
 /**
- * A wall. Solid and plainly not a zone: the floor markings are places to go
- * and this is a place to go round.
+ * A wall's outline, and a wall's fill. They are two functions because they are
+ * two passes over the whole list rather than one pass doing both: see
+ * `renderFloor`.
+ *
+ * Solid and plainly not a zone: the floor markings are places to go and this is
+ * a place to go round.
  */
-function drawWall(floor: Phaser.GameObjects.Graphics, wall: Obstacle): void {
-  const left = -wall.width / 2
-  const top = -wall.height / 2
-  floor.fillStyle(WALL_FILL, 1)
+function strokeWall(floor: Phaser.GameObjects.Graphics, wall: Obstacle): void {
   floor.lineStyle(WALL_EDGE_WIDTH, WALL_EDGE, 1)
-  // Drawn about its own middle, so that a bar which is turned is drawn turned
-  // — the model and the screen must not disagree about where a wall is.
+  aboutItsMiddle(floor, wall, (left, top, radius) => {
+    floor.strokeRoundedRect(left, top, wall.width, wall.height, radius)
+  })
+}
+
+function fillWall(floor: Phaser.GameObjects.Graphics, wall: Obstacle): void {
+  floor.fillStyle(WALL_FILL, 1)
+  aboutItsMiddle(floor, wall, (left, top, radius) => {
+    floor.fillRoundedRect(left, top, wall.width, wall.height, radius)
+  })
+}
+
+/**
+ * Drawn about its own middle, so that a bar which is turned is drawn turned —
+ * the model and the screen must not disagree about where a wall is.
+ *
+ * The corner radius is cut back on a thin wall: a radius of 10 on an
+ * eighteen-thick maze wall is very nearly a lozenge, and a row of lozenges is
+ * exactly what a bad join between two walls looks like.
+ */
+function aboutItsMiddle(
+  floor: Phaser.GameObjects.Graphics,
+  wall: Obstacle,
+  draw: (left: number, top: number, radius: number) => void,
+): void {
   floor.save()
   floor.translateCanvas(wall.x, wall.y)
   if (wall.angle !== undefined) floor.rotateCanvas(wall.angle)
-  floor.fillRoundedRect(left, top, wall.width, wall.height, WALL_CORNER)
-  floor.strokeRoundedRect(left, top, wall.width, wall.height, WALL_CORNER)
+  draw(
+    -wall.width / 2,
+    -wall.height / 2,
+    Math.min(WALL_CORNER, Math.min(wall.width, wall.height) / 3),
+  )
   floor.restore()
 }
 

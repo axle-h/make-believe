@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CRATE_SIZE, type Crate } from '../carryables.js'
+import { MAX_LEVEL } from '../constants.js'
 import { createRng } from '../rng.js'
 import { activePlayers } from '../selectors.js'
 import { createGame, type GameState } from '../state.js'
@@ -111,5 +112,22 @@ describe('shifting it', () => {
     expect(objective.outcome).toBe('done')
     expect(crate.home).toBe(spot.id)
     expect(objective.note).toContain('both of you')
+  })
+})
+
+/**
+ * The one collecting task with no litter in it, and the reason is in the
+ * generator: nothing keeps a *crate* out of a wall — `pushOutOfObstacles` moves
+ * blobs — so a crate shoved at one would sail through it while the two children
+ * pushing were squeezed out either side. A wall a crate ignores is worse than
+ * no wall.
+ */
+describe('the crate: what is in the way', () => {
+  it('is nothing, at any level', () => {
+    for (let level = 1; level <= MAX_LEVEL; level++) {
+      for (let seed = 0; seed < 8; seed++) {
+        expect(make(room(3), level, seed).obstacles).toEqual([])
+      }
+    }
   })
 })

@@ -37,10 +37,14 @@ export interface DrawItObjective extends ObjectiveBase {
 }
 
 /** Worn by whoever is drawing, so the room knows whose blob to watch. */
-const PENCIL = '✏️'
+export const PENCIL = '✏️'
 
-/** Long enough to draw something and for the room to shout at it. */
-const TIME_LIMIT = { easy: 75_000, hard: 55_000 }
+/**
+ * Long enough to draw something and for the room to shout at it. Children draw
+ * slowly: two minutes is a long time on a clock and about right for one
+ * four-year-old drawing a cat while five others shout at a television.
+ */
+const TIME_LIMIT = { easy: 120_000, hard: 95_000 }
 
 export const drawIt: ObjectiveTemplate<DrawItObjective> = {
   kind: 'drawIt',

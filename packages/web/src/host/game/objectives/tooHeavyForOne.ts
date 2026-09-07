@@ -88,6 +88,15 @@ export const tooHeavyForOne: ObjectiveTemplate<TooHeavyObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [spot],
+      /**
+       * **No litter here**, unlike the other three collecting tasks.
+       *
+       * A crate is not a blob: `pushOutOfObstacles` moves blobs out of walls
+       * and nothing at all keeps a crate out of one, so a crate shoved at a
+       * wall sails straight through it while the two children pushing it are
+       * squeezed out either side. A wall a crate ignores is worse than no wall,
+       * and the floor is 104 units of crate wide besides.
+       */
       obstacles: [],
       marks: [],
       carryables: [crate as Carryable],

@@ -128,13 +128,19 @@ export const PUSH_OUT_SPEED = 900
 /** How far past the edge a push-out lands, to keep it clear of rounding. */
 const OUT_BY = 0.01
 
-/** Everybody out of every wall. Called once a step, after they have all moved. */
+/**
+ * Everybody out of every wall. Called once a step, after they have all moved.
+ *
+ * Hands back the ids of whoever had to be pushed, which is what a bounce is
+ * worked out from. An away blob is a ghost and is never in it.
+ */
 export function pushOutOfObstacles(
   state: GameState,
   obstacles: readonly Obstacle[],
   dtMs: number,
-): void {
-  if (obstacles.length === 0) return
+): Set<string> {
+  const touched = new Set<string>()
+  if (obstacles.length === 0) return touched
   const limit = PUSH_OUT_SPEED * (Math.max(0, dtMs) / 1000)
   // A blob whose phone has gone is a ghost and is not really there, exactly as
   // it is not really there for the other blobs.
@@ -142,9 +148,10 @@ export function pushOutOfObstacles(
     if (player.away) continue
     for (const obstacle of obstacles) {
       carryAlong(state, player, obstacle, dtMs)
-      pushOutOfBox(state, player, obstacle, limit)
+      if (pushOutOfBox(state, player, obstacle, limit)) touched.add(player.playerId)
     }
   }
+  return touched
 }
 
 /**
@@ -202,15 +209,22 @@ function intoFrame(obstacle: Box, x: number, y: number): { x: number; y: number 
  * One blob, one rectangle: out along whichever way is shortest, but not
  * instantly. `limit` is how far it may be moved this step — see
  * `PUSH_OUT_SPEED` for why it is a few frames rather than one.
+ *
+ * True if the blob was inside the box at all, which is what makes a bounce.
  */
-export function pushOutOfBox(state: GameState, player: Player, obstacle: Box, limit: number): void {
+export function pushOutOfBox(
+  state: GameState,
+  player: Player,
+  obstacle: Box,
+  limit: number,
+): boolean {
   // In the box's own frame the blob is a circle rather than a square, which
   // is forgiving by construction — and forgiving is the right way to be wrong
   // for a four-year-old.
   const local = intoFrame(obstacle, player.x, player.y)
   const overlapX = (BLOB_SIZE + obstacle.width) / 2 - Math.abs(local.x)
   const overlapY = (BLOB_SIZE + obstacle.height) / 2 - Math.abs(local.y)
-  if (overlapX <= 0 || overlapY <= 0) return
+  if (overlapX <= 0 || overlapY <= 0) return false
 
   const horizontal = overlapX <= overlapY
   const overlap = horizontal ? overlapX : overlapY
@@ -236,4 +250,111 @@ export function pushOutOfBox(state: GameState, player: Player, obstacle: Box, li
   )
   player.x = moved.x
   player.y = moved.y
+  return true
+}
+
+/**
+ * Runs of walls that lie along the same line and touch, folded into single
+ * rectangles.
+ *
+ * A maze emits one rectangle per cell wall, so a straight run of four is four
+ * abutting rectangles — each with its own rounded corners and its own outline,
+ * which is what the messy joins in the third play test were. One wall drawn as
+ * one wall is the fix, and it takes the maze from about thirty obstacles to a
+ * third of that, which the collision loop notices too.
+ *
+ * It lives here rather than in `mazes.ts` because it is about rectangles rather
+ * than about mazes: the small walls scattered through the collecting tasks want
+ * it as well.
+ *
+ * Two passes, up and down and then side to side, which is what lets a run of
+ * squares come out as one wall whichever way it is laid. A T-junction is left
+ * alone by both — the two arms share neither line — and that is right: they are
+ * two walls, and the renderer is what stops the join looking like a seam.
+ *
+ * Only motionless, unrotated rectangles are ever merged. The maze has neither,
+ * and the guard is what keeps this safe if a course ever mixes a bobbing bar
+ * into a run of still ones — two walls that are in the same place *now* are not
+ * the same wall if one of them is about to move.
+ *
+ * The merged wall keeps the first segment's id. Ids only have to be stable and
+ * unique within one objective, which they still are.
+ */
+export function mergeWalls(walls: readonly Obstacle[]): Obstacle[] {
+  const still: Obstacle[] = []
+  const moving: Obstacle[] = []
+  for (const wall of walls) {
+    if (wall.motion === undefined && wall.angle === undefined) still.push(wall)
+    else moving.push(wall)
+  }
+  return [...alongX(alongY(still)), ...moving]
+}
+
+/** How close two ends have to be to count as touching. Rounding, and no more. */
+const TOUCHING = 0.001
+
+/** Walls sharing a vertical line, folded top to bottom. */
+function alongY(walls: readonly Obstacle[]): Obstacle[] {
+  return fold(
+    walls,
+    (wall) => `${wall.x}:${wall.width}`,
+    (wall) => wall.y,
+    (wall) => wall.height,
+    (first, middle, length) => ({ ...first, y: middle, height: length }),
+  )
+}
+
+/** Walls sharing a horizontal line, folded left to right. */
+function alongX(walls: readonly Obstacle[]): Obstacle[] {
+  return fold(
+    walls,
+    (wall) => `${wall.y}:${wall.height}`,
+    (wall) => wall.x,
+    (wall) => wall.width,
+    (first, middle, length) => ({ ...first, x: middle, width: length }),
+  )
+}
+
+/**
+ * One pass of the fold. Group the walls onto lines, sort each line along
+ * itself, and run through it joining anything whose ends meet — a gap between
+ * two of them is two walls, and the gap is the corridor.
+ */
+function fold(
+  walls: readonly Obstacle[],
+  line: (wall: Obstacle) => string,
+  along: (wall: Obstacle) => number,
+  span: (wall: Obstacle) => number,
+  stretch: (first: Obstacle, middle: number, length: number) => Obstacle,
+): Obstacle[] {
+  const lines = new Map<string, Obstacle[]>()
+  for (const wall of walls) {
+    const key = line(wall)
+    const found = lines.get(key)
+    if (found) found.push(wall)
+    else lines.set(key, [wall])
+  }
+
+  const merged: Obstacle[] = []
+  for (const group of lines.values()) {
+    // oxlint-disable-next-line unicorn/no-array-sort -- `group` is ours alone
+    const sorted = [...group].sort((one, other) => along(one) - along(other))
+    let run = sorted[0] as Obstacle
+    let from = along(run) - span(run) / 2
+    let to = along(run) + span(run) / 2
+    for (const wall of sorted.slice(1)) {
+      const start = along(wall) - span(wall) / 2
+      const end = along(wall) + span(wall) / 2
+      if (start <= to + TOUCHING) {
+        to = Math.max(to, end)
+        continue
+      }
+      merged.push(stretch(run, (from + to) / 2, to - from))
+      run = wall
+      from = start
+      to = end
+    }
+    merged.push(stretch(run, (from + to) / 2, to - from))
+  }
+  return merged
 }

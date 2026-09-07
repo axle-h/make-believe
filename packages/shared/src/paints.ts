@@ -25,13 +25,3 @@ export const PAINTS = [
 
 /** Just the colours, for the row of crayons on the phone. */
 export const PAINT_HEXES: readonly string[] = PAINTS.map((paint) => paint.hex)
-
-/**
- * The ones worth asking a whole room to cover themselves in. Black and white
- * are for eyes and teeth: a blob painted in either is hard to tell from one
- * that has been scribbled on, and being told your green is not green enough is
- * the one thing this game must never do.
- */
-export const ASKABLE_PAINTS: readonly Paint[] = PAINTS.filter(
-  (paint) => paint.name !== 'black' && paint.name !== 'white',
-)

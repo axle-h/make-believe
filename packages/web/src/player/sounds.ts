@@ -3,10 +3,15 @@ import type { SoundCue } from '@make-believe/shared'
 /**
  * The noises, made on the phone out of two oscillators and an envelope.
  *
- * There are no audio files and no dependency: each cue is a short shape drawn
- * in `VOICES`, and `play` turns one into a beep. The whole thing is about sixty
+ * No audio files and no dependency: each cue is a short shape drawn in
+ * `VOICES`, and `play` turns one into a beep. The whole thing is about sixty
  * lines because six children each holding a phone is already the loudest part
  * of the game.
+ *
+ * **`bounce` is the one exception, and it is not here.** A synthesiser has
+ * nothing to say about the sound of something landing, so a bounce is one of
+ * ten short recordings played by `audio.ts` — one per blob, by `slot`. This is
+ * the *synth*, and it has nothing for that cue on purpose.
  *
  * The spec is pure and the browser is not, which is the split worth keeping:
  * `voiceFor` is a lookup a test can read, and the `AudioContext` is not tested
@@ -31,7 +36,7 @@ export interface Voice {
  * something arriving goes up, something lost goes down — because a phone
  * speaker in a noisy room is not going to carry a melody.
  */
-const VOICES: Record<SoundCue, Voice> = {
+const VOICES: Record<Exclude<SoundCue, 'bounce'>, Voice> = {
   pickup: { wave: 'square', from: 520, to: 780, ms: 90, gain: 0.16 },
   deliver: { wave: 'square', from: 660, to: 990, ms: 150, gain: 0.2, second: 1320 },
   mine: { wave: 'triangle', from: 300, to: 900, ms: 180, gain: 0.22 },
@@ -43,8 +48,9 @@ const VOICES: Record<SoundCue, Voice> = {
   hit: { wave: 'sawtooth', from: 240, to: 90, ms: 200, gain: 0.2 },
 }
 
-export function voiceFor(cue: SoundCue): Voice {
-  return VOICES[cue]
+/** The shape of a cue, or `null` for the one the synth does not make. */
+export function voiceFor(cue: SoundCue): Voice | null {
+  return cue === 'bounce' ? null : VOICES[cue]
 }
 
 /**
@@ -55,6 +61,7 @@ export function voiceFor(cue: SoundCue): Voice {
 export function play(context: AudioContext, cue: SoundCue): void {
   if (context.state !== 'running') return
   const voice = voiceFor(cue)
+  if (!voice) return
   const at = context.currentTime
   const seconds = voice.ms / 1000
 

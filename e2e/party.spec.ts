@@ -718,7 +718,9 @@ test.describe('an objective', () => {
     await Promise.all(
       crowd.map(async (phone) => {
         await expect(phone.page.locator('#brief-headline')).toHaveText('Hot potato!')
-        await expect(phone.page.locator('#brief-detail')).toHaveText(`${holder.name} has it!`)
+        await expect(phone.page.locator('#brief-detail')).toHaveText(
+          `${holder.name} has it — run away!`,
+        )
       }),
     )
     // The strip goes the colour of whoever has it, for a child who cannot read

@@ -247,11 +247,61 @@ describe('hot potato: what the phones are told', () => {
     expect(brief?.colour).toBe(holder.colour)
   })
 
+  /**
+   * Who has it is only half of it: a three-year-old who cannot read needs to
+   * be told what to *do* about the blob whose name is in the line.
+   */
+  it('says to run away, not merely who has it', () => {
+    const state = room(3)
+    const objective = make(state)
+
+    expect(hotPotato.briefs(objective, state)[0]?.detail).toContain('run away')
+  })
+
   /** Everybody hears the same thing: this one is played by looking up. */
   it('tells everybody the same thing', () => {
     const state = room(3)
     const objective = make(state)
 
     expect(hotPotato.briefs(objective, state).map((brief) => brief.to)).toEqual(['*'])
+  })
+})
+
+/**
+ * The other half of "make it obvious you have to avoid the potato": the TV
+ * rings whoever is holding it. The ring itself is Phaser and is not unit
+ * tested; that it names the right blob, follows the potato and goes when the
+ * task is over is all model, and is here.
+ */
+describe('hot potato: the blob to keep away from', () => {
+  it('is whoever is holding it, from the start', () => {
+    const state = room(3)
+    const objective = make(state)
+
+    expect(objective.danger).toEqual([objective.it])
+  })
+
+  it('follows the potato when it is passed on', () => {
+    const state = room(3)
+    const objective = make(state)
+    const holder = objective.it as string
+    const victim = [...state.players.keys()].find((id) => id !== holder) as string
+
+    play(state, objective, objective.graceMs + 100)
+    shoveInto(state, holder, victim)
+    hotPotato.step(objective, state, 50)
+
+    expect(objective.danger).toEqual([victim])
+  })
+
+  /** Being caught with it is the joke, and the joke stops when the buzzer goes. */
+  it('is nobody once the task is over', () => {
+    const state = room(3)
+    const objective = make(state)
+    objective.remainingMs = 0
+    hotPotato.step(objective, state, 50)
+
+    expect(objective.outcome).toBe('done')
+    expect(objective.danger).toEqual([])
   })
 })

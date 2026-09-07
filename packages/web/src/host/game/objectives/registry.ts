@@ -1,4 +1,3 @@
-import { colourHunt } from './colourHunt.js'
 import { dodge } from './dodge.js'
 import { drawIt } from './drawIt.js'
 import { fetch } from './fetch.js'
@@ -32,7 +31,6 @@ export const TEMPLATES: readonly ObjectiveTemplate<Objective>[] = [
   pairs,
   followTheChain,
   findYourColour,
-  colourHunt,
   drawIt,
   fetch,
   sorting,

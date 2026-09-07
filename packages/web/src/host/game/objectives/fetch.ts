@@ -11,6 +11,8 @@ import { THEMES } from '@make-believe/shared'
 import { MAX_LEVEL, ZONE_COLOURS } from '../constants.js'
 import { pick } from '../rng.js'
 import { placeZone, radiusFor, zoneReach, type HouseZone } from '../zones.js'
+import { mergeWalls } from '../obstacles.js'
+import { litter } from './arena.js'
 import {
   difficulty,
   scale,
@@ -37,7 +39,7 @@ export interface FetchObjective extends ObjectiveBase {
   /** What they are, plural, for the one word of the headline that is painted. */
   things: string
   thingColour: string
-  /** And where they go — a basket, a postbox — for the line underneath it. */
+  /** And where they go — a pie, a postbox — for the line underneath it. */
   home: string
 }
 
@@ -64,7 +66,7 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
     // crowd into at once, because they will.
     const across = radiusFor(Math.max(2, context.players.length), 1.4) * 2
     // What is being carried, and where to. It is the same game either way, but
-    // apples in a basket is funnier than parcels in a depot and a good deal
+    // apples into a pie is funnier than parcels in a depot and a good deal
     // easier to understand without reading a word of it.
     const theme = pick(rng, THEMES)
     const depot: HouseZone = {
@@ -82,8 +84,20 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
     depot.x = at.x
     depot.y = at.y
 
+    // A few small things in the way, once the room is well up the ladder.
+    // Placed after the house and before the parcels, so that nothing is put
+    // inside a wall and no wall lands on the house.
+    const walls = mergeWalls(litter(context, hard, [depot]))
+
     const count = Math.round(scale(PARCELS.easy, PARCELS.hard, hard))
-    const carryables: Carryable[] = scatter(rng, context.world, count, [depot], PARCEL_SIZE).map(
+    const carryables: Carryable[] = scatter(
+      rng,
+      context.world,
+      count,
+      [depot],
+      PARCEL_SIZE,
+      walls,
+    ).map(
       (spot, index): Parcel => ({
         kind: 'parcel',
         id: `${context.id}-parcel-${index}`,
@@ -106,7 +120,7 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [depot],
-      obstacles: [],
+      obstacles: walls,
       marks: [],
       carryables,
       outcome: 'running',

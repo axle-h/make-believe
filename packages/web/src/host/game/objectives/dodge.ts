@@ -43,21 +43,30 @@ export interface DodgeObjective extends ObjectiveBase {
   glyph: string
 }
 
+/** Worn by a blob that has run out of lives, and by one that still has some. */
+export const FUZZY_BADGE = '✨'
+export const LIFE_BADGE = '♥'
+
 /** Everybody starts with three. */
 const LIVES = 3
 /** How long after a hit a blob cannot be hit again: one tomato, one life. */
-const SAFE_MS = 1_200
-/** How often something comes over, and how fast it crosses. */
-const EVERY = { easy: 900, hard: 420 }
-const SPEED = { easy: 200, hard: 330 }
+const SAFE_MS = 1_800
+/**
+ * How often something comes over, and how fast it crosses. Slowly, and not many
+ * of them: a three-year-old has to be able to watch one coming and drive out of
+ * the way, which is the whole game. A tomato nobody can see coming is not a
+ * harder game, it is a game nobody is playing.
+ */
+const EVERY = { easy: 1_400, hard: 900 }
+const SPEED = { easy: 140, hard: 220 }
 const TIME_LIMIT = { easy: 35_000, hard: 45_000 }
 const HAZARD_SIZE = 44
 
 /** What is being thrown. All of it friendly: nothing here is a weapon. */
-const THROWN = [
+export const THROWN = [
   { things: 'tomatoes', glyph: '🍅' },
   { things: 'raindrops', glyph: '💧' },
-  { things: 'socks', glyph: '🧦' },
+  { things: 'shirts', glyph: '👕' },
   { things: 'snowballs', glyph: '⚪' },
   { things: 'leaves', glyph: '🍂' },
 ] as const
@@ -168,10 +177,10 @@ function pips(lives: Record<string, number>, only?: string[]): Mark[] {
     if (only && !only.includes(playerId)) continue
     if (left <= 0) {
       // Fuzzy rather than out: it is a thing to drive about in, not a chair.
-      marks.push({ playerId, badge: '✨' })
+      marks.push({ playerId, badge: FUZZY_BADGE })
       continue
     }
-    marks.push({ playerId, badge: '♥'.repeat(left) })
+    marks.push({ playerId, badge: LIFE_BADGE.repeat(left) })
   }
   return marks
 }

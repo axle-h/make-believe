@@ -152,3 +152,15 @@ body {
   font-size: 0.85rem;
   opacity: 0.5;
 }
+
+/*
+ * The glyph sheet. Every picture the game may draw, big enough to tell a
+ * tofu box from a saucepan across a room. See `SHEET` in `debug.ts`.
+ */
+.debug-glyphs {
+  margin: 0.35rem 0 0;
+  max-width: 26rem;
+  font-size: 1.6rem;
+  line-height: 1.4;
+  word-spacing: 0.15rem;
+}

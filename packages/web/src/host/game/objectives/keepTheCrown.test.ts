@@ -351,3 +351,30 @@ describe('keep the crown: what the phones are told', () => {
     expect(mine[0]?.detail).toContain('Run!')
   })
 })
+
+/**
+ * It is hot potato inside out and it gets hot potato's floor. A chase across
+ * an empty room is a straight line and whoever is quickest wins it; a chase
+ * around a block is a game, because whoever is being chased can turn a corner.
+ */
+describe('keeping the crown: the floor', () => {
+  it('puts something on the floor to run round', () => {
+    for (let seed = 0; seed < 12; seed++) {
+      const objective = make(room(4), MAX_LEVEL, seed)
+
+      expect(objective.obstacles.length).toBeGreaterThan(0)
+    }
+  })
+
+  /** Nothing in the arena moves: there is enough going on in a chase already. */
+  it('leaves all of it standing still', () => {
+    for (let seed = 0; seed < 12; seed++) {
+      const objective = make(room(4), MAX_LEVEL, seed)
+
+      for (const wall of objective.obstacles) {
+        expect(wall.motion).toBeUndefined()
+        expect(wall.angle).toBeUndefined()
+      }
+    }
+  })
+})

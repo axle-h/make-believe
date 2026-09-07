@@ -30,7 +30,7 @@ import {
   type Swatch,
 } from './joinForm.js'
 import { ZERO, createInputThrottle, vectorFromPointer, type Vector } from './joystick.js'
-import { play } from './sounds.js'
+import { createSpeaker } from './audio.js'
 import { isDifferentBuild, shouldReload, type Screen } from './updates.js'
 import './player.css'
 
@@ -247,9 +247,9 @@ function submitJoin(): void {
   }
   joinError.textContent = ''
   store(NAME_KEY, state.name)
-  // The tap that got us here is the gesture a browser wants before it will
-  // make a noise, so this is the one moment all evening that can wake it.
-  wakeAudio()
+  // The tap that got us here is a gesture, and the earliest one there is on a
+  // phone that has never played before.
+  speaker.wake()
   joined = { name: state.name, colour: state.colour as string }
   waitingName.textContent = state.name
   // The socket has been open since the page loaded — the palette came down it
@@ -406,6 +406,9 @@ function applyMessage(message: HostToPlayerMessage): void {
   if (message.type === 'assigned') {
     document.documentElement.style.setProperty('--blob', message.colour)
     blobColour = message.colour
+    // Which blob this is, which is which landing voice it has. The host
+    // decided; the phone is only playing what it was told it is.
+    speaker.slot = message.slot
     playName.textContent = joined?.name ?? ''
     if (screen !== 'play') showScreen('play')
     // A world that has never seen this blob's drawing gets it now: a TV that
@@ -495,45 +498,39 @@ function retryLater(): void {
  * signal that can be private without bowing six heads — you hear your own
  * without looking down.
  *
- * An `AudioContext` has to be woken inside a gesture, and the Join tap is that
- * gesture. If it is still asleep the cues are dropped in silence, which is
- * always an acceptable outcome: nothing in the game depends on being heard.
+ * An `AudioContext` has to be woken inside a gesture. The Join tap is one, and
+ * it used to be the only one we listened for — which is why the phones were
+ * silent all through the third play test. **Most phones never see the join
+ * screen**: a phone that has played before walks straight back into its blob
+ * without being asked anything, so the tap never comes and every cue for the
+ * rest of the evening was dropped. The first touch anywhere on the page is
+ * what catches those, and every child touches the joystick within a second of
+ * the play screen appearing.
+ *
+ * The waking itself lives in `audio.ts`, where it can be tested.
  */
-let audio: AudioContext | null = null
-let sound = loadStored(SOUND_KEY) !== 'off'
+const speaker = createSpeaker(() => new AudioContext(), loadStored(SOUND_KEY) === 'off')
+
+// The one that actually matters. Every other wake is a nicety on top of it.
+document.addEventListener('pointerdown', () => speaker.wake(), { once: true })
 
 const soundButton = requireElement<HTMLButtonElement>('#menu-sound')
 soundButton.addEventListener('click', () => {
-  sound = !sound
-  store(SOUND_KEY, sound ? 'on' : 'off')
+  speaker.muted = !speaker.muted
+  store(SOUND_KEY, speaker.muted ? 'off' : 'on')
   showSoundSwitch()
-  // Turning it on is a tap, which is the moment a context may be woken.
-  if (sound) wakeAudio()
+  // Turning it on is a tap, and it has to wake a context that was never made
+  // — a muted speaker does not make one.
+  speaker.wake()
 })
 
 function showSoundSwitch(): void {
-  soundButton.textContent = sound ? 'Sound: on' : 'Sound: off'
-  soundButton.setAttribute('aria-pressed', String(sound))
-}
-
-/** Wake the sound up, inside whatever tap we are already inside. */
-function wakeAudio(): void {
-  if (!sound) return
-  try {
-    audio ??= new AudioContext()
-    if (audio.state === 'suspended') void audio.resume()
-  } catch {
-    // No WebAudio here. The game is played in silence, and plays the same.
-  }
+  soundButton.textContent = speaker.muted ? 'Sound: off' : 'Sound: on'
+  soundButton.setAttribute('aria-pressed', String(!speaker.muted))
 }
 
 function makeNoise(cue: SoundCue): void {
-  if (!sound || !audio) return
-  try {
-    play(audio, cue)
-  } catch {
-    // A context that has been closed or refused. Silence is fine.
-  }
+  speaker.play(cue)
 }
 
 // --- keeping the screen on -----------------------------------------------

@@ -1,3 +1,4 @@
+import { SAFE_GLYPHS } from '@make-believe/shared'
 import {
   askFor,
   objectives,
@@ -29,6 +30,21 @@ import { debugKey } from './debugMenu.js'
 /** How the list reads while it is up. */
 const TITLE = 'Debug — pick a task'
 const HELP = '↑↓ choose · ↵ start · ←→ level · d closes'
+/**
+ * And the glyph sheet under it: every picture the game is allowed to draw, on
+ * one line, always there while the menu is open.
+ *
+ * A list in a test says a glyph is *allowed*; only this television says it
+ * renders. The device is a stick running Android 9, which is Emoji 11, and a
+ * picture its font has never heard of comes up a tofu box — which is what a
+ * whole play test spent looking at an empty nest and a traffic light with no
+ * amber. Press `d` on the stick and look: anything that is a box comes off
+ * `SAFE_GLYPHS`.
+ *
+ * It is no new key and no new exception. The debug menu is the one thing the
+ * TV takes input for, and this is a line at the bottom of it.
+ */
+const SHEET = 'Glyphs (any box comes off the list):'
 
 export interface DebugMenu {
   /** For tests and for anybody wondering; the page itself never asks. */
@@ -54,6 +70,14 @@ export function startDebugMenu(root: HTMLElement, state: GameState): DebugMenu {
   help.className = 'debug-help'
   help.textContent = HELP
 
+  const sheetLabel = document.createElement('p')
+  sheetLabel.className = 'debug-help'
+  sheetLabel.textContent = SHEET
+
+  const sheet = document.createElement('p')
+  sheet.className = 'debug-glyphs'
+  sheet.textContent = SAFE_GLYPHS.join(' ')
+
   const rows = TEMPLATES.map((template) => {
     const row = document.createElement('li')
     row.className = 'debug-row'
@@ -61,7 +85,7 @@ export function startDebugMenu(root: HTMLElement, state: GameState): DebugMenu {
     return { row, template }
   })
 
-  panel.append(heading, level, list, help)
+  panel.append(heading, level, list, help, sheetLabel, sheet)
   root.append(panel)
 
   let open = false

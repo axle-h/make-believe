@@ -1,5 +1,5 @@
 import { BLOB_SIZE } from './constants.js'
-import type { Obstacle } from './obstacles.js'
+import { mergeWalls, type Obstacle } from './obstacles.js'
 import { intRange, type Rng } from './rng.js'
 
 /**
@@ -51,7 +51,9 @@ const LOOPS = 0.05
 export function carveMaze(id: string, rng: Rng, area: MazeArea): Obstacle[] {
   const columns = fits(area.width)
   const rows = fits(area.height)
-  return walls(id, carve(rng, columns, rows), columns, rows, area)
+  // Merged before it leaves: a straight run of four cell walls is one wall,
+  // and drawing it as four is where the messy joins came from.
+  return mergeWalls(walls(id, carve(rng, columns, rows), columns, rows, area))
 }
 
 /** How many cells fit across this much floor with corridors still wide enough. */
