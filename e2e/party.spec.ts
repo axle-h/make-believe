@@ -8,6 +8,7 @@ import {
   driveTo,
   dropSocket,
   everyKind,
+  expectDrives,
   finishPlaying,
   freeColours,
   herdOnto,
@@ -322,10 +323,7 @@ test.describe('a party', () => {
     expect((await snapshot(host)).objectives.level).toBe(1)
 
     // It plays the game like everybody else, sheet or no sheet.
-    const before = await playerNamed(host, 'Daddy')
-    const away = before.y < (await snapshot(host)).world.height / 2 ? 1 : -1
-    await pushJoystick(daddy, { dx: 0, dy: away }, 400)
-    expect(Math.abs((await playerNamed(host, 'Daddy')).y - before.y)).toBeGreaterThan(20)
+    await expectDrives(host, daddy, 'Daddy')
   })
 
   /**
@@ -781,11 +779,7 @@ test.describe('an objective', () => {
     expect((await runningObjective(host)).kind).not.toBe('hotPotato')
 
     // The joystick drives exactly as it did before any of that.
-    const settled = await playerNamed(host, chased.name)
-    const away = settled.y < (await snapshot(host)).world.height / 2 ? 1 : -1
-    await pushJoystick(chased, { dx: 0, dy: away }, 400)
-    const moved = (await playerNamed(host, chased.name)).y
-    expect(away > 0 ? moved > settled.y + 20 : moved < settled.y - 20).toBe(true)
+    await expectDrives(host, chased, chased.name)
   })
 
   /**
@@ -979,11 +973,7 @@ test.describe('an objective', () => {
     expect((await snapshot(host)).objectives.score).toBeGreaterThan(before)
 
     // The joystick drives exactly as it did before any of that.
-    const settled = await playerNamed(host, 'Ida')
-    const away = settled.y < (await snapshot(host)).world.height / 2 ? 1 : -1
-    await pushJoystick(ida, { dx: 0, dy: away }, 400)
-    const moved = (await playerNamed(host, 'Ida')).y
-    expect(away > 0 ? moved > settled.y + 20 : moved < settled.y - 20).toBe(true)
+    await expectDrives(host, ida, 'Ida')
   })
 
   /**

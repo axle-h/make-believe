@@ -31,7 +31,8 @@ import {
 } from './joinForm.js'
 import { ZERO, createInputThrottle, vectorFromPointer, type Vector } from './joystick.js'
 import { createSpeaker } from './audio.js'
-import { isDifferentBuild, shouldReload, type Screen } from './updates.js'
+import { isDifferentBuild } from '../lib/version.js'
+import { shouldReload, type Screen } from './updates.js'
 import './player.css'
 
 /**

@@ -5,6 +5,7 @@ import {
   type Recipient,
 } from '@make-believe/shared'
 import { connect } from '../lib/ws.js'
+import { isDifferentBuild } from '../lib/version.js'
 import {
   applyMessage,
   briefFor,
@@ -14,6 +15,7 @@ import {
   grownupTasks,
   obeyGrownup,
   palette,
+  playerCount,
   snapshot,
   TEMPLATES,
   type Brief,
@@ -22,6 +24,7 @@ import {
   type GameState,
 } from './game/index.js'
 import { startDebugMenu } from './debug.js'
+import { shouldReload, VERSION_POLL_MS } from './updates.js'
 import { startPhaser, wornTextures } from './phaser/game.js'
 import { joinUrl, qrSvg } from './qr.js'
 import './host.css'
@@ -89,6 +92,10 @@ const client = connect({
   schema: HostInboundMessageSchema,
   onMessage: handleMessage,
   onStatus: (status) => {
+    // A socket is the cheapest moment to wonder whether a deploy has happened
+    // — it is exactly when the phones ask — and a TV that lost the server for
+    // a minute is a TV that may have lost it *to* a deploy.
+    if (status === 'open') void checkForNewBuild()
     if (!statusEl) return
     statusEl.textContent =
       status === 'open' ? '' : status === 'connecting' ? 'Connecting…' : 'Lost the server, retrying…'
@@ -188,6 +195,9 @@ function handleMessage(message: HostInboundMessage): void {
     // A colour has come free, and somebody may be sitting on a join screen
     // waiting for exactly that.
     sendPalette('*')
+    // That may have been the last blob, which is the only moment a waiting
+    // build is allowed to take the TV over.
+    reloadIfSafe()
     return
   }
   if (result.kind !== 'joined' && result.kind !== 'rejoined') return
@@ -251,8 +261,54 @@ const phaser = startPhaser(world, state, {
   onForgotten: () => {
     sendPalette('*')
     refreshGrownup()
+    // The world has just got emptier, and possibly empty.
+    reloadIfSafe()
   },
 })
+
+// --- keeping the TV on the build the server is serving ---------------------
+
+/** Set when a newer build is out there but there are still blobs to lose. */
+let updatePending = false
+/** Set once a reload is on its way; asking twice only races the first. */
+let reloading = false
+
+/**
+ * Take a waiting build, but only into an empty world.
+ *
+ * The TV holds every blob there is — names, colours, the pictures the children
+ * drew — and reloading throws the lot away, so this waits however long it has
+ * to. See `updates.ts`.
+ */
+function reloadIfSafe(): void {
+  if (reloading || !shouldReload(playerCount(state), updatePending)) return
+  reloading = true
+  window.location.reload()
+}
+
+/**
+ * Is this page the build the server is serving?
+ *
+ * Asked on every socket and every couple of minutes besides, because a TV is
+ * not carried about: it is switched on, left, and would otherwise sit on
+ * whatever build it started with until somebody pressed Menu on the remote.
+ */
+async function checkForNewBuild(): Promise<void> {
+  try {
+    const response = await fetch('/version', { cache: 'no-store' })
+    if (!response.ok) return
+    if (!isDifferentBuild(__BUILD_VERSION__, await response.text())) return
+    updatePending = true
+    reloadIfSafe()
+  } catch {
+    // The server is unreachable. Nothing to do: the next poll asks again, and
+    // a TV that cannot reach the server has a louder problem than being stale.
+  }
+}
+
+// No check on load: the host page is served `no-cache`, so a page that has
+// just loaded *is* the served build. What this is for is the hours afterwards.
+setInterval(() => void checkForNewBuild(), VERSION_POLL_MS)
 
 /**
  * The one thing on the TV that answers a key. It is hidden behind `d`, it is

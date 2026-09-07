@@ -640,3 +640,29 @@ export async function chaseSomebody(
   }
   return false
 }
+
+/**
+ * That a blob still answers its joystick, whatever is on the floor.
+ *
+ * It tries each way in turn and is satisfied by the first that moves the blob,
+ * because the question is "does the joystick still drive" and not "is this
+ * particular direction open". Several tasks put walls down — hot potato and
+ * keep the crown both get an arena, and a bar across the middle is 794 units
+ * wide at the top of the ladder — so a test that picks one direction and
+ * insists on it is a test that passes on four layouts out of five.
+ */
+export async function expectDrives(host: Host, player: Player, name: string): Promise<void> {
+  const ways = [
+    { dx: 0, dy: 1 },
+    { dx: 0, dy: -1 },
+    { dx: 1, dy: 0 },
+    { dx: -1, dy: 0 },
+  ]
+  for (const way of ways) {
+    const before = await playerNamed(host, name)
+    await pushJoystick(player, way, 400)
+    const after = await playerNamed(host, name)
+    if (Math.hypot(after.x - before.x, after.y - before.y) > 20) return
+  }
+  throw new Error(`${name} did not move whichever way its joystick was pushed`)
+}
