@@ -1,11 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-/**
- * The phone installs the player page as an app. Installability itself cannot
- * be tested from Playwright, so this asserts the parts a phone needs before it
- * will offer it: a manifest served as one, icons that are really there, and
- * the link from the player page only.
- */
+/** What a phone needs before it offers to install the player page; installing cannot be tested here. */
 test.describe('the phone app', () => {
   test('serves a manifest the player page links to', async ({ page, request }) => {
     const response = await request.get('/manifest.webmanifest')
@@ -20,8 +15,7 @@ test.describe('the phone app', () => {
       display: 'fullscreen',
     })
 
-    // Every icon the manifest promises exists, maskable included — a missing
-    // one costs the install prompt with no other sign that anything is wrong.
+    // A missing icon costs the install prompt with no other sign that anything is wrong.
     const images = await Promise.all(manifest.icons.map((icon) => request.get(icon.src)))
     for (const [index, image] of images.entries()) {
       const { src } = manifest.icons[index]
@@ -41,8 +35,7 @@ test.describe('the phone app', () => {
 
   test('registers a worker for the build the server is serving', async ({ page, request }) => {
     const version = (await (await request.get('/version')).text()).trim()
-    // `unknown` is what the server answers when the build left no version
-    // beside the pages, which would leave every phone unable to spot a deploy.
+    // `unknown` would leave every phone unable to spot a deploy.
     expect(version).not.toBe('unknown')
     expect(version).not.toBe('')
 
@@ -55,14 +48,12 @@ test.describe('the phone app', () => {
       const registration = await navigator.serviceWorker.ready
       return registration.active?.scriptURL ?? ''
     })
-    // The build is in the worker's own URL: that is how a deploy becomes a new
-    // worker, and how the worker knows what to call its cache.
+    // The build in the worker's URL is how a deploy becomes a new worker and names its cache.
     expect(scriptURL).toContain(`/sw.js?v=${version}`)
   })
 
   test('leaves the TV out of it', async ({ page }) => {
-    // The host is not installable and never should be: the TV has its own
-    // wrapper, and an installed TV page would be a second way in.
+    // The TV has its own wrapper; an installed TV page would be a second way in.
     await page.goto('/host/')
     await expect(page.locator('link[rel="manifest"]')).toHaveCount(0)
   })

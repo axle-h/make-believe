@@ -6,29 +6,15 @@ import type { Brief } from './objectives/types.js'
 import { pushOutOfObstacles, stepObstacles } from './obstacles.js'
 import { clampToWorld, type GameState } from './state.js'
 
-/**
- * One step of the world. The model is the only thing that moves a blob: the
- * renderer reads positions from here rather than integrating its own.
- *
- * `tick` takes whatever step it is given, so a test can wind the clock forward
- * in one call. Capping a real frame is the renderer's job: see `MAX_STEP_MS`.
- */
+/** Arcade physics is deliberately off: only the model moves a blob and the renderer copies positions from here. */
 
-/** Longest step a renderer should take, so a stalled tab cannot teleport anyone. */
+/** `tick` takes any step so tests can jump the clock; the renderer caps real frames at this. */
 export const MAX_STEP_MS = 50
 
 export interface TickResult {
-  /** Players forgotten this step because their phone never came back. */
   removed: string[]
-  /**
-   * What the phones need to hear about the objective, and only what has
-   * changed — the wording, not every frame of it.
-   */
+  /** Only what has changed since the last step, for briefs and sounds alike. */
   briefs: Brief[]
-  /**
-   * And what they should make a noise about: a parcel landing, a badge
-   * arriving, a rung climbed. Also only what is new.
-   */
   sounds: Sound[]
 }
 
@@ -36,7 +22,6 @@ export function tick(state: GameState, dtMs: number): TickResult {
   const step = Math.max(0, dtMs)
   const seconds = step / 1000
   const removed: string[] = []
-  /** Everybody who has ended this step pressed against something. */
   const leaning = new Set<string>()
 
   for (const player of state.players.values()) {
@@ -56,8 +41,7 @@ export function tick(state: GameState, dtMs: number): TickResult {
     const wantX = player.x + player.dx * SPEED * seconds
     const wantY = player.y + player.dy * SPEED * seconds
     const moved = clampToWorld(state, wantX, wantY)
-    // A blob whose drive was cut short is leaning on the edge of the floor,
-    // which is a thing to bounce off exactly as a wall is.
+    // Cut short by the edge of the floor counts as leaning, as a wall does.
     if (Math.abs(moved.x - wantX) > EDGE_SLACK || Math.abs(moved.y - wantY) > EDGE_SLACK) {
       leaning.add(player.playerId)
     }
@@ -65,39 +49,23 @@ export function tick(state: GameState, dtMs: number): TickResult {
     player.y = moved.y
   }
 
-  // Everybody has moved; now out of the walls, and then out of each other.
-  // The walls come first because a blob squeezed out of one has to end up
-  // beside its neighbours rather than inside them.
+  // Walls before blobs, so a blob squeezed out of a wall ends beside its neighbours rather than inside them.
   const walls = state.objectives.current?.obstacles ?? []
   stepObstacles(walls, step)
   for (const id of pushOutOfObstacles(state, walls, step)) leaning.add(id)
   for (const id of resolveCollisions(state)) leaning.add(id)
 
-  // Whoever has just started leaning on something, handed to the director so
-  // that it goes through the same limiter everything else does.
+  // Through the director so bounces share the rate limiter every cue goes through.
   state.objectives.sounds.push(...bounces(state, leaning))
 
-  // And last, with everybody where they have ended up, ask whether the world
-  // has got what it wanted.
   const { briefs, sounds } = stepObjectives(state, step)
 
   return { removed, briefs, sounds }
 }
 
-/**
- * How far short of where it was driving a blob has to end up before it counts
- * as leaning on something. Floating point, and nothing more.
- */
 const EDGE_SLACK = 0.001
 
-/**
- * One bounce each for everybody who has *just* started leaning on something.
- *
- * It is an edge rather than a state, which is the whole trick: a blob held
- * against a wall makes one noise and is then quiet, and only lets go and comes
- * back to make another. Worked out by looking at what changed, exactly as
- * every other cue is — no task reports anything.
- */
+/** An edge, not a state: a blob held against a wall bounces once and must let go to bounce again. */
 function bounces(state: GameState, leaning: Set<string>): Sound[] {
   const sounds: Sound[] = []
   for (const playerId of leaning) {

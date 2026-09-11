@@ -6,13 +6,7 @@ import { PENCIL } from './objectives/drawIt.js'
 import { POTATO } from './objectives/hotPotato.js'
 import { HOME_BADGE } from './objectives/race.js'
 
-/**
- * The pictures the *host* draws, on top of the ones in `shared`.
- *
- * Same rule and the same reason: the television is a stick running Android 9,
- * and a picture its font has never heard of is a tofu box. The vocabulary is
- * capped at Emoji 5.0 and `SAFE_GLYPHS` is what holds it there.
- */
+/** Every picture the host draws is in `SAFE_GLYPHS`, which caps the TV at Emoji 5.0 so nothing renders as tofu. */
 
 describe('what the television is asked to draw', () => {
   it('is a safe picture, for everything thrown in dodge', () => {
@@ -26,7 +20,6 @@ describe('what the television is asked to draw', () => {
     }
   })
 
-  /** Three lives is three of the same character, which is still one picture. */
   it('is a safe picture for a whole row of lives', () => {
     expect(isSafeGlyph(LIFE_BADGE.repeat(3))).toBe(true)
   })

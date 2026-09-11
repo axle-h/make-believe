@@ -19,10 +19,6 @@ describe('generateSessionCode', () => {
     expect(generateSessionCode(() => 0)).toBe('AAAA')
   })
 
-  /**
-   * Nobody reads a session code any more, but the charset costs nothing to
-   * keep legible and a code that turns up in a log is easier to follow for it.
-   */
   it('never emits an ambiguous character', () => {
     expect(SESSION_CODE_CHARSET).not.toMatch(/[01OI]/)
   })

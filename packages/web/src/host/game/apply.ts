@@ -11,27 +11,12 @@ import {
 } from './state.js'
 
 /**
- * Everything the world hears from a phone, applied to the state. The state is
- * mutated in place and the result says what happened, so the host can answer a
- * join and the renderer can react to a new blob.
- *
- * Nothing here asks what the world is doing first: the session is one
- * continuous game, so every message is welcome whenever it arrives. The
- * running objective is *offered* each message afterwards — that is how "say
- * the word" and "draw it" will watch — but it never gets a veto: what a phone
- * sends always lands, whatever the world happens to be asking for.
+ * The running objective is offered each message only after it lands and never gets a veto:
+ * a task changes what the world asks for, never what a phone may do.
  */
 
-/** A message about somebody the world has never heard of. */
 export type IgnoredReason = 'unknown-player'
 
-/**
- * Why a hello was not granted: the colour has gone, the name is somebody
- * else's, or there are already as many blobs as there are colours. All three
- * send the phone back to its join screen to pick again; none of them is a
- * queue, except the eleventh phone, which is waiting for a physical thing
- * rather than for a turn.
- */
 export type ApplyResult =
   | { applied: true; kind: 'joined' | 'rejoined'; player: Player }
   | { applied: true; kind: 'input' | 'away' | 'text' | 'drawing'; player: Player }
@@ -62,24 +47,8 @@ function route(state: GameState, message: ServerToHostMessage): ApplyResult {
   }
 }
 
-/**
- * A phone said hello, asking to be called something and to be a colour.
- *
- * A `playerId` the world already knows keeps its blob, colour, slot, name and
- * position — which is what makes a refresh on the phone a non-event, and why
- * it is exempt from both checks below: a blob may not be refused its own name
- * or its own colour.
- *
- * Anybody else has to ask for a colour nobody is wearing and a name nobody is
- * called, and there have to be fewer than ten blobs already. The world decides
- * all three; the phone only shows what it was told.
- *
- * The name comes off the hello every time rather than only the first: the
- * hello is what a phone says on every reconnect, and it is the only thing that
- * knows what its child is called.
- */
+/** A known `playerId` keeps its blob and is never refused its own name or colour. */
 function join(state: GameState, playerId: string, rawName: string, colour: string): ApplyResult {
-  // The schema has already refused a blank name; tidy it for the label.
   const name = normaliseName(rawName)
   const existing = state.players.get(playerId)
   if (existing) {
@@ -90,9 +59,7 @@ function join(state: GameState, playerId: string, rawName: string, colour: strin
     existing.awayForMs = 0
     return { applied: true, kind: 'rejoined', player: existing }
   }
-  // Ten colours is ten blobs. The eleventh phone waits with its name typed and
-  // gets in the moment somebody quits, which is a physical limit rather than a
-  // turn: nobody who is already in ever waits for anything.
+  // The only queue in the game, and a physical limit rather than a turn.
   if (state.players.size >= MAX_BLOBS) return { applied: false, refused: 'full', playerId }
   if (namedAs(state, name)) return { applied: false, refused: 'name', playerId }
   if (!claimColour(state, colour)) return { applied: false, refused: 'colour', playerId }
@@ -118,14 +85,7 @@ function join(state: GameState, playerId: string, rawName: string, colour: strin
   return { applied: true, kind: 'joined', player }
 }
 
-/**
- * Somebody said something. A bubble goes up over their blob and `tick` takes
- * it down again; a second message replaces the first rather than queueing.
- * Sending nothing at all takes the bubble down early.
- *
- * There is no round to be in and no wrong moment for it: half the fun is
- * shouting something while everyone is running about.
- */
+/** A second message replaces the first rather than queueing; an empty one takes the bubble down. */
 function text(state: GameState, playerId: string, value: string): ApplyResult {
   const player = state.players.get(playerId)
   if (!player) return { applied: false, reason: 'unknown-player' }
@@ -134,12 +94,7 @@ function text(state: GameState, playerId: string, value: string): ApplyResult {
   return { applied: true, kind: 'text', player }
 }
 
-/**
- * Somebody drew something. The drawing becomes the blob's skin, under a key
- * the renderer turns into a texture. Each one gets its own key so the renderer
- * can tell a new drawing from the one already on screen — which is what lets a
- * blob be redrawn as often as its owner likes.
- */
+/** A fresh key per drawing, so the renderer can tell a redraw from the one on screen. */
 function drawing(state: GameState, playerId: string, png: string): ApplyResult {
   const player = state.players.get(playerId)
   if (!player) return { applied: false, reason: 'unknown-player' }
@@ -148,11 +103,10 @@ function drawing(state: GameState, playerId: string, png: string): ApplyResult {
   return { applied: true, kind: 'drawing', player }
 }
 
-/** Steer a blob the world knows about. Input from a stranger is ignored. */
 function input(state: GameState, playerId: string, dx: number, dy: number): ApplyResult {
   const player = state.players.get(playerId)
   if (!player) return { applied: false, reason: 'unknown-player' }
-  // A phone whose blob is marked away is plainly back; let it drive again.
+  // An away blob that sends input is plainly back.
   player.away = false
   player.awayForMs = 0
   player.dx = dx
@@ -160,32 +114,16 @@ function input(state: GameState, playerId: string, dx: number, dy: number): Appl
   return { applied: true, kind: 'input', player }
 }
 
-/**
- * Somebody has finished. This is the one thing a phone can ask the world to
- * undo, and it undoes the lot: the blob goes, and its name, its picture and
- * its place on the floor go with it. Nothing is answered, because the phone
- * has already forgotten it too and is asking its child for a name again.
- *
- * It is deliberately not `left`. A phone that has merely gone quiet leaves a
- * blob standing there waiting for it; a child who has finished does not want
- * to come back to the one they had.
- */
+/** The one thing a phone can undo, and it undoes the lot, crown included; nothing is sent back. */
 function finish(state: GameState, playerId: string): ApplyResult {
   const player = state.players.get(playerId)
   if (!player) return { applied: false, reason: 'unknown-player' }
   state.players.delete(playerId)
-  // Everything the world was holding for this blob goes with it, including
-  // the crown: a title on a head that is not on the floor is not one anybody
-  // can come and take.
   forgetPlayer(state, playerId)
   return { applied: true, kind: 'finished', player }
 }
 
-/**
- * The phone went away. The blob stays put, holding its slot, colour, name and
- * position, so that a refresh — or a rejoin from the same phone — walks back
- * into the same blob. `tick` clears it out if nobody comes back.
- */
+/** Unlike `finish`, the blob keeps everything so a reconnect walks back into it; `tick` forgets it later. */
 function left(state: GameState, playerId: string): ApplyResult {
   const player = state.players.get(playerId)
   if (!player) return { applied: false, reason: 'unknown-player' }

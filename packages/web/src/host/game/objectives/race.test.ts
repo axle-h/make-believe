@@ -10,13 +10,6 @@ import { tick } from '../tick.js'
 import { contains, type RectZone } from '../zones.js'
 import { race, type RaceObjective } from './race.js'
 
-/**
- * A wide start pad, a wide finish pad, and something in the way. The rule that
- * matters is that there is no rule: the start has a gate across it, every
- * joystick works throughout, and nobody can jump the gun because there is a
- * wall there.
- */
-
 function room(count: number): GameState {
   const state = createGame(2)
   for (let index = 1; index <= count; index++) joinPlayer(state, `p${index}`, `B${index}`)
@@ -34,18 +27,13 @@ function make(state: GameState, level = 3, seed = 4): RaceObjective {
   })
 }
 
-/**
- * How far across the floor a wall ever reaches from its own middle. A bar that
- * turns sweeps a circle and reaches its own half-length in every direction; a
- * bar that stands still or bobs up and down is only ever as wide as it is.
- */
+/** A turning bar reaches its half-length in every direction; any other is only as wide as it is. */
 function reachAcross(wall: ObstacleSweep): number {
   if (wall.motion?.kind === 'spin') return Math.hypot(wall.width, wall.height) / 2
   const bob = wall.motion?.kind === 'bob' ? Math.abs(wall.motion.reachX) : 0
   return wall.width / 2 + bob
 }
 
-/** The topmost and bottommost this wall ever gets, at each end of its travel. */
 function sweeps(wall: ObstacleSweep): { top: number; bottom: number }[] {
   if (wall.motion?.kind === 'spin') {
     const reach = Math.hypot(wall.width, wall.height) / 2
@@ -61,16 +49,11 @@ function sweeps(wall: ObstacleSweep): { top: number; bottom: number }[] {
 
 type ObstacleSweep = RaceObjective['obstacles'][number]
 
-/** Whether this wall goes anywhere at all. */
 function moves(wall: ObstacleSweep): boolean {
   return wall.motion !== undefined
 }
 
-/**
- * Whether a blob could actually drive from one patch of floor to another,
- * worked out on a fine grid of the world: it is the walls as they were
- * emitted that a blob meets, not the reasoning that produced them.
- */
+/** Floods a fine grid, because a blob meets the walls as emitted, not the reasoning behind them. */
 function reachable(
   walls: readonly ObstacleSweep[],
   from: { x: number; y: number },
@@ -104,7 +87,6 @@ function reachable(
   return (spot) => seen.has(key(Math.floor(spot.x / step), Math.floor(spot.y / step)))
 }
 
-/** The start pad, as the rectangle it is. */
 function startOf(objective: RaceObjective): RectZone {
   const zone = objective.zones[0]
   if (!zone || zone.shape !== 'rect') throw new Error('expected a start pad')
@@ -115,7 +97,6 @@ const finishOf = (objective: RaceObjective) => objective.zones[1]!
 const gateOf = (objective: RaceObjective) =>
   objective.obstacles.find((wall) => wall.id.endsWith('-gate'))
 
-/** Put the whole room on the start line, as driving there does. */
 function onTheStart(state: GameState, objective: RaceObjective): void {
   for (const player of activePlayers(state)) {
     player.x = startOf(objective).x
@@ -123,10 +104,7 @@ function onTheStart(state: GameState, objective: RaceObjective): void {
   }
 }
 
-/**
- * Gather the room and stop the moment the countdown begins — which is the
- * moment the gate goes up, and the only moment there is a gate to look at.
- */
+/** Stops as the countdown begins, the only moment there is a gate to look at. */
 function gathered(state: GameState, objective: RaceObjective): RaceObjective {
   onTheStart(state, objective)
   for (let frame = 0; frame < 200 && objective.phase === 'gathering'; frame++) {
@@ -136,7 +114,6 @@ function gathered(state: GameState, objective: RaceObjective): RaceObjective {
   return objective
 }
 
-/** Gather, count in, and hand back a race that has actually started. */
 function started(state: GameState, objective: RaceObjective): RaceObjective {
   onTheStart(state, objective)
   for (let frame = 0; frame < 200 && objective.phase !== 'racing'; frame++) {
@@ -156,11 +133,6 @@ describe('laying out the course', () => {
     expect(finishOf(objective).label).toBe('FINISH')
   })
 
-  /**
-   * A fresh race has a course and no gate. There is nothing for a gate to do
-   * while the room is still arriving, and a wall standing across the floor is
-   * a wall somebody has to be let through.
-   */
   it('puts things in the way, and no gate until the room is gathered', () => {
     const objective = make(room(3))
 
@@ -175,15 +147,7 @@ describe('laying out the course', () => {
     expect(hard.obstacles.length).toBeGreaterThan(easy.obstacles.length)
   })
 
-  /**
-   * The one thing that has to be true of every course there is, whether it is
-   * two bars or a whole maze: a course a blob cannot get through is a race
-   * nobody finishes.
-   *
-   * It floods the *floor* rather than reasoning about the walls, because it is
-   * the walls as they were emitted that a blob meets — and it floods with the
-   * gate gone, which is the course as it is actually run.
-   */
+  /** Every rung's course, flooded with the gate gone, as it is actually run. */
   it('always leaves a way from the start line to the finish', () => {
     for (let level = 1; level <= MAX_LEVEL; level++) {
       for (let seed = 0; seed < 10; seed++) {
@@ -196,12 +160,6 @@ describe('laying out the course', () => {
     }
   })
 
-  /**
-   * The gate seals. The start pad is shorter than the floor, so a gate the
-   * pad's own height left a lane over the top of it and another under the
-   * bottom — which is the false start the third play test found. It spans the
-   * whole floor now, top to bottom, and there is no way past it at all.
-   */
   it('seals the floor from top to bottom when it goes up', () => {
     const state = room(4)
     const objective = gathered(state, make(state))
@@ -224,29 +182,18 @@ describe('laying out the course', () => {
     expect(turning.obstacles.some((wall) => wall.motion?.kind === 'spin')).toBe(true)
   })
 
-  /**
-   * And at the top it is a maze, which is the most there can be in the way.
-   * It is not a game of its own — the whole of it is on screen at once — but
-   * as the hardest thing between a start line and a finish line it arrives
-   * with the gate, the countdown, and the last child home.
-   */
   it('becomes a maze at the top of the ladder', () => {
     for (let seed = 0; seed < 10; seed++) {
       const maze = make(room(4), MAX_LEVEL, seed)
       const before = make(room(4), MAX_LEVEL - 2, seed)
       const walls = maze.obstacles.filter((wall) => !wall.id.endsWith('-gate'))
 
-      // Corners rather than a handful of gates, and it stands still: there is
-      // enough to do in a maze without any of it moving. A straight run of
-      // cell walls comes back as one rectangle, so this is fewer things than
-      // it looks and every one of them is longer.
+      // A straight run of cell walls is one rectangle, so this is fewer walls than it looks.
       expect(walls.length).toBeGreaterThan(3)
       expect(walls.length).toBeGreaterThan(before.obstacles.length)
       expect(maze.obstacles.every((wall) => wall.motion === undefined)).toBe(true)
     }
-    // Every corridor in it is wide enough for two blobs to pass, which in a
-    // race — where the whole room goes through together — is the difference
-    // between a maze and a jam.
+    // Two blobs wide, because the whole room goes through together.
     expect(MAZE_CORRIDOR).toBeGreaterThanOrEqual(BLOB_SIZE * 2)
   })
 
@@ -254,12 +201,7 @@ describe('laying out the course', () => {
     expect(make(room(4), MAX_LEVEL).totalMs).toBeGreaterThan(make(room(4), 3).totalMs)
   })
 
-  /**
-   * A blob that cannot drive out of where it has been put is the one thing
-   * this must never do, and the course is what guarantees it rather than the
-   * push-out code hoping. So: nothing that moves ever comes within a blob's
-   * width of a wall, and no two things in the way can reach each other.
-   */
+  /** Nothing that moves comes within a blob of a wall, and no two moving things can reach each other. */
   it('never puts a moving thing where it could pin a blob', () => {
     for (let level = 1; level <= MAX_LEVEL; level++) {
       for (let seed = 0; seed < 10; seed++) {
@@ -268,17 +210,14 @@ describe('laying out the course', () => {
 
         for (const wall of walls.filter(moves)) {
           for (const reach of sweeps(wall)) {
-            // A hair of slack: a bar hung against the top wall is exactly on
-            // it, and arithmetic does not always come out at exactly zero.
+            // A hair of slack for a bar hung exactly against the top wall.
             expect(reach.top).toBeGreaterThanOrEqual(-0.001)
             expect(reach.bottom).toBeLessThanOrEqual(WORLD_HEIGHT + 0.001)
-            // A gap the other way round, always: somewhere to be.
             const gap = Math.max(reach.top, WORLD_HEIGHT - reach.bottom)
             expect(gap).toBeGreaterThan(BLOB_SIZE * 1.4)
           }
         }
-        // And no two things that move can ever touch each other. Walls that
-        // stand still are allowed to: a maze is made of walls that meet.
+        // Walls that stand still may meet: a maze is made of them.
         const moving = walls.filter(moves)
         for (const [index, wall] of moving.entries()) {
           for (const other of moving.slice(index + 1)) {
@@ -299,11 +238,6 @@ describe('laying out the course', () => {
   })
 })
 
-/**
- * "No false starts" is a wall rather than a rule. Every joystick works the
- * whole time; a blob shoving at the gate is a blob doing exactly what it
- * should.
- */
 describe('the gate', () => {
   it('goes up as the room finishes gathering, not before', () => {
     const state = room(3)
@@ -316,11 +250,6 @@ describe('the gate', () => {
     expect(gateOf(objective)).toBeDefined()
   })
 
-  /**
-   * The other way into counting: patience runs out with the room still
-   * scattered. The gate goes up on that branch too — a blob left on the far
-   * side of it is a late arrival starting from where they stood.
-   */
   it('goes up when patience runs out as well', () => {
     const state = room(3)
     const objective = make(state)
@@ -353,20 +282,13 @@ describe('the gate', () => {
     expect(runner.x).toBeLessThan(gate.x)
   })
 
-  /**
-   * A blob standing exactly where the gate appears is slid *back into the pad*
-   * rather than squeezed out onto the course: its centre is inside the pad,
-   * therefore left of the gate's centre, and `pushOutOfObstacles` takes the
-   * shortest way out. Over a few frames, and never a teleport.
-   */
+  /** From a blob just inside the pad's right edge; it slides back over a few frames, never a teleport. */
   it('slides a blob it appears on top of back onto the pad', () => {
     const state = room(2)
     const objective = make(state)
     state.objectives.current = objective
     const runner = state.players.get('p1')!
     const start = startOf(objective)
-    // Just inside the pad's right edge, which is where a blob that has driven
-    // up to the mouth of the start is standing when the gate goes up.
     runner.x = start.x + start.width / 2 - 8
     runner.y = start.y
 
@@ -384,7 +306,6 @@ describe('the gate', () => {
     const objective = started(state, make(state))
 
     expect(gateOf(objective)).toBeUndefined()
-    // Whatever else was in the way is still in the way.
     expect(objective.obstacles.length).toBeGreaterThan(0)
   })
 })
@@ -404,10 +325,6 @@ describe('gathering, then counting', () => {
     expect(objective.clock).toBe('held')
   })
 
-  /**
-   * "No time limit" means no pressure, not an evening that can stall. Somebody
-   * present and dawdling must not be able to hold the room forever.
-   */
   it('counts down anyway once its patience runs out', () => {
     const state = room(3)
     const objective = make(state)
@@ -475,10 +392,6 @@ describe('racing', () => {
     expect(objective.marks.map((mark) => mark.playerId)).toEqual(['p2'])
   })
 
-  /**
-   * The room is racing the course. There is a winner in it, and the last child
-   * home still finishes rather than being stopped.
-   */
   it('is done when everybody is home, not when the first one is', () => {
     const state = room(3)
     const objective = started(state, make(state))

@@ -102,11 +102,7 @@ describe('standing on it', () => {
     expect(objective.outcome).toBe('done')
   })
 
-  /**
-   * Being shoved off the spot must not cost the whole hold. Blobs shove each
-   * other constantly — that is most of the fun — and a task that punished it
-   * would make the shoving the enemy of the game rather than part of it.
-   */
+  /** Being shoved off the spot must not cost the whole hold. */
   it('drains the hold when somebody steps off, rather than throwing it away', () => {
     const state = room(2)
     const objective = make(state)
@@ -130,10 +126,7 @@ describe('standing on it', () => {
     expect(objective.heldMs).toBe(0)
   })
 
-  /**
-   * Away blobs are not there. A child who has put the phone down must not be
-   * the reason the rest cannot finish.
-   */
+  /** Away blobs are not counted, so they cannot stop the rest finishing. */
   it('takes no notice of a blob whose phone has gone', () => {
     const state = room(3)
     const objective = make(state)
@@ -189,7 +182,6 @@ describe('what it tells the phones', () => {
     expect(onTheSpot.briefs(objective, state)[0]?.detail).toMatch(/^Hold it… \d$/)
   })
 
-  /** Everybody gets the same line: nothing about this task is private. */
   it('says one thing, to everybody', () => {
     const state = room(4)
     const objective = make(state)
@@ -204,7 +196,6 @@ describe('the shape of the task', () => {
     expect(onTheSpot.minLevel).toBe(1)
   })
 
-  /** It watches the floor and nothing else — no talking, no drawing. */
   it('listens to nothing a phone sends', () => {
     expect(onTheSpot.observe).toBeUndefined()
   })

@@ -11,43 +11,20 @@ import {
 import { debugKey } from './debugMenu.js'
 
 /**
- * The hidden debug menu. Press `d` on a keyboard attached to the TV and a list
- * of every task appears; arrows move, Enter starts one, left and right nudge
- * the ladder, `d` or Escape puts it away.
- *
- * It is the one exception to "the TV takes no input at all", and it is a
- * deliberate one. It exists so that a grown-up can look at the twelfth task
- * without a room of children first climbing eight levels to it, and it is safe
- * to leave switched on: the device this runs on is a stick behind a television
- * with no keyboard, no phone can reach it, and every key but `d` is ignored
- * while it is shut.
- *
- * Nothing in here is game state. It reads the model to draw a list and calls
- * two functions on the director, both of which do exactly what the director
- * does to itself when it starts a task of its own.
+ * The hidden debug menu: `d` is the only key the TV answers, and no phone can
+ * reach it. It holds no game state; it calls `askFor` and `setLevel`, which
+ * do what the director does to itself.
  */
 
-/** How the list reads while it is up. */
 const TITLE = 'Debug — pick a task'
 const HELP = '↑↓ choose · ↵ start · ←→ level · d closes'
 /**
- * And the glyph sheet under it: every picture the game is allowed to draw, on
- * one line, always there while the menu is open.
- *
- * A list in a test says a glyph is *allowed*; only this television says it
- * renders. The device is a stick running Android 9, which is Emoji 11, and a
- * picture its font has never heard of comes up a tofu box — which is what a
- * whole play test spent looking at an empty nest and a traffic light with no
- * amber. Press `d` on the stick and look: anything that is a box comes off
- * `SAFE_GLYPHS`.
- *
- * It is no new key and no new exception. The debug menu is the one thing the
- * TV takes input for, and this is a line at the bottom of it.
+ * The panel draws all of `SAFE_GLYPHS`: a test says a glyph is allowed, only the
+ * TV says it renders, so a box here means that glyph comes off the list.
  */
 const SHEET = 'Glyphs (any box comes off the list):'
 
 export interface DebugMenu {
-  /** For tests and for anybody wondering; the page itself never asks. */
   isOpen(): boolean
 }
 
@@ -123,12 +100,7 @@ export function startDebugMenu(root: HTMLElement, state: GameState): DebugMenu {
     draw()
   })
 
-  /**
-   * Ask the world for this one. A task the room is too small for is refused by
-   * the director rather than forced: it says so in the list and leaves whatever
-   * is running alone, because a task judged against two children when it needs
-   * three is one nobody can finish.
-   */
+  /** The director refuses a task the room is too small for, and the menu stays open. */
   function start(kind: Objective['kind'] | undefined): void {
     if (!kind) return
     if (askFor(state, kind)) open = false

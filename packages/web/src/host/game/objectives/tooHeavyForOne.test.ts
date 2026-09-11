@@ -49,7 +49,6 @@ describe('setting it up', () => {
       const spot = objective.zones[0]
       if (spot?.shape !== 'circle') throw new Error('expected a circle')
 
-      // Plainly a shove away, rather than sitting in it already.
       expect(Math.hypot(crate.x - spot.x, crate.y - spot.y)).toBeGreaterThan(spot.radius * 2)
       expect(crate.home).toBeNull()
     }
@@ -57,7 +56,7 @@ describe('setting it up', () => {
 })
 
 describe('shifting it', () => {
-  /** The whole point: one child driving at it as hard as they like does nothing. */
+  /** One blob pushing as hard as it likes does not move it. */
   it('does not move for one blob', () => {
     const state = room(2)
     const objective = make(state)
@@ -100,7 +99,6 @@ describe('shifting it', () => {
     const crate = crateOf(objective)
     const spot = objective.zones[0]!
 
-    // Push it towards the spot, a step at a time, the way two children would.
     for (let step = 0; step < 400 && objective.outcome === 'running'; step++) {
       const dx = Math.sign(spot.x - crate.x)
       const dy = Math.sign(spot.y - crate.y)
@@ -115,13 +113,7 @@ describe('shifting it', () => {
   })
 })
 
-/**
- * The one collecting task with no litter in it, and the reason is in the
- * generator: nothing keeps a *crate* out of a wall — `pushOutOfObstacles` moves
- * blobs — so a crate shoved at one would sail through it while the two children
- * pushing were squeezed out either side. A wall a crate ignores is worse than
- * no wall.
- */
+/** No walls: `pushOutOfObstacles` moves blobs, not crates, so a crate would sail through one. */
 describe('the crate: what is in the way', () => {
   it('is nothing, at any level', () => {
     for (let level = 1; level <= MAX_LEVEL; level++) {

@@ -1,44 +1,21 @@
-# TLS is terminated here by traefik, with the certificate issued by cert-manager from Let's Encrypt
-# over HTTP-01. Nothing inside the namespace knows or cares about it: the server speaks plain http
-# on 3000 and builds no absolute URLs, so `X-Forwarded-Proto` goes unread.
-#
-# ⚠️ `/ws` is a WebSocket that stays open for the whole evening. Traefik forwards the `Upgrade`
-# handshake and then proxies the connection with no idle timeout by default, so there is nothing to
-# configure here — but if this is ever put behind something else (a CDN, another reverse proxy), that
-# is the first property to check, and the symptom of getting it wrong is phones that connect, work
-# for a minute and then silently stop moving anything.
-#
-# ⚠️ **This is public, and nothing gates a join.** Anyone on the internet who knows this address can
-# open the player page, type a name and drive a blob on the TV. There is no code to know: the
-# session is negotiated on the socket precisely so that a phone never has to be told one, which
-# means it cannot double as a doorkeeper either. The 4-letter code it replaced was barely one —
-# thirty-two characters to the fourth power, tried against a relay that would answer as often as it
-# was asked — but this is the honest version of that trade, taken for a house game with no accounts
-# and no persistence, where the cost of getting in wrongly is a stray blob on a television.
-#
-# If that ever stops being acceptable, the fix is at this layer — basic auth or an IP allowlist on
-# the ingress — and not a code in the app, which would put the QR step back on every phone.
+# `/ws` stays open all evening, so nothing put in front of traefik may idle-time it out.
+# Public, and nothing gates a join: if that must change, gate it here (basic auth, IP allowlist), not in the app.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-production
-    # <namespace>-<middleware>@kubernetescrd — so this only resolves if the namespace really is
-    # `make-believe`.
+    # <namespace>-<middleware>@kubernetescrd: only resolves while the namespace is `make-believe`.
     traefik.ingress.kubernetes.io/router.middlewares: make-believe-redirect-http-https@kubernetescrd
   name: make-believe
   labels:
     app: make-believe
 spec:
-  # ⚠️ `spec.ingressClassName`, not the `kubernetes.io/ingress.class` annotation the older siblings
-  # use: the annotation is deprecated and kubectl says so on every apply.
   ingressClassName: traefik
   rules:
     - host: "believe.ax-h.com"
       http:
         paths:
-          # One prefix for the lot: `/` is the phone, `/host/` is the TV, `/ws` is the relay and
-          # `/healthz` is the probe. They are one process and one Service.
           - path: "/"
             pathType: Prefix
             backend:

@@ -2,7 +2,6 @@
   color-scheme: dark;
   --ink: #f4f1ea;
   --ground: #10121a;
-  /* How far the QR code and the status line sit from the edge of the screen. */
   --margin: clamp(0.75rem, 1.8vh, 1.5rem);
 }
 
@@ -20,26 +19,18 @@ body {
   font-family: system-ui, sans-serif;
 }
 
-/*
- * The world gets the whole screen; everything else floats on top of it, so
- * nothing steals a pixel of playing space.
- */
 .stage {
   position: relative;
   height: 100%;
   width: 100%;
 }
 
-/* Phaser fills this box with a 16:9 canvas, letterboxed only if the TV is not. */
 .world {
   position: absolute;
   inset: 0;
 }
 
-/*
- * Out of flow on purpose: a canvas that could push its own parent about would
- * make Phaser's FIT scaling chase its own tail and overflow the screen.
- */
+/* Out of flow, or Phaser's FIT scaling chases its own tail and overflows the screen. */
 .world canvas {
   position: absolute;
   inset: 0;
@@ -47,11 +38,6 @@ body {
   display: block;
 }
 
-/*
- * The way in for a phone that has never been here. It holds this deployment's
- * address and nothing else — which world the phone reaches is settled on the
- * socket — so a phone that has played before never needs to look at it again.
- */
 .qr {
   position: absolute;
   top: var(--margin);
@@ -70,11 +56,7 @@ body {
   height: auto;
 }
 
-/*
- * The TV has no controls of any kind; this is the one thing it
- * ever says for itself, and only when something is wrong. With nothing to
- * report it takes up no room at all.
- */
+/* Shown only when something is wrong. */
 .status {
   position: absolute;
   left: var(--margin);
@@ -91,11 +73,6 @@ body {
   display: none;
 }
 
-/*
- * The debug menu. It is not part of the game and no child ever sees it: it
- * lives behind the `d` key so that a grown-up can look at a task without a
- * room of children first climbing the ladder to it. See `debug.ts`.
- */
 .debug {
   position: absolute;
   top: 50%;
@@ -142,7 +119,6 @@ body {
   border-left-color: #4ea8ff;
 }
 
-/* Not enough blobs in the room for this one; it is listed, and it is refused. */
 .debug-row.is-out {
   opacity: 0.4;
 }
@@ -153,10 +129,7 @@ body {
   opacity: 0.5;
 }
 
-/*
- * The glyph sheet. Every picture the game may draw, big enough to tell a
- * tofu box from a saucepan across a room. See `SHEET` in `debug.ts`.
- */
+/* Big enough to tell a tofu box from a glyph across a room. */
 .debug-glyphs {
   margin: 0.35rem 0 0;
   max-width: 26rem;

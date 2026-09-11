@@ -15,47 +15,26 @@ import {
 } from './types.js'
 
 /**
- * Draw it. One phone is told privately what to draw; everybody else says what
- * they think it is, and the TV listens. Drawings are already blob skins, so
- * the thing being guessed is standing in the middle of the floor wearing it.
- *
- * This is the task that comes closest to a turn, so it is built to not be one:
- * the artist is not *in* anything they have to get out of — they can drive,
- * talk, redraw and finish throughout — and everybody else is doing what they
- * could do anyway, which is shouting at the television. If the artist puts
- * their phone down, the pencil is quietly handed to somebody else.
+ * Draw it: one phone is told privately what to draw on its blob, and the others guess with Say.
+ * It is not a turn: the artist can still drive, say, draw and finish, and nothing waits on them.
  */
 
 export interface DrawItObjective extends ObjectiveBase {
   kind: 'drawIt'
-  /** What it is. This is on exactly one phone and never on the TV. */
+  /** On exactly one phone, and never on the TV. */
   word: string
-  /** Whose turn it is with the pencil. */
   artist: string | null
-  /** Who got it, once somebody has. */
   guesser: string | null
 }
 
-/** Worn by whoever is drawing, so the room knows whose blob to watch. */
 export const PENCIL = '✏️'
 
-/**
- * Long enough to draw something and for the room to shout at it. Children draw
- * slowly: two minutes is a long time on a clock and about right for one
- * four-year-old drawing a cat while five others shout at a television.
- */
 const TIME_LIMIT = { easy: 120_000, hard: 95_000 }
 
 export const drawIt: ObjectiveTemplate<DrawItObjective> = {
   kind: 'drawIt',
   title: 'Draw it',
-  /** One to draw and at least one to guess. */
   minPlayers: 2,
-  /**
-   * The last thing unlocked. It asks a child to type, which is the slowest
-   * thing a phone can ask for, so a room only meets it once it is good at
-   * everything quicker.
-   */
   minLevel: 6,
 
   generate(context: GenerateContext): DrawItObjective {
@@ -83,11 +62,7 @@ export const drawIt: ObjectiveTemplate<DrawItObjective> = {
     }
   },
 
-  /**
-   * The pencil follows whoever is here. A phone put down mid-drawing would
-   * otherwise leave a room guessing at a blob nobody is drawing, so it goes to
-   * somebody else and the word goes with it.
-   */
+  /** Judged against whoever is present: an away artist's pencil, and the word, go to somebody here. */
   step(objective, state) {
     const present = activePlayers(state)
     if (present.length === 0) return
@@ -98,18 +73,13 @@ export const drawIt: ObjectiveTemplate<DrawItObjective> = {
       objective.marks = [{ playerId: artist.playerId, badge: PENCIL }]
     }
 
-    // Time is nearly up: say what it was, rather than leaving a room that
-    // never got it wondering. The director calls it expired a moment later.
+    // Say what it was; the director calls it expired a moment later.
     if (objective.remainingMs <= 0 && objective.outcome === 'running') {
       objective.note = `It was a ${objective.word}!`
     }
   },
 
-  /**
-   * Everybody hears the same thing except the one holding the pencil, who is
-   * the only place in the world the word is written down. The TV must not say
-   * it: half the room is looking at the TV.
-   */
+  /** Only the artist's brief carries the word; the shared one goes to the TV. */
   briefs(objective, state) {
     const present = activePlayers(state)
     const artist = present.find((player) => player.playerId === objective.artist)
@@ -132,11 +102,7 @@ export const drawIt: ObjectiveTemplate<DrawItObjective> = {
     ]
   },
 
-  /**
-   * Somebody said something. Anybody but the artist can guess, at any moment,
-   * without anything having been handed to them — the Say box is the Say box,
-   * and it works exactly as it does when the world is asking for nothing.
-   */
+  /** Any Say from anybody but the artist is a guess; the text is still an ordinary bubble. */
   observe(objective, state, message) {
     if (objective.outcome !== 'running') return
     if (message.type !== 'text') return

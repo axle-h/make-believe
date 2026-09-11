@@ -114,11 +114,7 @@ it('serves healthz and relays between a host and two players', async () => {
   one.ws.close()
 })
 
-/**
- * A TV taking the world over gives it a new session, and every phone already
- * on a socket is told so where it stands. That message is the phone's cue to
- * come back as a new player; nothing is closed and nobody has to knock.
- */
+/** Nothing is closed: the new session reaches every phone where it stands. */
 it('tells the phones on it when a new TV takes the world', async () => {
   const first = await connect('role=host')
   const phone = await connect('role=player&playerId=p1')
@@ -157,8 +153,7 @@ it('tells a phone which build it is serving, and never lets it be cached', async
 
   expect(response.status).toBe(200)
   expect(response.headers.get('cache-control')).toBe('no-store')
-  // The value itself is whatever the web build wrote beside the pages, which
-  // is a build's business; the unit test below covers where it comes from.
+  // The value is the build's business; the unit test below covers where it comes from.
   expect((await response.text()).length).toBeGreaterThan(0)
 })
 
@@ -168,8 +163,7 @@ it('reads the build version the web build left beside the pages', () => {
     writeFileSync(join(dist, 'version.txt'), '7fe4ccb\n')
     expect(readBuildVersion(dist)).toBe('7fe4ccb')
 
-    // A build that never wrote one, and no pages at all: both answer something
-    // a phone will simply never match, rather than throwing.
+    // Neither throws: both answer something a phone will never match.
     rmSync(join(dist, 'version.txt'))
     expect(readBuildVersion(dist)).toBe('unknown')
     expect(readBuildVersion(null)).toBe('unknown')

@@ -64,12 +64,6 @@ describe('the row of swatches', () => {
     expect(choosableColours(palette(), BLUE).chosen).toBe(BLUE)
   })
 
-  /**
-   * A colour that has gone selects nothing rather than the next one along. One
-   * appearing under a resting thumb is worse than an empty row — and the same
-   * rule the other way round means a swatch that comes free simply goes live
-   * and waits to be tapped.
-   */
   it('selects nothing at all when the colour wanted has gone', () => {
     expect(choosableColours(palette({ [BLUE]: 'Ida' }), BLUE).chosen).toBeNull()
     expect(choosableColours(palette(), null).chosen).toBeNull()
@@ -113,10 +107,6 @@ describe('joinFormError', () => {
   })
 })
 
-/**
- * The world says no and why; the sentence is built here from the palette that
- * came with it, which is where the name of whoever took the colour is.
- */
 describe('what the world said', () => {
   it('names whoever has the colour this phone wanted', () => {
     expect(refusalMessage('colour', palette({ [BLUE]: 'Bo' }), BLUE)).toBe('Bo has that one now.')

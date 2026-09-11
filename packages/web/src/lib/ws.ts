@@ -1,10 +1,6 @@
 import type { z } from 'zod'
 
-/**
- * The WebSocket client both pages use. It knows nothing about the game: it
- * connects, parses inbound messages with a shared schema, drops anything that
- * does not parse, and reconnects with a backoff.
- */
+// Both pages' socket client drops anything that does not parse and reconnects with a backoff.
 
 export type ConnectionStatus = 'connecting' | 'open' | 'closed'
 
@@ -16,15 +12,11 @@ const FIRST_RETRY_MS = 500
 const MAX_RETRY_MS = 8_000
 
 export interface WsClientOptions<Schema extends z.ZodType> {
-  /** Query parameters for `/ws`, such as role, room and playerId. */
   query: Record<string, string>
   schema: Schema
   onMessage: (message: z.infer<Schema>) => void
   onStatus?: (status: ConnectionStatus) => void
-  /**
-   * The server hung up for good and there will be no reconnect. `reason` is
-   * whatever it put in the close frame, such as `no-host` or `replaced`.
-   */
+  /** The server hung up for good and there will be no reconnect. */
   onFatal?: (info: { code: number; reason: string }) => void
 }
 

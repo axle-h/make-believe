@@ -1,9 +1,6 @@
 import { defineConfig } from 'vitest/config'
 
-/**
- * One project per package. Vitest 4 replaced `vitest.workspace.ts` with
- * `test.projects`. e2e is Playwright and is not run here.
- */
+/** One project per package; e2e is Playwright and is not run here. */
 export default defineConfig({
   test: {
     projects: [

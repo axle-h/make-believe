@@ -26,7 +26,6 @@ describe('painting one word of a headline', () => {
     })
   })
 
-  /** The first one is the one that gets painted; the rest are just words. */
   it('paints the first of two', () => {
     expect(splitHeadline('Green means green!', 'green')).toEqual({
       before: 'Green means ',
@@ -35,11 +34,7 @@ describe('painting one word of a headline', () => {
     })
   })
 
-  /**
-   * The schema refuses a word that is not in its headline, so this is the
-   * renderer being handed something impossible — and the sentence is still
-   * worth more than nothing at all.
-   */
+  /** The schema refuses this on the wire; a renderer handed it anyway still draws the sentence. */
   it('draws the sentence unpainted rather than dropping it', () => {
     expect(splitHeadline('Everybody go green!', 'blue')).toEqual({
       before: 'Everybody go green!',

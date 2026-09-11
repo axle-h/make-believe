@@ -3,22 +3,15 @@ import { MAX_NAME_LENGTH, isValidName } from './blobName.js'
 import { isValidSessionCode } from './sessionCode.js'
 import { SOUND_CUES } from './sounds.js'
 
-/**
- * Every message on the wire, as zod schemas with the TypeScript types derived
- * from them. The server validates everything inbound and drops what does not
- * parse; the host and the players trust nothing that has not been through here.
- */
+// Every wire message, as zod schemas. The server drops whatever does not parse, and host and
+// phones trust nothing that has not been through here. There are five unions and they are not
+// interchangeable: a message left out of one is dropped in silence.
 
 /** Longest speech-bubble text a player may send. */
 export const MAX_TEXT_LENGTH = 60
-/** Longest objective headline the TV may put on a phone's strip. */
 export const MAX_HEADLINE_LENGTH = 80
-/** Longest second line under a headline. */
 export const MAX_DETAIL_LENGTH = 120
-/**
- * Longest `data:` URL accepted for a drawing. A 256x256 doodle is far below
- * 256 KiB; a photo-sized paste is not, and the server drops it.
- */
+/** A 256x256 doodle is far below this; a photo-sized paste is not, and is dropped. */
 export const MAX_PNG_LENGTH = 262_144
 
 const PNG_DATA_URL_PREFIX = 'data:image/png;base64,'
@@ -34,17 +27,9 @@ export const RecipientSchema = z.union([z.literal('*'), PlayerIdSchema])
 
 // --- player → host -------------------------------------------------------
 
-/** A colour, as a hex string. Both palettes are hexes and neither is long. */
 export const ColourSchema = z.string().min(1).max(32)
 
-/**
- * "I am here, I am called this, and I want to be that colour."
- *
- * The colour is asked for rather than handed out: a child picks their blob off
- * a row of swatches, and the world grants it or says who has it. The name is
- * asked for on the same terms — one blob each, because two blobs called Ivy
- * are two labels a child cannot tell apart.
- */
+/** The colour and the name are asked for, not handed out: one blob each, and the world grants or refuses. */
 export const JoinMessageSchema = z.object({
   type: z.literal('join'),
   playerId: PlayerIdSchema,
@@ -76,30 +61,16 @@ export const TextMessageSchema = z.object({
   value: z.string().max(MAX_TEXT_LENGTH),
 })
 
-/**
- * "I am done — forget me." The one thing a phone can ask the world to undo:
- * the blob goes, and its name, its picture and its place on the floor go with
- * it. Nothing is sent back, because the phone is not waiting for an answer —
- * it has already forgotten everything too and is asking for a name again.
- *
- * This is not `left`. A phone that has merely gone quiet leaves its blob
- * standing there waiting for it; a phone that has finished does not.
- */
+// "Forget me": the blob is deleted outright, picture and all, and nothing is sent back.
+// Not `left`, which leaves the blob standing there away, waiting for its phone.
 export const FinishMessageSchema = z.object({
   type: z.literal('finish'),
   playerId: PlayerIdSchema,
 })
 
-/**
- * A grown-up reaching for the two functions the TV's `d` key already calls:
- * put up any task, or put the ladder back to the start.
- *
- * The host grants the privilege and the phone never claims it — a command from
- * a blob the host did not decide was the grown-up's is dropped, and the socket
- * decides who is speaking rather than the payload. `kind` is a bounded string
- * rather than an enum because `shared` knows nothing about objectives and must
- * not start to: the host resolves it, and an unknown one does nothing.
- */
+// The grown-up's two buttons. The host grants the privilege and the phone never claims it: a
+// command from any blob the host did not name is dropped. `kind` is a string because `shared`
+// knows nothing of objectives; the host resolves it and ignores an unknown one.
 export const CommandMessageSchema = z.discriminatedUnion('command', [
   z.object({
     type: z.literal('command'),
@@ -114,6 +85,8 @@ export const CommandMessageSchema = z.discriminatedUnion('command', [
   }),
 ])
 
+// What a phone may say; the server parses with it. The relay tags each with the id its socket
+// arrived under, so the socket decides who is speaking, not the payload.
 export const PlayerToHostMessageSchema = z.discriminatedUnion('type', [
   JoinMessageSchema,
   InputMessageSchema,
@@ -129,26 +102,12 @@ export const AssignedMessageSchema = z.object({
   type: z.literal('assigned'),
   colour: z.string().min(1).max(32),
   slot: z.number().int().nonnegative(),
-  /**
-   * Whether the world already has this blob's drawing. The phone keeps the
-   * last one it sent, so a `false` here — a TV that has reloaded, or a world
-   * that has forgotten a blob — is its cue to send it up again. The host is
-   * still the one that knows; the phone only answers.
-   */
+  /** `false` is the phone's cue to re-send the last drawing it kept. */
   hasDrawing: z.boolean(),
 })
 
-/**
- * Every colour there is, who has it, and what to call it — the whole of what a
- * join screen needs. It goes to a phone the moment its socket attaches, and to
- * everybody whenever the roster changes, so an open join screen greys itself
- * out live and the eleventh phone watches a colour come free.
- *
- * `takenBy` is the *name* of whoever is wearing it, because that is what the
- * phone shows: "Bo has that one now". An away blob still holds its colour —
- * it is still on the floor, waiting for its phone — so only joining, quitting
- * and being forgotten for good change this.
- */
+// Sent to one phone when its socket attaches and to '*' whenever the roster changes. `takenBy`
+// is a name; an away blob keeps its colour, so only joining, quitting and being forgotten move it.
 export const PaletteMessageSchema = z.object({
   type: z.literal('palette'),
   colours: z
@@ -162,46 +121,22 @@ export const PaletteMessageSchema = z.object({
     .max(64),
 })
 
-/**
- * "Not that one." The answer to a join the world could not grant, with the
- * reason in as many words.
- *
- * It is its own message rather than something the phone works out from a fresh
- * palette: a palette broadcast to everybody can arrive while a join is in
- * flight, and a phone that read one as a refusal would refuse itself for
- * somebody else's arrival. A refused phone goes back to the join screen — it
- * does not sit on waiting — and the fresh palette that comes with this is what
- * it needs to say *who* has the colour it wanted.
- */
+// Its own message because a palette to '*' can arrive while a join is in flight and must not
+// read as a refusal. A refused phone goes back to the join screen.
 export const RefusedMessageSchema = z.object({
   type: z.literal('refused'),
   reason: z.enum(['colour', 'name', 'full']),
 })
 
-/**
- * A noise for one phone, or for all of them.
- *
- * It is information exactly as a brief is: it changes no screen, takes no tool
- * away and puts no phone into a mode. A phone with its sound off, or one whose
- * `AudioContext` never woke up, plays the game identically.
- */
+/** Information exactly as a brief is: a phone with its sound off plays the same game. */
 export const SoundMessageSchema = z.object({
   type: z.literal('sound'),
   cue: z.enum(SOUND_CUES),
 })
 
-/**
- * The grown-up's sheet, as the TV describes it: every task there is, whether
- * this room is big enough for each, and where the ladder has got to.
- *
- * It is only ever sent to the one blob the host itself decided was the
- * grown-up's, and a phone that never receives it builds nothing — the sheet
- * does not exist in the markup, so there is nothing on any other phone to find.
- *
- * `playable` is exactly what `askFor` accepts, which is a headcount and not
- * `suits`: a greyed row the host would have accepted, or a live row it refuses,
- * is a menu that lies.
- */
+// Only ever sent to the one blob the host decided was the grown-up's; no other phone has any
+// trace of the sheet. `playable` is exactly what `askFor` accepts (a headcount, not `suits`),
+// or the menu would lie.
 export const GrownupMessageSchema = z.object({
   type: z.literal('grownup'),
   tasks: z
@@ -218,66 +153,35 @@ export const GrownupMessageSchema = z.object({
   score: z.number().int().nonnegative(),
 })
 
-/**
- * What the world is asking for, echoed onto the phone under the blob's name.
- *
- * It is information and never an instruction: no screen changes on it, nothing
- * is disabled by it, and every tool the phone has stays exactly where it was.
- * A child who ignores it entirely is still playing. An empty `headline` takes
- * the strip down again.
- */
+// What the world is asking for: information, never an instruction, so it changes no screen and
+// takes no tool away. An empty `headline` takes the strip down.
 export const BriefMessageSchema = z.object({
   type: z.literal('brief'),
   headline: z.string().max(MAX_HEADLINE_LENGTH),
-  /** The quieter second line: a count, a hint, or the half only you are told. */
   detail: z.string().max(MAX_DETAIL_LENGTH).optional(),
-  /** Tints the strip when the task is about a particular colour. */
   colour: z.string().min(1).max(32).optional(),
-  /**
-   * A word inside the headline to paint in `colour`. "Everybody go green!" in
-   * one flat white is a sentence whose only instruction is the word a
-   * three-year-old cannot read; painted, the word is the instruction.
-   *
-   * It has to be a word the headline actually contains — see the refusal
-   * below — and `splitHeadline` is how both ends cut the sentence up.
-   */
+  /** A word of the headline to paint in `colour`; `splitHeadline` is how both ends cut it out. */
   emphasis: z.string().min(1).max(MAX_HEADLINE_LENGTH).optional(),
-  /**
-   * How it should read. `task` is what the world wants, `win` and `miss` are
-   * how the last one ended, and `level` is the room getting better at this —
-   * the one line all evening that is about the children rather than the game,
-   * and the only one either screen makes bigger than the rest.
-   */
+  /** `level` is the only line either screen draws bigger than the rest. */
   tone: z.enum(['task', 'win', 'miss', 'level']),
 }).refine((brief) => brief.emphasis === undefined || brief.headline.includes(brief.emphasis), {
-  // A word that is not in the sentence is a renderer looking for something
-  // that is not there, which is a bug on the TV rather than a thing to draw.
   error: 'emphasis must be a word of the headline',
   path: ['emphasis'],
 })
 
-/**
- * There is no TV for you: show the waiting screen and try again shortly. Sent
- * by the *relay*, never by the host, when no host has the world.
- */
+/** No TV for you: wait and try again. Sent by the relay, never by the host. */
 export const WaitingMessageSchema = z.object({
   type: z.literal('waiting'),
 })
 
-/**
- * Which world you have just connected to. The relay sends this to every client
- * the moment it attaches, and again to everybody when a TV takes the world
- * over — it is the whole of how a session code is negotiated, and the reason
- * no code appears in any URL.
- *
- * A client holding a different code was talking to a world that is gone. It
- * keeps its name and its picture and comes back as a new player.
- */
+// Sent by the relay on attach, and to every phone when a TV takes the world over. A phone holding
+// a different code mints a new playerId and reconnects, keeping its name and its picture.
 export const SessionMessageSchema = z.object({
   type: z.literal('session'),
   session: z.string().refine(isValidSessionCode, 'not a session code'),
 })
 
+/** What a phone parses: the host's messages with `to` stripped off by the relay. */
 export const HostToPlayerMessageSchema = z.discriminatedUnion('type', [
   AssignedMessageSchema,
   PaletteMessageSchema,
@@ -289,14 +193,8 @@ export const HostToPlayerMessageSchema = z.discriminatedUnion('type', [
   SessionMessageSchema,
 ])
 
-/**
- * What the host actually puts on the wire: a message for a phone plus a `to`.
- * Which blob you are, and what the world is currently asking for — the second
- * is still not a round, and still nothing a phone has to obey.
- *
- * The relay forwards by `to` and never looks at the rest, so adding to this
- * union costs it nothing.
- */
+// What the TV may say; the server parses with it. Every host → player message is written twice:
+// in the union above, and here as `.extend({ to })`.
 export const HostOutboundMessageSchema = z.discriminatedUnion('type', [
   AssignedMessageSchema.extend({ to: RecipientSchema }),
   PaletteMessageSchema.extend({ to: RecipientSchema }),
@@ -313,21 +211,15 @@ export const LeftMessageSchema = z.object({
   playerId: PlayerIdSchema,
 })
 
-/**
- * A phone has a socket but has not said who it is yet. The relay sends it so
- * that the TV can answer with the palette, which is what a join screen is
- * made of.
- *
- * It looks like the mirror of `left` and is not one: `left` is in the game
- * model's union because the model genuinely acts on it, and this is a socket
- * that has not become a blob yet. The world has nothing to hear.
- */
+// A socket with nobody on it yet, so the TV can answer with the palette. Not the mirror of `left`:
+// there is no blob for the game model to hear about.
 export const ArrivedMessageSchema = z.object({
   type: z.literal('arrived'),
   playerId: PlayerIdSchema,
 })
 
-/** Everything the *game model* is fed: forwarded player messages plus `left`. */
+// The game model's input: `route()` in apply.ts switches exhaustively over it, so `session`,
+// `arrived` and `command` are deliberately left out.
 export const ServerToHostMessageSchema = z.discriminatedUnion('type', [
   JoinMessageSchema,
   InputMessageSchema,
@@ -337,14 +229,7 @@ export const ServerToHostMessageSchema = z.discriminatedUnion('type', [
   LeftMessageSchema,
 ])
 
-/**
- * Everything the host *socket* can receive. `session`, `arrived` and `command`
- * are kept out of the union above on purpose. The first two are about
- * connections rather than about the world; `command` is a grown-up reaching
- * for `askFor` and `setLevel`, which `main.ts` calls directly, exactly as
- * `debug.ts` does. None of the three is something the *world* hears, and
- * `route()` in `apply.ts` switches exhaustively over what it does.
- */
+/** Everything that can arrive at the TV socket; `main.ts` handles `command` as `debug.ts` does. */
 export const HostInboundMessageSchema = z.discriminatedUnion('type', [
   JoinMessageSchema,
   InputMessageSchema,
@@ -368,7 +253,6 @@ export type FinishMessage = z.infer<typeof FinishMessageSchema>
 export type PlayerToHostMessage = z.infer<typeof PlayerToHostMessageSchema>
 export type AssignedMessage = z.infer<typeof AssignedMessageSchema>
 export type PaletteMessage = z.infer<typeof PaletteMessageSchema>
-/** One swatch on a join screen: a colour, its word, and who has it. */
 export type PaletteEntry = PaletteMessage['colours'][number]
 export type RefusedMessage = z.infer<typeof RefusedMessageSchema>
 export type RefusedReason = RefusedMessage['reason']

@@ -13,62 +13,36 @@ import {
   type ObjectiveTemplate,
 } from './types.js'
 
-/**
- * Follow the lights. Pads sit dark on the floor and one of them lights up;
- * everybody has to be on the lit one before it goes out and the next lights
- * instead, and so on to the end of the chain.
- *
- * It is the most legible task in the list — a toddler who understands nothing
- * else understands "run to the bright one" — and it scales by simply making
- * the chain longer, which costs nothing.
- */
+/** Follow the lights: everybody present stands on the one lit pad, then the next lights, to the end of the chain. */
 
 export interface FollowTheChainObjective extends ObjectiveBase {
   kind: 'followTheChain'
-  /** The pads to visit, in order, by zone id. */
+  /** Zone ids to visit, in order. */
   chain: string[]
-  /** How far along the chain they have got. */
   position: number
   holdMs: number
   heldMs: number
 }
 
-/**
- * The whole room has to fit on the lit pad at once, so there is a great deal
- * more of it than there is on a pad two blobs share. A room of six on a pad
- * they cannot all stand inside is not a hard task, it is an impossible one.
- */
+/** The whole room must fit on the lit pad at once, or the task is impossible. */
 const ROOMINESS = { easy: 2.2, hard: 1.6 }
-/** How long they have to all be on one before it counts. A pause, not a wait. */
 const HOLD = { easy: 500, hard: 1_200 }
-/**
- * How many pads are on the floor. It does not climb with the level: harder is
- * a longer chain and less elbow room, not more pads to squint at — and every
- * pad added is floor taken off all of them.
- */
+/** Fixed at every level: harder is a longer chain and less elbow room, not more pads. */
 const PADS = 3
 const LENGTH = { easy: 2, hard: 4 }
-/**
- * How long each light in the chain is worth. Per light rather than per task,
- * because a longer chain must not also be a tighter one — which is what it was
- * until the second play test, where the hardest version was six lights in less
- * time than three had been given.
- */
+/** Time per light rather than per task, so a longer chain is not also a tighter one. */
 const PER_LIGHT = { easy: 20_000, hard: 14_000 }
 
 export const followTheChain: ObjectiveTemplate<FollowTheChainObjective> = {
   kind: 'followTheChain',
   title: 'Follow the lights',
-  /** One blob following lights around is a chore; a room doing it is a game. */
   minPlayers: 2,
   minLevel: 3,
 
   generate(context: GenerateContext): FollowTheChainObjective {
     const hard = difficulty(context.level, MAX_LEVEL)
     const { rng } = context
-    // Not `exactly`: if the room is too big for three pads this size, two
-    // roomy pads are a game and three cramped ones are not. Two is the floor,
-    // though — a chain with one pad has nowhere to send anybody.
+    // Not `exactly`: two roomy pads beat three cramped ones, but one pad is no chain.
     const zones = makePads(
       context,
       PADS,
@@ -79,8 +53,7 @@ export const followTheChain: ObjectiveTemplate<FollowTheChainObjective> = {
     const length = Math.round(scale(LENGTH.easy, LENGTH.hard, hard))
     const totalMs = Math.round(length * scale(PER_LIGHT.easy, PER_LIGHT.hard, hard))
 
-    // Never the same pad twice running: a light that stays where it is reads
-    // as a broken game rather than a lucky one.
+    // Never the same pad twice running: a light that stays put reads as broken.
     const chain: string[] = []
     while (chain.length < length) {
       const elsewhere = zones.filter((zone) => zone.id !== chain.at(-1))
@@ -117,7 +90,6 @@ export const followTheChain: ObjectiveTemplate<FollowTheChainObjective> = {
 
     if (!hold(objective, blobsIn(lit, present).length === present.length, dtMs)) return
 
-    // On to the next light, or that was the last of them.
     objective.position += 1
     objective.heldMs = 0
     if (objective.position >= objective.chain.length) {
@@ -140,14 +112,12 @@ export const followTheChain: ObjectiveTemplate<FollowTheChainObjective> = {
         : `Light ${objective.position + 1} of ${objective.chain.length}: ${on} of ${present.length} on it`,
       tone: 'task',
     }
-    // The strip is the colour of the pad they are being sent to, which is the
-    // whole instruction for anybody who cannot read the rest of it.
+    // The strip takes the lit pad's colour, the whole instruction for a child who cannot read.
     if (lit) brief.colour = lit.colour
     return [brief]
   },
 }
 
-/** Exactly one pad is bright; the rest sit dark and wait their turn. */
 function light(objective: FollowTheChainObjective): void {
   const lit = objective.chain[objective.position]
   for (const zone of objective.zones) zone.dim = zone.id !== lit

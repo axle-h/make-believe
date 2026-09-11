@@ -1,11 +1,5 @@
-/**
- * Things a small child can draw, and a smaller one can recognise.
- *
- * Every word here has to survive being drawn with a fat crayon on a phone in
- * twenty seconds and still be guessable from the sofa, so they are all
- * concrete, common, and shaped like nothing else on the list: no "animal", no
- * "happy", and nothing two of them could both be.
- */
+// Each word must survive a fat crayon in twenty seconds and be guessable from the sofa: concrete,
+// common, and shaped like nothing else on the list.
 
 export const DRAWABLE_WORDS = [
   'cat',

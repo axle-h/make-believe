@@ -3,55 +3,31 @@ import { players } from './selectors.js'
 import { clampToWorld, type GameState, type Player } from './state.js'
 
 /**
- * Walls. A task can put a few solid blocks on the floor — a bar across the
- * middle, a square to go round — and blobs cannot drive through them.
- *
- * They exist because a chase on an empty floor is two blobs in a straight
- * line, and a chase around a corner is a game. Nothing else uses them yet and
- * nothing has to: a task with no obstacles has an empty list and pays nothing.
- *
- * An obstacle is a rectangle and a blob is a square, so keeping one out of the
- * other is the same trick the blobs already use on each other: find the axis
- * they overlap least on and give way along it.
+ * Walls blobs cannot drive through. A blob standing where one appears is slid out over a few frames rather
+ * than teleported, and a blob caught inside a moving wall is carried along with it.
  */
 
-/**
- * A rectangle blobs are kept out of. Walls are the obvious ones; a crate is
- * the other, which is why the separation below works on a plain box rather
- * than on an `Obstacle` — "push it together" is the one task built on a thing
- * being in the way, and the thing has to actually be in the way.
- */
+/** A crate is a box too, which is why separation works on `Box` rather than `Obstacle`. */
 export interface Box {
   x: number
   y: number
   width: number
   height: number
-  /**
-   * Turned about its own middle, in radians. Absent is square on, which is
-   * every wall in the game bar one: the race's turning bar is the only thing
-   * that needs an angle, and it is worth about thirty lines to have it be a
-   * real oriented box rather than a row of little squares pretending to be a
-   * bar. The model is what the e2e reads and what the TV draws, and the two
-   * must not disagree about where a wall is.
-   */
+  /** Radians about its middle: a real oriented box, so the model and the TV agree on where a wall is. */
   angle?: number
 }
 
-/** Up and down its own line, eased so that it hangs at each end. */
+/** Along its own line, eased by a sine so it hangs at each end. */
 export interface Bob {
   kind: 'bob'
-  /** The middle of its travel. */
   homeX: number
   homeY: number
-  /** How far each way, and which way. */
   reachX: number
   reachY: number
   periodMs: number
-  /** How far through the period it is. */
   atMs: number
 }
 
-/** Turning slowly about its own centre. */
 export interface Spin {
   kind: 'spin'
   radiansPerSecond: number
@@ -60,31 +36,16 @@ export interface Spin {
 export type Motion = Bob | Spin
 
 export interface Obstacle extends Box {
-  /** Stable for the life of the objective; the renderer keeps its views by it. */
   id: string
-  /** How it moves, if it moves at all. Most walls do not. */
   motion?: Motion
-  /**
-   * How far it moved on the last step. A blob caught inside a moving wall is
-   * carried by this much before it is separated, which is being pushed aside
-   * by a platform rather than being squeezed out of its near side.
-   */
+  /** Last step's movement, which a blob caught inside is carried by before it is separated. */
   drift?: { dx: number; dy: number; spin: number }
 }
 
-/**
- * How fast a wall may carry a blob along with it. Well under the shove in
- * sumo, so that being swept along by a turning bar is a joke rather than a
- * force nobody can drive against.
- */
+/** Well under sumo's shove, so nobody is ever helpless against a moving wall. */
 export const CARRY_SPEED = 120
 
-/**
- * Everything on the floor that moves, moved. Called once a step, before the
- * blobs are pushed out of any of it — the wall goes first and the blobs are
- * separated afterwards, which is a wall shoving a blob rather than swallowing
- * one, exactly as a crate does.
- */
+/** Walls move before blobs are pushed out of them, so a wall shoves a blob rather than swallowing one. */
 export function stepObstacles(obstacles: readonly Obstacle[], dtMs: number): void {
   const seconds = Math.max(0, dtMs) / 1000
   for (const obstacle of obstacles) {
@@ -96,8 +57,6 @@ export function stepObstacles(obstacles: readonly Obstacle[], dtMs: number): voi
 
     if (motion.kind === 'bob') {
       motion.atMs = (motion.atMs + Math.max(0, dtMs)) % motion.periodMs
-      // A sine is the whole of it, and it hangs at each end for free, which
-      // reads as bouncy rather than mechanical.
       const along = Math.sin((motion.atMs / motion.periodMs) * Math.PI * 2)
       obstacle.x = motion.homeX + motion.reachX * along
       obstacle.y = motion.homeY + motion.reachY * along
@@ -113,27 +72,13 @@ export function stepObstacles(obstacles: readonly Obstacle[], dtMs: number): voi
   }
 }
 
-/**
- * How fast a blob is moved out of a wall it is already inside, in pixels a
- * second.
- *
- * Driving into a wall only ever buries a blob by one frame's worth of travel,
- * which this covers many times over — so it is not really a speed limit at
- * all. It is for the other case: the obstacles appear when a task starts, and
- * whoever was standing where a wall now is gets slid out over a few frames
- * where they can see it happen, rather than being teleported somewhere new.
- */
+/** Slow enough that a blob standing where a wall appears is slid out where it can see it, not teleported. */
 export const PUSH_OUT_SPEED = 900
 
-/** How far past the edge a push-out lands, to keep it clear of rounding. */
+/** Turning a push out of a bar's frame and back lands a rounding error short, so it overshoots by this. */
 const OUT_BY = 0.01
 
-/**
- * Everybody out of every wall. Called once a step, after they have all moved.
- *
- * Hands back the ids of whoever had to be pushed, which is what a bounce is
- * worked out from. An away blob is a ghost and is never in it.
- */
+/** Returns whoever had to be pushed, which is what a bounce is worked out from; away blobs are ghosts. */
 export function pushOutOfObstacles(
   state: GameState,
   obstacles: readonly Obstacle[],
@@ -142,8 +87,6 @@ export function pushOutOfObstacles(
   const touched = new Set<string>()
   if (obstacles.length === 0) return touched
   const limit = PUSH_OUT_SPEED * (Math.max(0, dtMs) / 1000)
-  // A blob whose phone has gone is a ghost and is not really there, exactly as
-  // it is not really there for the other blobs.
   for (const player of players(state)) {
     if (player.away) continue
     for (const obstacle of obstacles) {
@@ -154,12 +97,6 @@ export function pushOutOfObstacles(
   return touched
 }
 
-/**
- * A blob caught inside something that has just moved goes with it — carried
- * aside by a platform rather than squeezed out of its near side. A turning bar
- * sweeps whoever is on it along its length, which is the joke, and both are
- * capped well below the shove in sumo so that nobody is ever helpless.
- */
 function carryAlong(state: GameState, player: Player, obstacle: Obstacle, dtMs: number): void {
   const drift = obstacle.drift
   if (!drift || !insideObstacle(obstacle, player.x, player.y)) return
@@ -181,7 +118,6 @@ function carryAlong(state: GameState, player: Player, obstacle: Obstacle, dtMs: 
   player.y = moved.y
 }
 
-/** Whether a blob is standing in this wall — or in anything else solid. */
 export function insideObstacle(obstacle: Box, x: number, y: number): boolean {
   const local = intoFrame(obstacle, x, y)
   return (
@@ -190,11 +126,7 @@ export function insideObstacle(obstacle: Box, x: number, y: number): boolean {
   )
 }
 
-/**
- * A point in the box's own frame: the gap from its middle, turned back by
- * whatever the box is turned by. Everything below then works on a box that is
- * square on, and the answer is turned out again at the end.
- */
+/** Turned back by the box's angle, so the maths works square on and the answer is turned out again. */
 function intoFrame(obstacle: Box, x: number, y: number): { x: number; y: number } {
   const gapX = x - obstacle.x
   const gapY = y - obstacle.y
@@ -205,22 +137,13 @@ function intoFrame(obstacle: Box, x: number, y: number): { x: number; y: number 
   return { x: cos * gapX - sin * gapY, y: sin * gapX + cos * gapY }
 }
 
-/**
- * One blob, one rectangle: out along whichever way is shortest, but not
- * instantly. `limit` is how far it may be moved this step — see
- * `PUSH_OUT_SPEED` for why it is a few frames rather than one.
- *
- * True if the blob was inside the box at all, which is what makes a bounce.
- */
+/** Out along the shortest way by at most `limit`; true if the blob was inside at all. */
 export function pushOutOfBox(
   state: GameState,
   player: Player,
   obstacle: Box,
   limit: number,
 ): boolean {
-  // In the box's own frame the blob is a circle rather than a square, which
-  // is forgiving by construction — and forgiving is the right way to be wrong
-  // for a four-year-old.
   const local = intoFrame(obstacle, player.x, player.y)
   const overlapX = (BLOB_SIZE + obstacle.width) / 2 - Math.abs(local.x)
   const overlapY = (BLOB_SIZE + obstacle.height) / 2 - Math.abs(local.y)
@@ -228,15 +151,10 @@ export function pushOutOfBox(
 
   const horizontal = overlapX <= overlapY
   const overlap = horizontal ? overlapX : overlapY
-  // Dead in the middle of a wall there is no near side, so it goes one way
-  // rather than shimmering between the two.
+  // Dead in the middle it goes one way rather than shimmering between the two.
   const away = (horizontal ? local.x : local.y) >= 0 ? 1 : -1
-  // A hair past the edge rather than exactly onto it: turning a push out of a
-  // bar's own frame and back lands a rounding error short of the boundary, and
-  // a blob a millionth of a pixel inside a wall is a blob inside a wall.
   const step = Math.min(overlap + OUT_BY, limit) * away
 
-  // ...and the push is turned back out of the frame it was worked out in.
   const angle = obstacle.angle ?? 0
   const cos = Math.cos(angle)
   const sin = Math.sin(angle)
@@ -254,31 +172,9 @@ export function pushOutOfBox(
 }
 
 /**
- * Runs of walls that lie along the same line and touch, folded into single
- * rectangles.
- *
- * A maze emits one rectangle per cell wall, so a straight run of four is four
- * abutting rectangles — each with its own rounded corners and its own outline,
- * which is what the messy joins in the third play test were. One wall drawn as
- * one wall is the fix, and it takes the maze from about thirty obstacles to a
- * third of that, which the collision loop notices too.
- *
- * It lives here rather than in `mazes.ts` because it is about rectangles rather
- * than about mazes: the small walls scattered through the collecting tasks want
- * it as well.
- *
- * Two passes, up and down and then side to side, which is what lets a run of
- * squares come out as one wall whichever way it is laid. A T-junction is left
- * alone by both — the two arms share neither line — and that is right: they are
- * two walls, and the renderer is what stops the join looking like a seam.
- *
- * Only motionless, unrotated rectangles are ever merged. The maze has neither,
- * and the guard is what keeps this safe if a course ever mixes a bobbing bar
- * into a run of still ones — two walls that are in the same place *now* are not
- * the same wall if one of them is about to move.
- *
- * The merged wall keeps the first segment's id. Ids only have to be stable and
- * unique within one objective, which they still are.
+ * Touching walls on one line fold into one, so a run draws as one wall. Only motionless, unrotated walls
+ * merge, since two walls in the same place now are not the same wall if one is about to move.
+ * The merged wall keeps the first segment's id.
  */
 export function mergeWalls(walls: readonly Obstacle[]): Obstacle[] {
   const still: Obstacle[] = []
@@ -290,10 +186,8 @@ export function mergeWalls(walls: readonly Obstacle[]): Obstacle[] {
   return [...alongX(alongY(still)), ...moving]
 }
 
-/** How close two ends have to be to count as touching. Rounding, and no more. */
 const TOUCHING = 0.001
 
-/** Walls sharing a vertical line, folded top to bottom. */
 function alongY(walls: readonly Obstacle[]): Obstacle[] {
   return fold(
     walls,
@@ -304,7 +198,6 @@ function alongY(walls: readonly Obstacle[]): Obstacle[] {
   )
 }
 
-/** Walls sharing a horizontal line, folded left to right. */
 function alongX(walls: readonly Obstacle[]): Obstacle[] {
   return fold(
     walls,
@@ -315,11 +208,7 @@ function alongX(walls: readonly Obstacle[]): Obstacle[] {
   )
 }
 
-/**
- * One pass of the fold. Group the walls onto lines, sort each line along
- * itself, and run through it joining anything whose ends meet — a gap between
- * two of them is two walls, and the gap is the corridor.
- */
+/** Only ends that meet are joined: a gap between two walls on a line is a corridor. */
 function fold(
   walls: readonly Obstacle[],
   line: (wall: Obstacle) => string,

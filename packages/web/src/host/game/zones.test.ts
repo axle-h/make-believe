@@ -100,11 +100,7 @@ describe('placeZone', () => {
     }
   })
 
-  /**
-   * Generation runs inside a frame. A world too crowded to place anything in
-   * must give up and take a spot, because a generator that can loop forever
-   * would stop the TV dead.
-   */
+  /** A world too crowded to place anything in gives up and takes a spot rather than hang the TV. */
   it('gives up rather than looping when nothing will fit', () => {
     const filled: CircleZone[] = [
       { id: 'huge', shape: 'circle', x: 640, y: 360, radius: 2000, colour: '#fff' },

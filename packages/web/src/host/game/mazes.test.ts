@@ -4,12 +4,7 @@ import { carveMaze, fits, MAZE_CORRIDOR, type MazeArea } from './mazes.js'
 import { insideObstacle, type Obstacle } from './obstacles.js'
 import { createRng } from './rng.js'
 
-/**
- * The carve, on its own. It is a course rather than a task — the race runs
- * through one at the top of its ladder — so what has to be true of it is what
- * has to be true of any floor: there is a way across, and there is room to
- * drive down it.
- */
+/** A carved maze has a way across and room to drive down it, as any floor must. */
 
 const AREA: MazeArea = { x: 300, y: 0, width: 680, height: WORLD_HEIGHT }
 
@@ -49,7 +44,6 @@ function flood(walls: readonly Obstacle[], from: { x: number; y: number }): Set<
 }
 
 describe('carving one', () => {
-  /** Every cell reaches every other, by construction. */
   it('always leaves a way from one side of it to the other', () => {
     const step = BLOB_SIZE / 2
     const across = Math.floor(WORLD_WIDTH / step)
@@ -65,16 +59,9 @@ describe('carving one', () => {
     }
   })
 
-  /**
-   * Measured in wall rather than in walls. A straight run of cell walls comes
-   * back as one rectangle now, so counting them counts how the maze was drawn
-   * rather than how much of it there is — and merging moves not one pixel of
-   * where the wall actually lies.
-   */
+  /** Measured in length of wall rather than count, since merging changes the count and not the wall. */
   it('makes corners rather than a field, but leaves a loop or two', () => {
-    // A four by four grid has nine cell walls left standing in a perfect maze,
-    // each about a cell long. A knocked-through one is a field, and nine of
-    // nine is a maze with no way round a wrong turn.
+    // A perfect four by four maze leaves nine cell walls standing, each about a cell long.
     const cell = AREA.height / 4
     for (let seed = 0; seed < 20; seed++) {
       const wall = maze(seed).reduce((sum, one) => sum + Math.max(one.width, one.height), 0)
@@ -84,13 +71,7 @@ describe('carving one', () => {
     }
   })
 
-  /**
-   * One wall drawn as one wall. A straight run of cell walls used to come out
-   * as a rectangle each, and every one of them brought its own rounded corners
-   * and its own outline — which is what the messy joins in the third play test
-   * were. Nothing left in a carved maze is collinear with a neighbour it
-   * touches.
-   */
+  /** Nothing left in a carved maze is collinear with a neighbour it touches. */
   it('gives back one rectangle per run rather than one per cell wall', () => {
     for (let seed = 0; seed < 20; seed++) {
       const walls = maze(seed)
@@ -129,12 +110,7 @@ describe('carving one', () => {
     }
   })
 
-  /**
-   * Nowhere is walled off. A perfect maze has no sealed pockets in it, and a
-   * pocket is the one thing that would put a blob somewhere it cannot drive
-   * out of — so this walks the whole floor and checks that every patch of it
-   * that is not a wall can be got to.
-   */
+  /** Every patch of floor that is not wall can be reached, so no blob can be sealed in. */
   it('seals nothing off, anywhere on the floor', () => {
     const step = BLOB_SIZE / 2
     const across = Math.floor(WORLD_WIDTH / step)

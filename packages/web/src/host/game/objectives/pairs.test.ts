@@ -54,8 +54,7 @@ describe('laying out the pads', () => {
   it('puts down one pad per couple, however big the room is', () => {
     expect(make(room(4)).zones).toHaveLength(2)
     expect(make(room(6)).zones).toHaveLength(3)
-    // No cap: ten blobs get five pads, because four pads and ten blobs in
-    // twos is a sum that does not come out.
+    // No cap: ten blobs in twos need five pads.
     expect(make(room(10)).zones).toHaveLength(5)
   })
 
@@ -88,10 +87,6 @@ describe('pairing up', () => {
     expect(objective.heldMs).toBe(0)
   })
 
-  /**
-   * The rule a child would guess from the name, and the one the pads are sized
-   * for: three on a pad is a crowd, not a couple.
-   */
   it('does not count three on a pad, however keen they are', () => {
     const state = room(4)
     const objective = make(state)
@@ -113,7 +108,6 @@ describe('pairing up', () => {
 
     expect(objective.outcome).toBe('running')
 
-    // And splitting into the two pads is what finishes it.
     stand(state, objective, 1, ['p3', 'p4'])
     pairs.step(objective, state, objective.holdMs + 1)
     expect(objective.outcome).toBe('done')
@@ -158,11 +152,7 @@ describe('pairing up', () => {
     expect(objective.outcome).toBe('done')
   })
 
-  /**
-   * It is judged against whoever is here now. A couple who put their phones
-   * down leave a pad spare, and a spare pad must not be a task the four who
-   * are left cannot finish.
-   */
+  /** Judged against whoever is present: a pad left spare by a couple who went away is not needed. */
   it('stops counting a blob whose phone has been put down, spare pad and all', () => {
     const state = room(6)
     const objective = make(state)

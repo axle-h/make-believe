@@ -12,19 +12,7 @@ import {
   type ObjectiveTemplate,
 } from './types.js'
 
-/**
- * Two to a pad. One pad per couple appears and every pad wants exactly two
- * blobs on it — so the room has to sort itself out, out loud, before anybody
- * can stand still.
- *
- * It is cooperative by construction and it is the first task that cannot be
- * solved by everybody doing the same thing at once. The rule used to be
- * "nobody on their own", so that an odd room could always come out; a room of
- * five showed what that costs. Three on a pad counted, which made the rule
- * invisible — right until it wasn't — so the rule is now the one a child would
- * guess from the name, and the world only asks for it when a room can be
- * halved. That is what `suits` is for.
- */
+/** Two to a pad: one pad per couple, and every pad wants exactly two blobs on it. */
 
 export interface PairsObjective extends ObjectiveBase {
   kind: 'pairs'
@@ -32,7 +20,7 @@ export interface PairsObjective extends ObjectiveBase {
   heldMs: number
 }
 
-/** Room for two and no more: a third blob shoving at the edge does not fit. */
+/** Room for two and no more. */
 const ROOMINESS = { easy: 1.2, hard: 0.95 }
 const HOLD = { easy: 1_500, hard: 3_000 }
 const TIME_LIMIT = { easy: 50_000, hard: 30_000 }
@@ -40,26 +28,22 @@ const TIME_LIMIT = { easy: 50_000, hard: 30_000 }
 export const pairs: ObjectiveTemplate<PairsObjective> = {
   kind: 'pairs',
   title: 'Two to a pad',
-  /** Two blobs and one pad is not a negotiation, and four is the next even room. */
   minPlayers: 4,
   minLevel: 3,
 
-  /** Exactly two on every pad only comes out if the room can be halved. */
+  /** Exactly two on every pad only comes out in an even room. */
   suits(present) {
     return present % 2 === 0
   },
 
   generate(context: GenerateContext): PairsObjective {
     const hard = difficulty(context.level, MAX_LEVEL)
-    // One pad per couple, exactly — `makePads` may not trade one away for
-    // room, and there is no cap either: a room of ten gets five, because a
-    // capped count is a sum the room cannot make come out.
+    // One pad per couple, `exactly` and uncapped, or the sum cannot come out.
     const count = Math.max(1, Math.floor(context.players.length / 2))
     const zones = makePads(context, count, 2, scale(ROOMINESS.easy, ROOMINESS.hard, hard), {
       exactly: true,
     })
-    // Dim until it has its two, so how far along the room is can be read off
-    // the floor without anybody counting anything.
+    // Dim until it has its two, so progress can be read off the floor.
     for (const zone of zones) zone.dim = true
     const totalMs = Math.round(scale(TIME_LIMIT.easy, TIME_LIMIT.hard, hard))
     return {
@@ -105,18 +89,11 @@ export const pairs: ObjectiveTemplate<PairsObjective> = {
   },
 }
 
-/**
- * Everybody standing on a pad with exactly one other blob. With one pad per
- * couple that is the same sentence as "every pad has its two" — but it is
- * written from the blobs' end on purpose, because the room is judged against
- * whoever is here *now*: a couple who wander off mid-task leave a spare pad
- * behind, and a spare pad must not be a task the rest cannot finish.
- */
+/** Judged from the blobs' end, against whoever is present, so a pad left spare by leavers is not needed. */
 function everybodyPaired(zones: Zone[], present: Player[]): boolean {
   return paired(zones, present).length === present.length
 }
 
-/** The blobs standing on a pad that has exactly two on it. */
 function paired(zones: Zone[], present: Player[]): Player[] {
   const together: Player[] = []
   for (const zone of zones) {

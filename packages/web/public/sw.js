@@ -1,27 +1,10 @@
-/**
- * The player page's service worker. It exists so the app opens from its icon
- * even when the server is not there — and, more often, so it can say it cannot
- * reach the TV rather than showing Chrome's dinosaur.
- *
- * Network-first for everything. The phone is on the same wifi as the server
- * and the page is a few kilobytes, so fresh is the normal case and the cache
- * is only ever a fallback. That also means there is no precache manifest to
- * keep in step with Vite's hashed filenames: the cache holds whatever was
- * successfully fetched, and nothing else.
- *
- * Registered as `/sw.js?v=<build>` — a new build therefore registers a new
- * worker, and the version in the query names the cache, so the old build's
- * cache is dropped on activation.
- */
+// Network-first for everything; the cache is only a fallback. Registered as `/sw.js?v=<build>`,
+// so each build gets its own cache and the old one is dropped on activation.
 
 const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev'
 const CACHE = `make-believe-${VERSION}`
 
-/**
- * Paths the worker keeps its hands off entirely: the socket, the TV's own page
- * (which is never installed and must never be served from a phone's cache),
- * and the version check, whose whole job is to be fresh.
- */
+/** The worker never touches the socket, the version check or the TV's page. */
 function isOurs(url) {
   if (url.origin !== self.location.origin) return false
   if (url.pathname === '/ws' || url.pathname === '/version') return false
@@ -29,9 +12,7 @@ function isOurs(url) {
 }
 
 self.addEventListener('install', () => {
-  // Nothing to precache, so the new worker is ready immediately. It still
-  // waits for the page to be on a safe screen before it takes over — that is
-  // the page's decision, made when it sees the controller change.
+  // Nothing to precache, so take over at once; the page decides when to reload into the new build.
   self.skipWaiting()
 })
 
@@ -52,12 +33,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(networkFirst(request))
 })
 
-/**
- * Every navigation is the same page whatever is hanging off the URL, so they
- * are all cached under the bare path. Nothing puts a query on the player link
- * any more, but a shared link with one on it would otherwise fill the cache
- * with copies that match nothing next time.
- */
+/** Every navigation is the same page, so all of them are cached under `/`. */
 function cacheKey(request) {
   return request.mode === 'navigate' ? new Request('/') : request
 }

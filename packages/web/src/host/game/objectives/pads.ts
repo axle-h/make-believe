@@ -4,54 +4,21 @@ import type { World } from '../state.js'
 import { radiusFor, type CircleZone } from '../zones.js'
 import type { GenerateContext } from './types.js'
 
-/**
- * Pads: several spots on the floor at once, rather than the single spot
- * everybody piles onto. Three tasks are built out of them — pairing up,
- * finding the one that is yours, and following a chain of lights — and they
- * all want the same thing: a handful of circles, well apart, each a colour
- * that can be said out loud.
- *
- * There are only as many pad colours as there are names worth saying, so a
- * room with more pads than that wraps round. Only the task that identifies a
- * pad *by* its colour has to care, and that one asks for no more pads than
- * there are colours.
- */
-
-/** How many pads can be told apart by colour alone. */
+/** Pad colours wrap beyond this, so a task that names pads by colour asks for no more. */
 export const MAX_NAMED_PADS = ZONE_COLOURS.length
 
 export interface PadOptions {
-  /**
-   * Colours for the pads, in order, for a task that identifies a pad by
-   * something other than the floor palette.
-   */
   colours?: readonly string[]
-  /**
-   * This many pads or nothing: the count means something to the task and may
-   * not be traded away for room. Pairs lays out one pad per couple, so a pad
-   * fewer is a sum the room cannot make come out.
-   */
+  /** The count may not be traded for room: pairs needs one pad per couple. The pads are squashed instead. */
   exactly?: boolean
-  /**
-   * The fewest that are still worth having, for a task that can give some of
-   * its pads up but not all of them: a chain of lights with one pad has
-   * nowhere to send anybody.
-   */
+  /** The fewest pads still worth having when some must be given up. */
   least?: number
 }
 
 /**
- * A handful of pads, placed clear of each other and wholly inside the world.
- * `capacity` is how many blobs one pad is meant to hold, and `roominess` how
- * much elbow room they get doing it — under 1 they have to shove.
- *
- * **The capacity comes first.** Every pad has to stay inside its own square of
- * floor, or two of them overlap and "which pad are you on?" stops having an
- * answer — so when the room a capacity asks for will not fit that square, this
- * lays out *fewer* pads rather than shrinking them. A pad nobody can all stand
- * on is worse than a pad fewer: six blobs told to gather on a pad they cannot
- * all fit inside is not a hard task, it is an impossible one, and that is how
- * following the lights came back from the second play test.
+ * `capacity` blobs per pad, with `roominess` elbow room (under 1 they shove). Each pad stays in its
+ * own square of floor, and when the capacity will not fit there it lays out fewer pads rather than
+ * smaller ones, unless `exactly` asks for the count.
  */
 export function makePads(
   context: GenerateContext,
@@ -61,12 +28,10 @@ export function makePads(
   options: PadOptions = {},
 ): CircleZone[] {
   const { rng } = context
-  // A little jiggle either way, so two goes at the same level are not twins.
   const wanted = radiusFor(capacity, roominess * range(rng, 0.94, 1.06))
   const least = options.exactly === true ? count : Math.min(count, options.least ?? 1)
   const laid = fitting(context.world, count, wanted, least)
   const cell = cellsAcross(context.world, laid)
-  // A task that insists on its count takes the squash; nothing else has to.
   const radius = Math.min(wanted, (Math.min(cell.width, cell.height) / 2) * FILL)
 
   const squares = shuffled(rng, laid)
@@ -78,25 +43,16 @@ export function makePads(
       x: spot.x,
       y: spot.y,
       radius,
-      // A task that identifies a pad by something other than the pad palette —
-      // find your own pad colours them like the blobs — says so; everything
-      // else takes the floor colours, which are chosen not to be blobs.
       colour: options.colours?.[index] ?? colourOfPad(index),
     }
   })
 }
 
 export function colourOfPad(index: number): string {
-  // The list is a literal and the index is wrapped, so there is always one.
   return (ZONE_COLOURS[index % ZONE_COLOURS.length] as { hex: string }).hex
 }
 
-/**
- * What to call a pad when a phone is being told which one is theirs. Both
- * palettes have a name for every colour in them — the floor's and the blobs' —
- * and anything else is described rather than named, which is better than a hex
- * code arriving on a six-year-old's phone.
- */
+/** A colour in neither palette is described, never sent to a phone as a hex code. */
 export function nameOfColour(hex: string): string {
   return (
     ZONE_COLOURS.find((colour) => colour.hex === hex)?.name ??
@@ -105,14 +61,10 @@ export function nameOfColour(hex: string): string {
   )
 }
 
-/** How much of its square of floor a pad may fill, leaving a lane between them. */
+/** Share of its square a pad may fill, leaving a lane between pads. */
 const FILL = 0.8
 
-/**
- * The most pads, up to the number asked for, whose own squares of floor are
- * big enough for a pad of the size wanted — and never fewer than `least`,
- * which is where a task says how much of its count it cannot do without.
- */
+/** The most pads, up to `count` and never below `least`, whose squares fit a pad of the size wanted. */
 function fitting(world: World, count: number, wanted: number, least: number): number {
   for (let laid = count; laid > least; laid--) {
     const cell = cellsAcross(world, laid)
@@ -128,19 +80,13 @@ interface Grid {
   height: number
 }
 
-/**
- * The floor cut into one square per pad, wide before tall — the TV is wider
- * than it is high, and pads spread across it are easier to tell apart than
- * pads stacked up it. Every pad gets one square and stays inside it, which is
- * what makes them clear of each other without any luck involved.
- */
+/** One square per pad, wide before tall; a pad never leaves its square, so pads never overlap. */
 function cellsAcross(world: World, count: number): Grid {
   const columns = count <= 3 ? Math.max(1, count) : Math.ceil(count / 2)
   const rows = Math.ceil(count / columns)
   return { columns, rows, width: world.width / columns, height: world.height / rows }
 }
 
-/** Somewhere inside this pad's own square, wholly on the floor. */
 function somewhereIn(
   rng: Rng,
   world: World,
@@ -150,7 +96,6 @@ function somewhereIn(
 ): { x: number; y: number } {
   const column = square % cell.columns
   const row = Math.floor(square / cell.columns)
-  // Whatever is left of the square once the pad is in it, to jiggle about in.
   const slackX = Math.max(0, cell.width / 2 - radius)
   const slackY = Math.max(0, cell.height / 2 - radius)
   const x = cell.width * (column + 0.5) + range(rng, -slackX, slackX)
@@ -161,7 +106,7 @@ function somewhereIn(
   }
 }
 
-/** The squares in a shuffled order, so the colours are not always left to right. */
+/** Shuffled so the colours are not always left to right. */
 function shuffled(rng: Rng, count: number): number[] {
   const squares = Array.from({ length: count }, (_, index) => index)
   for (let index = squares.length - 1; index > 0; index--) {

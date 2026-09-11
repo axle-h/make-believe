@@ -22,22 +22,13 @@ import {
   type ObjectiveTemplate,
 } from './types.js'
 
-/**
- * Sorting. Fetch with one more rule: the parcels come in colours and each one
- * has to reach the depot of its own colour.
- *
- * That one rule is the whole difference, and it is the rule a four-year-old
- * gets first — the picture on the floor says it without a word, and a blob
- * carrying a yellow parcel past the yellow spot gets shouted at by the room,
- * which is the game working exactly as intended.
- */
+/** Sorting: fetch, but each coloured parcel is only home on the depot of its own colour. */
 
 export interface SortingObjective extends ObjectiveBase {
   kind: 'sorting'
   parcels: number
 }
 
-/** How many depots, and how many parcels between them. */
 const DEPOTS = { easy: 2, hard: 3 }
 const PARCELS = { easy: 4, hard: 6 }
 const TIME_LIMIT = { easy: 70_000, hard: 55_000 }
@@ -46,7 +37,6 @@ export const sorting: ObjectiveTemplate<SortingObjective> = {
   kind: 'sorting',
   title: 'Sorting',
   minPlayers: 2,
-  /** Everything about it is fetch, so a room meets it having already done that. */
   minLevel: 6,
 
   generate(context: GenerateContext): SortingObjective {
@@ -58,15 +48,11 @@ export const sorting: ObjectiveTemplate<SortingObjective> = {
       Math.max(2, context.players.length),
       1.3,
     )
-    // Named on the floor as well as coloured, for whoever is reading by then.
     for (const depot of depots) depot.label = nameOfColour(depot.colour).toUpperCase()
 
-    // Socks, or eggs, or presents. The colour is still the rule and the glyph
-    // rides on top of it: a blue sock is a sock on a blue square.
+    // The colour is the rule; the theme's glyph only rides on top of it.
     const theme = pick(rng, THEMES)
-    // A few small things in the way, once the room is well up the ladder.
-    // Placed after the depots and before the parcels, so that nothing is put
-    // inside a wall and no wall lands on a depot.
+    // After the depots and before the parcels, so no wall lands on a depot and no parcel in a wall.
     const walls = mergeWalls(litter(context, hard, depots))
 
     const count = Math.round(scale(PARCELS.easy, PARCELS.hard, hard))
@@ -90,7 +76,7 @@ export const sorting: ObjectiveTemplate<SortingObjective> = {
         carriedBy: null,
       }),
     )
-    // ...and shuffled, so the parcel nearest a depot is not always its own.
+    // Shuffled, so the parcel nearest a depot is not always its own.
     for (let index = carryables.length - 1; index > 0; index--) {
       const swap = intRange(rng, 0, index)
       const held = carryables[index]?.colour as string
@@ -117,7 +103,6 @@ export const sorting: ObjectiveTemplate<SortingObjective> = {
 
   step(objective, state, dtMs) {
     stepCarryables(state, objective.carryables, dtMs)
-    // The one rule: a parcel is only home on a spot of its own colour.
     deliverInto(objective.carryables, objective.zones, (thing, zone) => thing.colour === zone.colour)
     if (stillOut(objective.carryables).length === 0) objective.outcome = 'done'
   },

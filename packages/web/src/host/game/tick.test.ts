@@ -149,15 +149,7 @@ function scattered(count: number): GameState {
   return state
 }
 
-/**
- * The bounce. Every blob has a landing voice of its own — its `slot`, played
- * by its own phone — and the noise is worked out here by looking at what
- * changed, exactly as every other cue is: no task reports anything.
- *
- * It is an **edge**, not a state. A blob shoved up against a wall makes one
- * noise and then goes quiet; it has to come off and go back to make another.
- * Six blobs droning at each other would be unbearable.
- */
+/** A bounce is an edge, not a state: one noise per contact, worked out from what changed. */
 describe('bouncing off things', () => {
   it('says nothing at all while everybody is driving about in the open', () => {
     const state = scattered(2)
@@ -202,8 +194,7 @@ describe('bouncing off things', () => {
   it('makes one noise for a blob held against the edge of the floor, then none', () => {
     const state = scattered(1)
     applyMessage(state, { type: 'input', playerId: 'p1', dx: -1, dy: 0 })
-    // Driving left until it can go no further; the bounce is the moment it
-    // stops, not every frame it spends leaning there.
+    // The bounce is the moment it stops, not every frame it leans there.
     let heard = 0
     for (let frame = 0; frame < 200; frame++) heard += bouncesIn(tick(state, 16)).length
 
@@ -212,8 +203,7 @@ describe('bouncing off things', () => {
   })
 
   it('bounces a blob a wall has appeared on top of', () => {
-    // Two, because a room of one is a room the world will not ask anything of
-    // — and there has to be a running task to put a wall into.
+    // Two, since the world asks nothing of a room of one and a wall needs a running task.
     const state = scattered(2)
     tick(state, 16)
     const blob = state.players.get('p1')!
@@ -236,10 +226,7 @@ describe('bouncing off things', () => {
     expect(bouncesIn(tick(state, 16))).toEqual([])
   })
 
-  /**
-   * A bounce keeps a budget of its own, so a blob scraping along a wall cannot
-   * starve the delivery its owner is actually waiting to hear.
-   */
+  /** Bounces have their own budget, so scraping a wall cannot starve a delivery cue. */
   it('lets a bounce and a real cue through in the same step', () => {
     const state = scattered(2)
     const one = state.players.get('p1')!

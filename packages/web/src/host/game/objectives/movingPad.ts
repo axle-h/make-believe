@@ -13,49 +13,30 @@ import {
   type ObjectiveTemplate,
 } from './types.js'
 
-/**
- * The spot, but it will not stay still. One pad drifts across the floor and
- * bounces off the walls, and everybody has to be on it — and stay on it — for
- * a good long moment while it wanders.
- *
- * It is the smallest thing that can be made out of a floor that moves, which
- * is the point of building it first: everything that comes after moves
- * something. A three-year-old understands it from the picture, exactly as they
- * understand standing on a spot, and the difference is entirely in the legs.
- */
+/** The spot that runs away: one pad drifts and bounces off the walls, and everybody present holds on it. */
 
 export interface MovingPadObjective extends ObjectiveBase {
   kind: 'movingPad'
-  /** Where it is going, in world units a second. */
+  /** Velocity, in world units a second. */
   vx: number
   vy: number
   holdMs: number
   heldMs: number
 }
 
-/** Elbow room for the whole room at once: it has to hold everybody. */
+/** It has to hold the whole room at once. */
 const ROOMINESS = { easy: 2.8, hard: 2.2 }
-/**
- * How long it takes to cross its own width, in seconds — which is the number
- * that matters rather than a speed, because the pad also gets wider as the room
- * fills. Bigger is slower, and it is set slow enough that the smallest child in
- * the room can keep up with it on foot. The room still has to move to stay on
- * it; a blob that happens to be standing where the pad is going, and is still
- * there when the count is up, is a lucky blob rather than a bug.
- */
+/** Seconds to cross its own width, not a speed, because the pad widens as the room fills. */
 const CROSSING = { easy: 4.0, hard: 2.6 }
 /** However big the pad gets, it never outruns the room chasing it. */
 export const MAX_DRIFT = 180
-/** How long everybody has to keep up with it. */
 const HOLD = { easy: 2_500, hard: 3_500 }
 const TIME_LIMIT = { easy: 50_000, hard: 40_000 }
 
 export const movingPad: ObjectiveTemplate<MovingPadObjective> = {
   kind: 'movingPad',
   title: 'The spot that runs away',
-  /** One blob following a circle about is a chore; a room doing it is a game. */
   minPlayers: 2,
-  /** Straight after standing on one, because it is the same task with legs. */
   minLevel: 2,
 
   generate(context: GenerateContext): MovingPadObjective {
@@ -72,8 +53,7 @@ export const movingPad: ObjectiveTemplate<MovingPadObjective> = {
       radius,
       colour: pick(rng, ZONE_COLOURS).hex,
     }
-    // Any direction at all, but never straight along an axis: a pad sliding
-    // flat across the screen and back is a metronome rather than a wander.
+    // Never straight along an axis, where it would be a metronome rather than a wander.
     const heading = range(rng, 0.35, 1.2) * (rng.next() < 0.5 ? 1 : -1)
     const speed = Math.min(MAX_DRIFT, (radius * 2) / scale(CROSSING.easy, CROSSING.hard, hard))
     const totalMs = Math.round(scale(TIME_LIMIT.easy, TIME_LIMIT.hard, hard))
@@ -123,18 +103,13 @@ export const movingPad: ObjectiveTemplate<MovingPadObjective> = {
   },
 }
 
-/**
- * The pad, a moment later. It bounces off the walls rather than wrapping: a
- * spot that leaves one side of the screen and appears at the other is a spot
- * six children lose, and this way it stays somewhere they can chase it to.
- */
+/** Bounces off the walls rather than wrapping, so it is never lost off one side of the screen. */
 function drift(objective: MovingPadObjective, zone: CircleZone, world: World, dtMs: number): void {
   const seconds = Math.max(0, dtMs) / 1000
   zone.x += objective.vx * seconds
   zone.y += objective.vy * seconds
 
-  // Wholly on the floor, always: half a pad off the screen is half a pad
-  // nobody can stand on.
+  // Kept wholly on the floor: half a pad off the screen is half a pad nobody can stand on.
   if (zone.x < zone.radius) {
     zone.x = zone.radius
     objective.vx = Math.abs(objective.vx)

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#10121a" />
-    <!-- Only the player page is installable; the TV gets its own wrapper. -->
+    <!-- Only the player page is installable. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/blob.svg" type="image/svg+xml" />
     <title>MAKE believe: controller</title>
@@ -13,13 +13,8 @@
   <body>
     <p id="link-status" class="link-status" role="status" hidden>Reconnecting…</p>
     <main class="phone">
-      <!-- The screen the page opens on, before any script has run. -->
       <section id="screen-join" class="screen">
         <h1>MAKE believe</h1>
-        <!--
-          The whole of getting in. There is one world, this page came from it,
-          and which session of it this is gets settled on the socket.
-        -->
         <p class="hint">Name your blob — 5 letters — and pick a colour.</p>
         <form id="join-form" class="join-form">
           <input
@@ -35,11 +30,7 @@
             placeholder="Name"
             aria-label="Blob name"
           />
-          <!--
-            The swatches are built from the palette the TV sends: which colours
-            there are and who has them is the world's business, not this page's,
-            so there is nothing here to go stale.
-          -->
+          <!-- Built from the palette the TV sends; the page holds no colours of its own. -->
           <div id="join-colours" class="swatches" role="group" aria-label="Blob colour"></div>
           <p id="join-full" class="hint" hidden>All ten blobs are out playing.</p>
           <button id="join-button" class="button" type="submit" disabled>Join</button>
@@ -50,31 +41,15 @@
       <section id="screen-waiting" class="screen" hidden>
         <h1>MAKE believe</h1>
         <p class="hint">Waiting for the TV…</p>
-        <!--
-          Nothing to do and nothing to press. The phone keeps trying on its
-          own, and the moment a TV answers this becomes the joystick.
-        -->
         <p class="waiting-detail">
           <span id="waiting-name" class="waiting-name">Blob</span> is ready.
         </p>
       </section>
 
-      <!--
-        The controller. The joystick is the whole point of it, so it gets the
-        middle of the screen; saying something and redrawing your blob are
-        always one tap away along the bottom. Quitting is the one thing that
-        undoes anything, so it lives behind the menu beside them rather than
-        under a thumb that is already down there driving.
-      -->
+      <!-- Quit undoes things, so it lives behind the menu rather than under a driving thumb. -->
       <section id="screen-play" class="screen screen-play" hidden>
         <p id="play-name" class="play-name">Blob</p>
-        <!--
-          What the world is asking for, echoed from the TV so a child looking
-          down is not lost. It is a line of text and no more: it covers
-          nothing, blocks nothing, is never tapped, and every tool below stays
-          exactly where it was whatever it says. The slot around it keeps its
-          height so the joystick never moves when it appears.
-        -->
+        <!-- The brief blocks nothing; its slot keeps its height so the joystick never moves. -->
         <div class="brief-slot">
           <div id="brief" class="brief" role="status" hidden>
             <p id="brief-headline" class="brief-headline"></p>
@@ -139,20 +114,12 @@
       <p id="draw-status" class="hint" role="status"></p>
     </div>
 
-    <!--
-      Everything that is not a tool. There is one thing in it today; it is a
-      list so that the next one costs nothing.
-    -->
     <div id="sheet-menu" class="sheet" hidden>
       <header class="sheet-head">
         <h2>Menu</h2>
         <button id="menu-close" class="close" type="button" aria-label="Back to the joystick">✕</button>
       </header>
       <div class="menu-items">
-        <!--
-          Six phones beeping at once is a lot. The switch is worth having on
-          the first day rather than after the next play test.
-        -->
         <button id="menu-sound" class="button button-quiet" type="button" aria-pressed="true">
           Sound: on
         </button>
@@ -160,10 +127,6 @@
       </div>
     </div>
 
-    <!--
-      Quitting is the only thing on the phone that undoes anything, so it says
-      plainly what goes and gives an equally easy way back to the joystick.
-    -->
     <div id="sheet-quit" class="sheet" hidden>
       <header class="sheet-head">
         <h2>Quit playing?</h2>

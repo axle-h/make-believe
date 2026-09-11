@@ -3,68 +3,37 @@ import { mergeWalls, type Obstacle } from './obstacles.js'
 import { intRange, type Rng } from './rng.js'
 
 /**
- * A maze, carved by a seeded recursive backtracker and emitted as plain
- * `Obstacle` rectangles — which already exist, are already solid, and already
- * slide a blob out of a wall that appears on top of it.
- *
- * It is a *course*, not a task: the race runs through one at the top of its
- * ladder. Which is where it belongs, because a maze on a television is not
- * really a maze — the whole of it is on screen at once and a child can see the
- * way through from where they are standing. What it is, is the most there can
- * be in the way, and "the most there can be in the way" is a rung of the
- * race's course rather than a game of its own.
- *
- * The area it fills is given to it, so the pads at either end of the race stay
- * clear. Only the walls *between* cells are emitted: the edges of the area are
- * the way in and the way out, and a wall as long as the floor is a wall that
- * shuts the floor in half.
+ * A seeded recursive backtracker emitted as plain `Obstacle`s, for the top of the race's course. Only walls
+ * between cells are emitted, so the edges of the area stay the way in and the way out.
  */
 
-/** A patch of floor to carve up: everything between the pads, top to bottom. */
 export interface MazeArea {
-  /** The left edge and the top edge of it. */
+  /** The top-left corner, unlike an obstacle's centre. */
   x: number
   y: number
   width: number
   height: number
 }
 
-/** How wide a corridor is at its narrowest: two blobs, near enough. */
+/** At its narrowest, two blobs. */
 export const MAZE_CORRIDOR = BLOB_SIZE * 2
-/** How thick a wall is. Thin enough to see past, thick enough to read. */
 const MAZE_WALL = 18
-/**
- * How likely each wall left standing after the carve is to be knocked through
- * as well: a loop or two, so that a dead end is rarely a proper trap.
- *
- * It is small because a maze this size has few walls to spare — four cells
- * across a race course leaves nine of them — and every one knocked through is
- * a corner the room does not have to turn. A knocked-through maze is a field.
- */
+/** A loop or two so a dead end is rarely a trap; small, because a knocked-through maze is a field. */
 const LOOPS = 0.05
 
-/**
- * The walls of a maze filling this area, in as many cells as will fit without
- * a corridor coming out tight. Every cell is reachable from every other, by
- * construction — so wherever the area is entered, there is a way across it.
- */
+/** Every cell is reachable from every other by construction, so there is always a way across. */
 export function carveMaze(id: string, rng: Rng, area: MazeArea): Obstacle[] {
   const columns = fits(area.width)
   const rows = fits(area.height)
-  // Merged before it leaves: a straight run of four cell walls is one wall,
-  // and drawing it as four is where the messy joins came from.
+  // A straight run of cell walls is merged into one wall so the joins draw cleanly.
   return mergeWalls(walls(id, carve(rng, columns, rows), columns, rows, area))
 }
 
-/** How many cells fit across this much floor with corridors still wide enough. */
 export function fits(across: number): number {
   return Math.max(2, Math.floor(across / (MAZE_CORRIDOR + MAZE_WALL)))
 }
 
-/**
- * Which walls are still standing, as two flags per cell: the one to its right
- * and the one below it.
- */
+/** Two flags per cell: the wall to its right and the wall below it. */
 interface Grid {
   right: boolean[]
   below: boolean[]
@@ -93,7 +62,6 @@ function carve(rng: Rng, columns: number, rows: number): Grid {
     path.push(way.cell)
   }
 
-  // And a few loops, so that a dead end is rarely a proper trap.
   for (let cell = 0; cell < cells; cell++) {
     for (const way of neighbours(cell, columns, rows)) {
       if (rng.next() >= LOOPS) continue
@@ -119,7 +87,6 @@ function neighbours(cell: number, columns: number, rows: number): Step[] {
   return ways
 }
 
-/** The wall between these two cells, gone. */
 function knockThrough(grid: Grid, cell: number, way: Step, columns: number): void {
   if (way.side === 'right') grid.right[cell] = false
   else if (way.side === 'left') grid.right[cell - 1] = false
@@ -128,10 +95,8 @@ function knockThrough(grid: Grid, cell: number, way: Step, columns: number): voi
 }
 
 /**
- * The maze as rectangles. Each wall runs half a thickness past its ends so
- * that the corners meet rather than leaving a nick a blob could squeeze
- * through, and is cut back at the edge of the area, where there is nothing to
- * meet and where a longer wall would start closing the way in.
+ * Each wall runs half a thickness past its ends so corners leave no nick to squeeze through,
+ * and is cut back at the edge of the area so it cannot start closing the way in.
  */
 function walls(id: string, grid: Grid, columns: number, rows: number, area: MazeArea): Obstacle[] {
   const cellW = area.width / columns

@@ -22,23 +22,9 @@ import {
 } from './types.js'
 
 /**
- * In order. A sandwich is bread, then cheese, then bread; a traffic light is
- * red, amber, green. The pieces are scattered about the floor and the house
- * asks for one at a time, in the only way that needs no reading: it shows the
- * next one, large.
- *
- * The mechanism is nearly free — `deliverInto` already takes a predicate, so
- * "only the next one is accepted" is one function — and the whole of the game
- * is in what happens when somebody brings the wrong thing: it is **dropped
- * where it stands**, with a blip for whoever was carrying it. Not a penalty,
- * not a reset, nothing lost. Just not yet.
- *
- * Matching is by what a thing *looks like* rather than by which parcel it is,
- * because a sandwich has two slices of bread and a child who fetched the far
- * one has not made a mistake. That is its picture and its colour together: a
- * traffic light has no pictures on it at all — it is red, amber and green, and
- * a glyph drawn over a red circle said nothing the circle did not — so the
- * house shows what it wants next by turning that colour.
+ * In order: the house shows the next piece it wants, large, by its picture and colour.
+ * A wrong piece is dropped where it stands with a blip, and nothing is lost.
+ * Pieces match by look, not by id, so either slice of bread will do.
  */
 
 /** One thing the house is waiting for, as it is drawn on the floor. */
@@ -49,24 +35,19 @@ export interface Step {
 
 export interface InOrderObjective extends ObjectiveBase {
   kind: 'inOrder'
-  /** What it is making, for the headline. */
   making: string
   /** What it wants, in order: a picture and a colour, or a colour alone. */
   steps: Step[]
-  /** How many of them have arrived. */
   position: number
 }
 
 const TIME_LIMIT = { easy: 70_000, hard: 50_000 }
-/** The picture on the house is the whole instruction, so it is drawn like one. */
 const WANTED_SIZE = 56
 
 export const inOrder: ObjectiveTemplate<InOrderObjective> = {
   kind: 'inOrder',
   title: 'In order',
-  /** One blob fetching three things in a row is a queue of one. */
   minPlayers: 2,
-  /** Everything about it is fetch with one rule on top, so it comes after. */
   minLevel: 7,
 
   generate(context: GenerateContext): InOrderObjective {
@@ -83,8 +64,6 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
       height: across * 0.8,
       x: 0,
       y: 0,
-      // Both of these say what it wants next, and nothing else says anything.
-      // They are the instruction.
       colour: steps[0]?.colour ?? pick(rng, ZONE_COLOURS).hex,
       label: steps[0]?.glyph ?? '',
       labelSize: WANTED_SIZE,
@@ -93,9 +72,7 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
     house.x = at.x
     house.y = at.y
 
-    // A few small things in the way, once the room is well up the ladder.
-    // Placed after the house and before the pieces, so that nothing is put
-    // inside a wall and no wall lands on the house.
+    // After the house and before the pieces, so no wall lands on the house and no piece in a wall.
     const walls = mergeWalls(litter(context, hard, [house]))
 
     const carryables: Carryable[] = scatter(
@@ -116,9 +93,7 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
         home: null,
         carriedBy: null,
       }
-      // Left off entirely rather than set to nothing: the renderer makes no
-      // text object at all for a thing with no picture, and a traffic light is
-      // three plain coloured squares.
+      // Left off rather than set to '', so the renderer draws no text for a plain piece.
       if (step?.glyph !== undefined) piece.glyph = step.glyph
       return piece
     })
@@ -147,9 +122,6 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
     const house = objective.zones[0]
     if (!house) return
 
-    // Anything brought in out of turn is put down where it stands. The blip is
-    // for the child who carried it: "not yet" is worth hearing without having
-    // to look up, and it is the only thing that happens.
     for (const thing of objective.carryables) {
       if (thing.home !== null || thing.kind !== 'parcel' || thing.carriedBy === null) continue
       if (!contains(house, thing.x, thing.y) || wanted(objective, thing)) continue
@@ -158,8 +130,7 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
     }
 
     deliverInto(objective.carryables, objective.zones, (thing) => wanted(objective, thing))
-    // The house only ever accepts the thing it is showing, so how far along
-    // the room is is simply how much of it has arrived.
+    // Only the wanted piece is ever accepted, so position is the count delivered.
     objective.position = objective.carryables.filter((thing) => thing.home !== null).length
     const next = objective.steps[objective.position]
     if (next) {
@@ -185,7 +156,6 @@ export const inOrder: ObjectiveTemplate<InOrderObjective> = {
   },
 }
 
-/** Does this look like the thing the house is asking for right now? */
 function wanted(objective: InOrderObjective, thing: Carryable): boolean {
   const next = objective.steps[objective.position]
   if (!next) return false

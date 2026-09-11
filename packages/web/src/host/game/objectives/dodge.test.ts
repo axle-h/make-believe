@@ -8,11 +8,7 @@ import { joinPlayer } from '../testRoom.js'
 import { tick } from '../tick.js'
 import { dodge, type DodgeObjective } from './dodge.js'
 
-/**
- * Nobody is ever eliminated. Losing the last life makes a blob fuzzy — still
- * driving, no longer hittable — which is the same shape as being shoved off
- * the sumo island: a state you drive around in, not one you are let out of.
- */
+/** Nobody is eliminated: losing the last life makes a blob fuzzy, still driving and no longer hittable. */
 
 function room(count: number): GameState {
   const state = createGame(4)

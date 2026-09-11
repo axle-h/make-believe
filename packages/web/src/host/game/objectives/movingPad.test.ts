@@ -7,12 +7,6 @@ import { joinPlayer } from '../testRoom.js'
 import { radiusFor } from '../zones.js'
 import { MAX_DRIFT, movingPad, type MovingPadObjective } from './movingPad.js'
 
-/**
- * The spot, with legs. The pad is the first thing in the game that moves the
- * floor about, which is why it comes before the race and the maze: everything
- * after it moves something.
- */
-
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) joinPlayer(state, `p${index}`, `B${index}`)
@@ -30,7 +24,6 @@ function make(state: GameState, level = 2, seed = 9): MovingPadObjective {
   })
 }
 
-/** Where the pad is now. It is the only zone this task has. */
 function pad(objective: MovingPadObjective) {
   const zone = objective.zones[0]
   if (!zone || zone.shape !== 'circle') throw new Error('expected a circle')
@@ -59,10 +52,6 @@ describe('the pad that will not stay still', () => {
     expect(Math.hypot(pad(objective).x - from.x, pad(objective).y - from.y)).toBeGreaterThan(20)
   })
 
-  /**
-   * A spot that leaves one side of the screen and appears at the other is a
-   * spot six children lose. It bounces, and it stays wholly on the floor.
-   */
   it('bounces off the walls and stays on the floor, however long it runs', () => {
     for (let level = 1; level <= MAX_LEVEL; level++) {
       for (let seed = 0; seed < 6; seed++) {
@@ -96,15 +85,7 @@ describe('the pad that will not stay still', () => {
     expect(hard.holdMs).toBeGreaterThan(easy.holdMs)
   })
 
-  /**
-   * The promise the task rests on now: it is slow enough for the smallest
-   * child in the room to keep up with on foot, however big the pad gets. It
-   * used to be the other way round — the hold was always longer than a
-   * crossing, so that standing still could never work — and that sentence was
-   * protecting a rule about how the task ought to be played while the play
-   * test said it was not being played at all, because the pad outran a
-   * four-year-old.
-   */
+  /** Slow enough for the smallest child to keep up with on foot, however big the pad gets. */
   it('never drifts faster than a blob can walk, however big the room', () => {
     for (let level = 1; level <= MAX_LEVEL; level++) {
       for (let present = 2; present <= 10; present++) {
@@ -114,7 +95,6 @@ describe('the pad that will not stay still', () => {
     }
   })
 
-  /** And it never outruns the room chasing it, however big it gets. */
   it('drifts at well under the speed of the blobs chasing it', () => {
     for (let present = 2; present <= 10; present++) {
       const objective = make(room(present), MAX_LEVEL, present)
@@ -122,7 +102,6 @@ describe('the pad that will not stay still', () => {
     }
   })
 
-  /** However long the hold, there is time to get onto it and see it through. */
   it('asks for a hold that fits inside the time limit with room to spare', () => {
     for (let level = 1; level <= MAX_LEVEL; level++) {
       for (let present = 2; present <= 10; present++) {
@@ -132,7 +111,6 @@ describe('the pad that will not stay still', () => {
     }
   })
 
-  /** The whole room has to fit on it: it is the spot, and everybody stands on it. */
   it('is big enough for everybody, at every level and in every size of room', () => {
     for (let level = 1; level <= MAX_LEVEL; level++) {
       for (let present = 2; present <= 10; present++) {
@@ -153,13 +131,7 @@ describe('standing on it', () => {
     expect(objective.outcome).toBe('done')
   })
 
-  /**
-   * The room still has to move. A blob left where the pad *was* is off it by
-   * the time the count is up — which is the task — though a blob that happens
-   * to be standing where the pad is going, and is still there at the end, is a
-   * lucky blob rather than a bug. That is the whole of what changed when the
-   * pad was slowed down for the smallest child in the room.
-   */
+  /** A blob left where the pad was is off it by the end; one standing where it is going is merely lucky. */
   it('leaves a blob that stands where the pad used to be', () => {
     const state = room(3)
     const objective = make(state, MAX_LEVEL)
@@ -208,8 +180,7 @@ describe('what the phones are told', () => {
     const [first, ...rest] = activePlayers(state)
     first!.x = pad(objective).x
     first!.y = pad(objective).y
-    // The pad is wide enough for the whole room, so the others have to be put
-    // somewhere it plainly is not for the count to mean anything.
+    // The pad fits the whole room, so the others go somewhere it plainly is not.
     for (const player of rest) {
       player.x = WORLD_WIDTH - pad(objective).x
       player.y = WORLD_HEIGHT - pad(objective).y

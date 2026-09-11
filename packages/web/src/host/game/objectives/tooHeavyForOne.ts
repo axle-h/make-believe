@@ -19,29 +19,19 @@ import {
   type ObjectiveTemplate,
 } from './types.js'
 
-/**
- * Too heavy for one. A crate sits on the floor and will not move an inch for a
- * single blob, however hard it drives. Two of them leaning on it shift it by
- * the average of what the two of them are asking for — so it goes where the
- * two children agree it should go, and nowhere at all while they argue.
- *
- * It is the purest "this needs both of you" in the game: not two people doing
- * the same job in parallel, but one job that does not start until two of them
- * are on it. Of everything built out of carrying, this is the one worth having.
- */
+/** Too heavy for one: the crate moves only for two pushers, by the average of what they ask for. */
 
 export interface TooHeavyObjective extends ObjectiveBase {
   kind: 'tooHeavyForOne'
 }
 
-/** How far apart the crate and the spot start, as a share of the way out. */
+/** How far apart the crate and the spot start, as a share of the way to the edge. */
 const TRAVEL = { easy: 0.55, hard: 0.95 }
 const TIME_LIMIT = { easy: 60_000, hard: 45_000 }
 
 export const tooHeavyForOne: ObjectiveTemplate<TooHeavyObjective> = {
   kind: 'tooHeavyForOne',
   title: 'Too heavy for one',
-  /** Two, and it means two: the crate is built not to move for one. */
   minPlayers: 2,
   minLevel: 7,
 
@@ -49,10 +39,7 @@ export const tooHeavyForOne: ObjectiveTemplate<TooHeavyObjective> = {
     const hard = difficulty(context.level, MAX_LEVEL)
     const { rng } = context
 
-    // The crate at one end of the floor and the spot at the other, rather than
-    // both dropped at random and hoping: two children shoving a crate two feet
-    // is not the game, and a generator that keeps rolling until it likes the
-    // answer is one that can sit there rolling.
+    // Crate and spot either side of the middle, so the push is always a long one without rerolling.
     const angle = range(rng, 0, Math.PI * 2)
     const share = scale(TRAVEL.easy, TRAVEL.hard, hard)
     const reach = {
@@ -88,15 +75,7 @@ export const tooHeavyForOne: ObjectiveTemplate<TooHeavyObjective> = {
       remainingMs: totalMs,
       totalMs,
       zones: [spot],
-      /**
-       * **No litter here**, unlike the other three collecting tasks.
-       *
-       * A crate is not a blob: `pushOutOfObstacles` moves blobs out of walls
-       * and nothing at all keeps a crate out of one, so a crate shoved at a
-       * wall sails straight through it while the two children pushing it are
-       * squeezed out either side. A wall a crate ignores is worse than no wall,
-       * and the floor is 104 units of crate wide besides.
-       */
+      // No walls: `pushOutOfObstacles` moves blobs, not crates, so a crate would sail through one.
       obstacles: [],
       marks: [],
       carryables: [crate as Carryable],

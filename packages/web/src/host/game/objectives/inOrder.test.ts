@@ -10,12 +10,6 @@ import { joinPlayer } from '../testRoom.js'
 import { contains } from '../zones.js'
 import { inOrder, type InOrderObjective, type Step } from './inOrder.js'
 
-/**
- * Bread, cheese, bread. The house asks for one at a time by showing it, and
- * something brought out of turn is put down where it stands — not a penalty,
- * not a reset, just not yet.
- */
-
 function room(count: number): GameState {
   const state = createGame(1)
   for (let index = 1; index <= count; index++) joinPlayer(state, `p${index}`, `B${index}`)
@@ -33,11 +27,9 @@ function make(state: GameState, level = 7, seed = 5): InOrderObjective {
   })
 }
 
-/** Whether two steps look the same, which is the whole of how the house judges. */
 const alike = (step: Step, other: Step): boolean =>
   step.colour === other.colour && (step.glyph ?? '') === (other.glyph ?? '')
 
-/** How a piece on the floor looks, as a step. */
 const looks = (thing: { glyph?: string; colour: string }): Step =>
   thing.glyph === undefined || thing.glyph === '' ? { colour: thing.colour } : { glyph: thing.glyph, colour: thing.colour }
 
@@ -69,12 +61,6 @@ describe('laying it out', () => {
     expect(objective.headline).toBe(`Make the ${objective.making}!`)
   })
 
-  /**
-   * What the house shows is the whole instruction, so it is drawn like one.
-   * A traffic light has no pictures on it at all, so the house says what it
-   * wants by turning that colour — which is the same instruction, and one a
-   * three-year-old reads faster.
-   */
   it('shows the first thing it wants, large and in its colour', () => {
     const objective = make(room(2))
     const house = objective.zones[0]
@@ -132,14 +118,9 @@ describe('making it', () => {
     expect(objective.zones[0]?.colour).toBe(objective.steps[1]?.colour)
   })
 
-  /**
-   * The whole of the game. Nothing is lost, nothing is undone, nothing is
-   * reset: the piece is put down where it stands and the room tries again.
-   */
   it('drops one brought out of turn where it stands, and does not advance', () => {
     const state = room(2)
     const objective = make(state)
-    // Something that is not what the house is showing.
     const first = objective.steps[0] as Step
     const later = objective.steps.find((step) => !alike(step, first))
     if (!later) throw new Error('expected a sequence of more than one picture')
@@ -167,11 +148,7 @@ describe('making it', () => {
     expect(state.objectives.sounds).toEqual([{ to: 'p2', cue: 'miss' }])
   })
 
-  /**
-   * A sandwich has two slices of bread, and a child who fetched the far one
-   * has not made a mistake. Matching is by how a thing looks, never by which
-   * parcel it is.
-   */
+  /** Matching is by how a thing looks, never by which parcel it is. */
   it('takes either of two pieces that look the same', () => {
     const state = room(2)
     let objective = make(state)
@@ -186,7 +163,6 @@ describe('making it', () => {
     const both = objective.carryables.filter((thing) => alike(looks(thing), repeated))
     expect(both.length).toBeGreaterThan(1)
 
-    // The far one, brought first, is accepted exactly as the near one is.
     bring(state, objective, repeated)
     expect(objective.position).toBe(1)
   })
@@ -224,7 +200,6 @@ describe('what the phones are told', () => {
   })
 })
 
-/** The same corners fetch gets, for the same reason. In order unlocks at 7. */
 describe('in order: what is in the way', () => {
   it('gives a room at the top of the ladder something to carry things round', () => {
     let seen = 0

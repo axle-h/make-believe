@@ -58,7 +58,6 @@ describe('hot potato: generating', () => {
     expect(state.players.has(objective.it as string)).toBe(true)
     expect(objective.marks).toEqual([{ playerId: objective.it, badge: expect.any(String) }])
     expect(objective.outcome).toBe('running')
-    // Nothing on the floor: this one is entirely about who is touching whom.
     expect(objective.zones).toEqual([])
   })
 
@@ -77,26 +76,17 @@ describe('hot potato: generating', () => {
     expect(hard.graceMs).toBeLessThan(easy.graceMs)
   })
 
-  /**
-   * Two blobs is a tag-back rather than a chase: the potato has nowhere to go
-   * but back where it came from, and the joke needs somebody to run *to*.
-   */
   it('needs three blobs, and joins the ladder after the simplest task', () => {
     expect(hotPotato.minPlayers).toBe(3)
     expect(hotPotato.minLevel).toBeGreaterThan(1)
   })
 
-  /**
-   * A chase across an empty floor is whoever is quickest; a chase round a
-   * corner is a game. Every wall leaves a lane round it — a floor cut in two
-   * is a floor half the blobs cannot get out of.
-   */
+  /** Every wall leaves a lane round it, so no blob is ever cut off. */
   it('puts something on the floor to run round, and never a wall across it', () => {
     for (let seed = 0; seed < 40; seed++) {
       const objective = make(room(3), 5, seed)
       expect(objective.obstacles.length).toBeGreaterThan(0)
       for (const wall of objective.obstacles) {
-        // Room for two blobs to pass either side of it, whichever way it runs.
         expect(WORLD_WIDTH - wall.width).toBeGreaterThan(BLOB_SIZE * 2)
         expect(WORLD_HEIGHT - wall.height).toBeGreaterThan(BLOB_SIZE * 2)
       }
@@ -126,11 +116,7 @@ describe('hot potato: passing it on', () => {
     expect(objective.marks).toEqual([{ playerId: victim, badge: expect.any(String) }])
   })
 
-  /**
-   * Blobs are solid, so the two of them are still touching the moment it
-   * changes hands. Without a breather it would flick back and forth every
-   * frame and nobody would ever be chased anywhere.
-   */
+  /** Blobs still touch as it changes hands, so the grace period stops it flicking back every frame. */
   it('cannot be handed straight back', () => {
     const state = room(2)
     const objective = make(state)
@@ -142,7 +128,6 @@ describe('hot potato: passing it on', () => {
     hotPotato.step(objective, state, 50)
     expect(objective.it).toBe(victim)
 
-    // Still standing on top of each other, and it stays put.
     play(state, objective, objective.graceMs - 100)
     expect(objective.it).toBe(victim)
 
@@ -177,10 +162,6 @@ describe('hot potato: passing it on', () => {
     expect(objective.it).toBe(near!.playerId)
   })
 
-  /**
-   * A child who puts their phone down mid-chase must not take the game with
-   * them. The potato lands on somebody who is still here.
-   */
   it('finds it a new home when the blob holding it goes away', () => {
     const state = room(3)
     const objective = make(state)
@@ -220,10 +201,7 @@ describe('hot potato: the buzzer', () => {
     expect(objective.note).toContain(holder.name)
   })
 
-  /**
-   * Being caught with it is the joke, not a punishment: the buzzer is how this
-   * task finishes, so the room is credited with having played it.
-   */
+  /** The buzzer finishes the task as done, so the room is credited with having played it. */
   it('finishes rather than expires, so nothing is taken off anybody', () => {
     const state = room(3)
     const objective = make(state)
@@ -247,10 +225,6 @@ describe('hot potato: what the phones are told', () => {
     expect(brief?.colour).toBe(holder.colour)
   })
 
-  /**
-   * Who has it is only half of it: a three-year-old who cannot read needs to
-   * be told what to *do* about the blob whose name is in the line.
-   */
   it('says to run away, not merely who has it', () => {
     const state = room(3)
     const objective = make(state)
@@ -258,7 +232,6 @@ describe('hot potato: what the phones are told', () => {
     expect(hotPotato.briefs(objective, state)[0]?.detail).toContain('run away')
   })
 
-  /** Everybody hears the same thing: this one is played by looking up. */
   it('tells everybody the same thing', () => {
     const state = room(3)
     const objective = make(state)
@@ -267,12 +240,7 @@ describe('hot potato: what the phones are told', () => {
   })
 })
 
-/**
- * The other half of "make it obvious you have to avoid the potato": the TV
- * rings whoever is holding it. The ring itself is Phaser and is not unit
- * tested; that it names the right blob, follows the potato and goes when the
- * task is over is all model, and is here.
- */
+/** `danger` names who the TV rings; the ring itself is Phaser and untested. */
 describe('hot potato: the blob to keep away from', () => {
   it('is whoever is holding it, from the start', () => {
     const state = room(3)
@@ -294,7 +262,6 @@ describe('hot potato: the blob to keep away from', () => {
     expect(objective.danger).toEqual([victim])
   })
 
-  /** Being caught with it is the joke, and the joke stops when the buzzer goes. */
   it('is nobody once the task is over', () => {
     const state = room(3)
     const objective = make(state)

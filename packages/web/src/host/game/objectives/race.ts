@@ -15,99 +15,50 @@ import {
   type ObjectiveTemplate,
 } from './types.js'
 
-/**
- * The race. A wide start pad down the left, a finish pad down the right, and
- * something in the way. Everybody gathers on the start, then 3 — 2 — 1 — GO.
- *
- * **"No false starts" is not a rule.** It sounds like one — hold six joysticks
- * still for three seconds — and rule one says drive is live in every task, for
- * everybody, throughout. So there is no rule at all: the start pad has a
- * **gate** across its mouth, and the gate is taken away on GO. Every joystick
- * works the whole time, a blob shoving at the gate is a blob doing exactly
- * what it should, and nobody can jump the gun because there is a wall there.
- * The floor explains it, which is how find-your-own-pad and the two-sized pad
- * work too.
- *
- * **It is done when everybody present is home**, not when the first one is.
- * That is what keeps a race inside the rules: the room is racing the course,
- * there is a winner in it, and the last child home still finishes rather than
- * being stopped.
- */
+// No false starts is a gate across the start pad, taken away on GO, never a joystick ignored.
 
 export interface RaceObjective extends ObjectiveBase {
   kind: 'race'
-  /** Gathering on the start line, counting down, or off. */
   phase: 'gathering' | 'counting' | 'racing'
-  /** How long the room has been gathering, for the patience below. */
   gatheredMs: number
-  /** What is left of the countdown. */
   countdownMs: number
   /** The last whole second counted out, so it is said once. */
   counted: number | null
-  /** Who got there first, by name, once anybody has. */
+  /** A name, not a `playerId`. */
   firstHome: string | null
-  /** Everybody who has finished, by `playerId`. */
   home: string[]
 }
 
-/** Worn beside the name of everybody who is home. */
 export const HOME_BADGE = '🏁'
 
-/**
- * How long the world waits for a room to gather before it counts down anyway.
- *
- * "No time limit" means no pressure, not an evening that can stall. A child
- * who has put the phone down is already excluded — `activePlayers` does that —
- * but one who is present and dawdling must not be able to hold the room.
- */
+/** A room that is present but dawdling counts down anyway after this, so nobody can stall it. */
 const PATIENCE_MS = 20_000
 /** Three, two, one, go: one second each. */
 const COUNTDOWN_MS = 4_000
-/**
- * How long the race itself gets, once it has started. It is the one limit in
- * the game that *grows* with the level rather than tightening, because what
- * grows with the level here is the course — and it is not over until the last
- * child is home.
- */
+/** Grows with the level rather than tightening, because the course does. */
 const TIME_LIMIT = { easy: 45_000, hard: 50_000 }
-/** How many things are in the way. */
 const BLOCKS = { easy: 2, hard: 4 }
-/** How wide a block is, and how much of the floor's height it takes. */
 const BLOCK_WIDTH = 34
 const BLOCK_SHARE = { easy: 0.42, hard: 0.58 }
-/**
- * How hard the world has to be before the course starts moving, then turning,
- * then stops being a handful of bars and becomes a maze. On an eight-rung
- * ladder that is bars up to level 5, a turning bar at 6, and a maze at 7 and 8.
- */
+/** Bars, then bobbing bars, then a turning bar, then a maze. */
 const BOBBING_FROM = 0.4
 const SPINNING_FROM = 0.65
 const MAZE_FROM = 0.85
-/** How far a bobbing bar slides each way, and how long it takes to come back. */
 const BOB_REACH = 110
 const BOB_PERIOD_MS = 3_600
-/** How long the turning bar is, and how fast it goes round. */
 const SPIN_LENGTH = 420
 const SPIN_SPEED = { easy: 0.5, hard: 0.9 }
 
 export const race: ObjectiveTemplate<RaceObjective> = {
   kind: 'race',
   title: 'The race',
-  /** One blob racing itself is a stopwatch. */
   minPlayers: 2,
-  /**
-   * Low on the ladder: it needs no reading at all, only legs. Not the *first*
-   * rung, though — that one is deliberately a room learning one thing, and a
-   * new room has enough to work out without a starting gate as well.
-   */
   minLevel: 3,
 
   generate(context: GenerateContext): RaceObjective {
     const hard = difficulty(context.level, MAX_LEVEL)
     const { world } = context
-    // Tall pads down each edge, but not the whole height: a blob has to be
-    // able to get round the end of one to reach the course, and a pad that
-    // reaches the top and bottom walls is one nobody can leave sideways.
+    // Short of the full height, so a blob can get round the end of a pad.
     const tall = world.height - BLOB_SIZE * 3
     const wide = BLOB_SIZE * 2.2
     const start: RectZone = {
@@ -135,13 +86,10 @@ export const race: ObjectiveTemplate<RaceObjective> = {
       headline: 'To the start line!',
       remainingMs: totalMs,
       totalMs,
-      // No clock at all while they gather: a countdown running while people
-      // arrive is a countdown that punishes whoever was slowest.
+      // No clock while they gather, or it punishes whoever was slowest to arrive.
       clock: 'held',
       zones: [start, finish],
-      // No gate yet: it goes up when the room is gathered. The course itself
-      // is down from the start, because it is the thing children look at
-      // while they gather and taking it away and putting it back is worse.
+      // The course is down from the start; the gate goes up only once the room is gathered.
       obstacles: course(context, hard, start, finish),
       marks: [],
       carryables: [],
@@ -170,8 +118,7 @@ export const race: ObjectiveTemplate<RaceObjective> = {
       objective.firstHome ??= player.name
       objective.marks = objective.home.map((playerId): Mark => ({ playerId, badge: HOME_BADGE }))
     }
-    // Everybody who is here, not merely the first: the room is racing the
-    // course, and the last one home still finishes.
+    // Done when everybody present is home, not the first: the last child still finishes.
     if (present.every((player) => objective.home.includes(player.playerId))) {
       objective.outcome = 'done'
       objective.note = objective.firstHome
@@ -219,15 +166,7 @@ export const race: ObjectiveTemplate<RaceObjective> = {
   },
 }
 
-/**
- * Waiting for the room, with no clock and nothing taken away from anybody.
- *
- * The gate goes up here rather than at the start, on both branches: there is
- * nothing for it to do while the room is still arriving, and a wall standing
- * across the floor is a wall somebody has to be let through. A blob dawdling
- * off the pad when patience runs out ends up on the far side of it — that is a
- * late arrival starting from where they stood, not a false start.
- */
+/** The gate goes up when the room is gathered, or patience runs out; a dawdler starts from where it stood. */
 function gather(
   objective: RaceObjective,
   present: Player[],
@@ -245,7 +184,6 @@ function gather(
   }
 }
 
-/** Three, two, one — and the gate goes. */
 function countIn(objective: RaceObjective, state: GameState, dtMs: number): void {
   objective.countdownMs -= dtMs
   const seconds = counting(objective)
@@ -257,36 +195,19 @@ function countIn(objective: RaceObjective, state: GameState, dtMs: number): void
 
   objective.phase = 'racing'
   objective.clock = 'running'
-  // The gate, and only the gate: everything else in the way stays there.
+  // Taken down on GO; the rest of the course stays.
   objective.obstacles = objective.obstacles.filter((wall) => !wall.id.endsWith('-gate'))
 }
 
-/**
- * The number to say out loud, with 0 meaning GO. The last second of the
- * countdown is GO's own, so three, two, one and go each get one.
- */
+/** 0 is GO, which gets the last second of the countdown to itself. */
 function counting(objective: RaceObjective): number {
   return Math.max(0, Math.ceil((objective.countdownMs - 1_000) / 1_000))
 }
 
 /**
- * The gate across the mouth of the start pad. It is what makes "no false
- * starts" a thing on the floor rather than a rule about joysticks.
- *
- * It spans the **whole floor**, top to bottom. The start pad is shorter than
- * the floor, so a gate the pad's own height left a lane over the top of it and
- * another under the bottom, and a gate with a lane past it is not a gate.
- *
- * Where it sits matters for one reason. `pushOutOfObstacles` slides a blob out
- * of a wall that appears on top of it along the shortest axis, so its centre is
- * at the pad's right edge: every blob that triggered the gate has its own
- * centre inside the pad, therefore left of the gate's centre, therefore slides
- * back into the pad over a few frames rather than being squeezed onto the
- * course.
- *
- * It is the one wall in the game that does shut the floor in half, and it is
- * allowed to because it lasts four seconds with the whole room already on the
- * near side of it. Nothing else may.
+ * Spans the whole floor top to bottom: the pad is shorter than the floor, and a gate with a lane over
+ * it is not a gate. Centred on the pad's right edge so `pushOutOfObstacles` slides blobs back onto the
+ * pad. The only wall allowed to cut the floor in half, because it lasts four seconds.
  */
 function gate(id: string, start: RectZone, world: World): Obstacle {
   return {
@@ -298,28 +219,7 @@ function gate(id: string, start: RectZone, world: World): Obstacle {
   }
 }
 
-/**
- * Something in the way, and four rungs of it.
- *
- * At the bottom it is a few **bars**, each covering about half the floor's
- * height, alternately hung from the top and the bottom — whatever else they
- * are, there is always a gap the other way round. Then they **bob**, sliding
- * along their own line. Then the middle of the course is a **turning bar**
- * with a bobbing bar at each end, and the turning one gets the middle to
- * itself because it sweeps a circle: two things in the way that can reach each
- * other are two things that could pin a blob between them.
- *
- * And at the top it is a **maze**, which is the most there can be in the way.
- * A maze is not a game of its own on a television — the whole of it is on
- * screen at once and a child can see the way through from where they are
- * standing — but as the hardest thing between a start line and a finish line
- * it is exactly right, and it arrives with the gate, the countdown and the
- * rule that it is not over until the last child is home.
- *
- * Whatever the rung, there is always a way through: a maze is carved so that
- * every cell reaches every other, and a bar always leaves a lane the other
- * side of it. A course a blob cannot get through is a race nobody finishes.
- */
+/** Every rung leaves a way through: a bar leaves a lane the other side, and a maze connects every cell. */
 function course(
   context: GenerateContext,
   hard: number,
@@ -333,8 +233,6 @@ function course(
   const height = world.height * share
 
   if (hard >= MAZE_FROM) {
-    // Everything between the pads, carved up. The top and bottom of it are the
-    // floor's own edges; the way in and the way out are the ends.
     return carveMaze(context.id, rng, {
       x: from,
       y: 0,
@@ -344,8 +242,7 @@ function course(
   }
 
   if (hard >= SPINNING_FROM) {
-    // One at each end of the course and a turning bar between them, well clear
-    // of both. Nothing here can reach anything else.
+    // The turner has the middle to itself: two things that can reach each other could pin a blob.
     return [
       bar(context, 0, from, height, true, true),
       spinner(context, (from + to) / 2, world.height / 2, hard),
@@ -358,20 +255,12 @@ function course(
   const moving = hard >= BOBBING_FROM
   return Array.from({ length: count }, (_, index): Obstacle => {
     const middle = from + lane * (index + 0.5) + range(rng, -lane * 0.15, lane * 0.15)
-    // Hung from the top or from the bottom, alternately, with a jiggle so two
-    // goes at the same level are not twins.
     const top = (index + intRange(rng, 0, 1)) % 2 === 0
     return bar(context, index, middle, height, top, moving)
   })
 }
 
-/**
- * A bar hung from the top or the bottom of the floor, bobbing along its own
- * line if it is a moving one. It never bobs further than the room it has: the
- * gap the other side stays at least a blob and a half wide at both ends of the
- * travel, so there is always somewhere to be, which is the one thing this
- * must never take away.
- */
+/** The gap the other side stays at least a blob and a half wide at both ends of the bob. */
 function bar(
   context: GenerateContext,
   index: number,
@@ -399,18 +288,12 @@ function bar(
     reachX: 0,
     reachY: reach,
     periodMs: BOB_PERIOD_MS,
-    // Started somewhere along the way, so a row of them is not a chorus line.
     atMs: range(context.rng, 0, BOB_PERIOD_MS),
   }
   return obstacle
 }
 
-/**
- * A bar turning slowly about its middle. Its sweep is kept a blob's width off
- * the top and bottom walls, so there is always a lane above and below it
- * whichever way round it is: nothing may pin a child, and the course is what
- * guarantees that rather than the push-out code hoping.
- */
+/** Its sweep stays clear of the top and bottom walls, so a lane is always open whichever way round. */
 function spinner(context: GenerateContext, x: number, y: number, hard: number): Obstacle {
   const world = context.world
   const sweep = Math.min(SPIN_LENGTH / 2, world.height / 2 - BLOB_SIZE * 1.5)

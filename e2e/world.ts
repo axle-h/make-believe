@@ -6,18 +6,10 @@ import {
   type WebSocketRoute,
 } from '@playwright/test'
 
-/*
- * Driving a blob is a feedback loop — look at where it is, move the thumb, look
- * again — and a room is herded one blob at a time, because they are solid and
- * shove each other. Every await in a loop here is deliberately in a queue.
- */
+/* Driving is a feedback loop and a room is herded one blob at a time: every await in a loop is meant. */
 /* oxlint-disable no-await-in-loop */
 
-/**
- * Helpers for driving one TV and its phones. The assertions read the host's
- * `window.__game` seam rather than pixels: Phaser cannot be screenshot-diffed
- * sensibly, and the model is the thing that decides what is true anyway.
- */
+/** Helpers for one TV and its phones. Assertions read the host's `window.__game` seam, never pixels. */
 
 /** The blob's side length in world units, mirroring the model's own constant. */
 export const BLOB_SIZE = 72
@@ -39,7 +31,6 @@ export interface PlayerSnapshot {
   skinKey: string | null
 }
 
-/** A patch of floor the objective has put down. */
 export interface ZoneSnapshot {
   id: string
   /** A house is a rectangle with a roof drawn on it; the body is what counts. */
@@ -52,14 +43,12 @@ export interface ZoneSnapshot {
   colour: string
 }
 
-/** A wall on the floor. Blobs cannot drive through one. */
 export interface ObstacleSnapshot {
   id: string
   x: number
   y: number
   width: number
   height: number
-  /** Turned about its own middle, for the one bar in the game that turns. */
   angle?: number
 }
 
@@ -75,7 +64,6 @@ export interface CarryableSnapshot {
   x: number
   y: number
   colour: string
-  /** What it actually is — an apple, a bone — drawn over it. */
   glyph?: string
   /** The zone it has been delivered to, or `null` while it is still out. */
   home: string | null
@@ -85,7 +73,6 @@ export interface CarryableSnapshot {
   pushedBy?: string[]
 }
 
-/** Something drifting across the floor to be got out of the way of. */
 export interface HazardSnapshot {
   id: string
   x: number
@@ -134,14 +121,9 @@ declare global {
       snapshot: () => GameSnapshot
       /** The texture each blob is actually wearing, keyed by playerId. */
       worn: () => Record<string, string>
-      /** The world the relay gave this TV. Nothing on screen ever shows it. */
       session: () => string
-      /** Every kind of task there is, so a test need keep no list of its own. */
       kinds: () => string[]
-      /**
-       * The live world. Nothing in this suite reads it — `snapshot()` is for
-       * that — and only `askFor` writes to it. See what that says about why.
-       */
+      /** The live world. Only `askFor` writes to it and nothing reads it: `snapshot()` is for that. */
       state: { objectives: { level: number; current: unknown } }
     }
   }
@@ -149,7 +131,6 @@ declare global {
 
 export interface Host {
   page: Page
-  /** The session the relay minted when this TV attached. */
   session: string
 }
 
@@ -157,27 +138,13 @@ export interface Player {
   page: Page
   playerId: string
   name: string
-  /**
-   * Every socket this phone has opened, newest last. They are proxied straight
-   * through to the real server; the test only holds them so that it can pull
-   * the live one out, which is the one thing a browser will not do to order.
-   */
+  /** Every socket this phone opened, newest last: proxied through, held only to pull the live one. */
   sockets: WebSocketRoute[]
 }
 
-/**
- * One evening's worth of browser contexts, closed together when the test ends.
- * Leaving one open is not a tidiness matter: a TV page that is still loaded
- * reconnects, takes the single world back from the next test, and both tests
- * lose it.
- */
+/** Contexts closed together at the end: a TV page left loaded would take the world from the next test. */
 export interface Party {
   openHost(): Promise<Host>
-  /**
-   * A phone joins. There is no code to carry across from the TV: the page it
-   * is served is the only world there is, and which session of it this is gets
-   * settled on the socket.
-   */
   joinAs(name: string, colour?: string): Promise<Player>
   /** A phone opened at an arbitrary address, for the cases that never join. */
   openPhone(path: string): Promise<Page>
@@ -210,8 +177,7 @@ async function openHost(open: OpenPage): Promise<Host> {
   const page = await open()
   await page.goto('/host/')
   await expect(page.locator('#qr svg')).toBeVisible()
-  // The session is nowhere on the TV — nothing shows it and nothing needs to —
-  // so the test reads it from the same seam it reads the world from.
+  // Nothing on the TV shows the session, so it is read from the seam.
   await expect.poll(() => hostSession(page)).toMatch(/^[A-Z2-9]{4}$/)
   return { page, session: await hostSession(page) }
 }
@@ -225,25 +191,20 @@ export function hostSession(page: Page): Promise<string> {
   })
 }
 
-/**
- * Who this phone is right now. It is read rather than remembered because a
- * phone that meets a new world throws its identity away and mints another.
- */
+/** Who this phone is now: read, not remembered, because a phone meeting a new world mints another. */
 export function playerIdNow(page: Page): Promise<string | null> {
   return page.evaluate(() => window.localStorage.getItem('make-believe.playerId'))
 }
 
 async function joinAs(open: OpenPage, name: string, colour?: string): Promise<Player> {
   const page = await open()
-  // Watch the phone's sockets without standing in their way: everything is
-  // forwarded to the real relay, so the phone cannot tell the difference.
+  // Forwarded to the real relay, so the phone cannot tell it is being watched.
   const sockets: WebSocketRoute[] = []
   await page.routeWebSocket(/\/ws\?/, (ws) => {
     ws.connectToServer()
     sockets.push(ws)
   })
-  // Nothing but the address. A phone that has scanned the QR code once, or
-  // installed the page, opens exactly this.
+  // Nothing but the address, which is what an installed phone opens.
   await page.goto('/')
   await pickAndJoin(page, name, colour)
   const playerId = await playerIdNow(page)
@@ -251,14 +212,7 @@ async function joinAs(open: OpenPage, name: string, colour?: string): Promise<Pl
   return { page, playerId: playerId as string, name, sockets }
 }
 
-/**
- * Type a name, tap a colour, and get in — which is the whole of getting in.
- *
- * The join screen waits for the TV before it can be filled in at all: the row
- * of swatches is the palette the TV sent, so a phone with no world to talk to
- * has nothing to choose from. With no colour named it takes the first one
- * going, which is what a child does.
- */
+/** Name, colour (the first free one if none is named), join. The swatches wait for the TV's palette. */
 export async function pickAndJoin(page: Page, name: string, colour?: string): Promise<void> {
   await expect(page.locator('#screen-join')).toBeVisible()
   await page.fill('#name-input', name)
@@ -271,18 +225,13 @@ export async function pickAndJoin(page: Page, name: string, colour?: string): Pr
   await expect(page.locator('#screen-play')).toBeVisible()
 }
 
-/** Every colour going on this phone's join screen, in palette order. */
 export function freeColours(page: Page): Promise<string[]> {
   return page.locator('#join-colours .swatch:not(:disabled)').evaluateAll((nodes) =>
     nodes.map((node) => (node as HTMLElement).dataset.colour ?? ''),
   )
 }
 
-/**
- * Yank the phone's connection away, as walking out of wifi range does, and
- * wait for the client to open the next one. Nothing on the page is touched:
- * the phone does not know it happened and nobody has pressed anything.
- */
+/** Pull the live socket, as leaving wifi does, and wait for the next; nothing on the page is touched. */
 export async function dropSocket(player: Player): Promise<void> {
   const live = player.sockets.at(-1)
   if (!live) throw new Error('the phone has not connected to anything')
@@ -336,11 +285,7 @@ export async function objectiveNow(host: Host): Promise<ObjectiveSnapshot | null
   return (await snapshot(host)).objectives.objective
 }
 
-/**
- * Wait until the world is actually asking for something, and say what. A task
- * that has just been finished stays on screen cheering for a moment, so "there
- * is an objective" and "there is one to play" are not the same question.
- */
+/** Wait for a running task: one just finished stays on screen cheering for a moment. */
 export async function runningObjective(host: Host, timeout = 30_000): Promise<ObjectiveSnapshot> {
   await expect.poll(async () => (await objectiveNow(host))?.outcome, { timeout }).toBe('running')
   const objective = await objectiveNow(host)
@@ -366,14 +311,8 @@ export function briefTint(page: Page): Promise<string> {
 }
 
 /**
- * Drive a blob to a spot on the floor with its joystick, the way a child does
- * — thumb down, steering, thumb up on arrival. Nothing is teleported: the
- * whole point is that the objective is solved through the controller.
- *
- * Returns whether it got there. Blobs are solid and shove each other, so a
- * blob can be wedged behind two others for a while; that is the game working,
- * not the test failing, and the caller is the one that decides what to do
- * about it.
+ * Drive a blob to a spot with its joystick; nothing is teleported. Returns false if it stayed wedged
+ * behind solid blobs, which is the game working and for the caller to deal with.
  */
 export async function driveTo(
   host: Host,
@@ -397,9 +336,7 @@ export async function driveTo(
       const distance = Math.hypot(gap.x, gap.y)
       if (distance <= within) return true
 
-      // Blobs are solid, so a straight line can end up wedged behind one.
-      // Going sideways for a moment is what a child does about that, and it
-      // tries the other way round if the first one does not free them.
+      // Wedged behind a solid blob: go sideways a while, then the other way round.
       stuck = last && Math.hypot(blob.x - last.x, blob.y - last.y) < 4 ? stuck + 1 : 0
       last = { x: blob.x, y: blob.y }
       const sideways = stuck > 2 && stuck % 8 < 4
@@ -408,9 +345,7 @@ export async function driveTo(
         ? { x: (-gap.y / distance) * way, y: (gap.x / distance) * way }
         : { x: gap.x / distance, y: gap.y / distance }
 
-      // Ease off near the target so the blob does not sail past it — but never
-      // below the pad's dead zone, where the phone reads the thumb as centred
-      // and the blob stops dead short of where it was going.
+      // Ease off near the target, but never below the pad's dead zone, where the blob stops short.
       const push = sideways ? 1 : Math.max(0.45, Math.min(1, distance / 150))
       await player.page.mouse.move(
         centre.x + heading.x * reach * push,
@@ -420,37 +355,27 @@ export async function driveTo(
     }
     return false
   } finally {
-    // The thumb comes off whatever happened, so the blob is not left running.
+    // Thumb off whatever happened, so the blob is not left running.
     await player.page.mouse.up()
   }
 }
 
 /**
- * Solve "everybody on the spot" the way the room does: read the spot off the
- * TV, drive every blob onto it, and stand still while the TV counts the hold.
- *
- * It reads the objective afresh each time round, because one that runs out of
- * time is replaced by another — herding onto a spot that is no longer there is
- * the one way this could wait forever.
+ * Solve "everybody on the spot" through the joysticks. The spot is re-read every attempt: an expired
+ * task is replaced, and herding onto a spot that is gone would wait for ever.
  */
 export async function solveTheSpot(host: Host, crowd: Player[], attempts = 8): Promise<void> {
-  // Whatever they have already earned; this call is about earning some more.
   const before = (await snapshot(host)).objectives.score
   for (let attempt = 0; attempt < attempts; attempt++) {
     const spot = (await objectiveNow(host))?.zones[0]
     if (spot) await herdOnto(host, crowd, spot)
-    // Standing still is the rest of it; the TV counts the hold.
     await host.page.waitForTimeout(2_000)
     if ((await snapshot(host)).objectives.score > before) return
   }
   throw new Error('the room never managed to stand on the spot together')
 }
 
-/**
- * Drive every blob in the room onto one patch of floor, each to its own place
- * on it so that arriving does not shove whoever got there first back off.
- * Whoever is already standing where they are wanted is left alone.
- */
+/** Drive every blob to its own place on a zone; one already there is left alone. */
 export async function herdOnto(host: Host, crowd: Player[], zone: ZoneSnapshot): Promise<void> {
   for (const [player, target] of await placesOn(host, zone, crowd)) {
     const blob = await playerNamed(host, player.name)
@@ -461,10 +386,8 @@ export async function herdOnto(host: Host, crowd: Player[], zone: ZoneSnapshot):
 }
 
 /**
- * Somewhere on the spot for each blob to stand: spread evenly round the
- * middle, far enough apart that arriving does not shove whoever got there
- * first back off it, and each blob given the nearest one going — blobs are
- * solid, and two of them swapping sides get wedged against each other.
+ * Places round the middle far enough apart that arriving shoves nobody off, each blob given the
+ * nearest free one: two solid blobs swapping sides wedge against each other.
  */
 async function placesOn(
   host: Host,
@@ -500,20 +423,13 @@ async function placesOn(
   return given
 }
 
-/**
- * Open one of the tools over the joystick. They are always there — the TV has
- * no say in what a phone is doing.
- */
+/** Open a tool over the joystick; they are always there, whatever the TV is asking for. */
 export async function openTool(player: Player, tool: 'say' | 'draw' | 'menu'): Promise<void> {
   await player.page.click(`#tool-${tool}`)
   await expect(player.page.locator(`#sheet-${tool}`)).toBeVisible()
 }
 
-/**
- * Finish with a blob, as a child who has had enough does: the menu, Quit, and
- * then the button that confirms it. The phone is back on the join screen
- * afterwards, holding nothing it held before.
- */
+/** Menu, Quit, confirm: the phone ends on the join screen holding nothing it held before. */
 export async function finishPlaying(player: Player): Promise<void> {
   await openTool(player, 'menu')
   await player.page.click('#menu-quit')
@@ -522,11 +438,7 @@ export async function finishPlaying(player: Player): Promise<void> {
   await expect(player.page.locator('#screen-join')).toBeVisible()
 }
 
-/**
- * The same phone comes back as somebody new. There is nothing to it beyond a
- * name — the phone minted a fresh identity the moment it finished, so this is
- * a different blob however familiar the child holding it is.
- */
+/** The same phone joins as a new blob: it minted a fresh identity when it finished. */
 export async function joinAgainAs(player: Player, name: string): Promise<Player> {
   await pickAndJoin(player.page, name)
   const playerId = await playerIdNow(player.page)
@@ -535,19 +447,9 @@ export async function joinAgainAs(player: Player, name: string): Promise<Player>
 }
 
 /**
- * Ask the world for a particular task, at the level that unlocks it.
- *
- * This is the **only** thing in the suite that reaches past the UI, and it is
- * here because the alternative is not a slower test but no test at all: sumo
- * unlocks at level 5 and keep the crown at the top of the ladder, which is
- * twelve and twenty-one solved tasks away, at up to a minute a rung and with a
- * bespoke solver needed for every task in between.
- *
- * It sets the level and throws away whatever is running until the director
- * makes the one wanted. That is the whole of it: the task itself is generated
- * by the real director, solved through real joysticks, and judged by the real
- * TV. Nothing here stands in for the ladder — that is climbed for real, three
- * tasks at a time, in "the room levels up".
+ * The only seam in the suite that reaches past the UI: it sets the level and puts tasks back until
+ * the director asks for the one wanted. Nothing may add a second such seam, or use this one to skip
+ * the ladder climb in "the room levels up".
  */
 export async function askFor(
   host: Host,
@@ -561,8 +463,7 @@ export async function askFor(
       const game = window.__game
       if (!game) throw new Error('the host page has no test seam')
       game.state.objectives.level = wanted
-      // Hand back whatever is running, which is what the director itself does
-      // when a room empties out below what a task needs.
+      // What the director itself does when a room empties below what a task needs.
       game.state.objectives.current = null
     }, level)
     const objective = await runningObjective(host, 15_000)
@@ -571,11 +472,7 @@ export async function askFor(
   throw new Error(`the world never got round to asking for ${kind}`)
 }
 
-/**
- * Every kind of task there is, read off the TV's own registry. A test that
- * wants to cover all of them should not have a list of its own to keep up to
- * date: adding the eighteenth would silently not be covered.
- */
+/** Every kind of task, read off the TV's registry so that a new one is covered without a list here. */
 export function everyKind(host: Host): Promise<string[]> {
   return host.page.evaluate(() => {
     const game = window.__game
@@ -596,13 +493,7 @@ export async function zoneNow(host: Host, id: string): Promise<ZoneSnapshot> {
   return zone
 }
 
-/**
- * Whichever of these blobs is nearest to `from`, on the floor as it stands.
- *
- * There are walls on the floor now, and the blob furthest away may be round
- * the wrong side of one. A child chases whoever is closest, and so does a test
- * that wants to prove what happens when one blob reaches another.
- */
+/** Whichever of these blobs is nearest `from`; the furthest may be round the wrong side of a wall. */
 export async function nearestBlob(host: Host, from: Player, others: Player[]): Promise<Player> {
   const here = await playerNamed(host, from.name)
   let closest: Player | null = null
@@ -618,15 +509,7 @@ export async function nearestBlob(host: Host, from: Player, others: Player[]): P
   return closest
 }
 
-/**
- * Drive one blob at the others until it reaches one of them, going again at
- * whoever is nearest each time.
- *
- * A single run at somebody used to be enough on an empty floor. It is not any
- * more: a blob can end up round the wrong side of a wall, and `driveTo` gives
- * up after a while rather than steering for ever. Going again is what a child
- * does about that, and it is still the joystick doing all of it.
- */
+/** Drive at whoever is nearest until one is reached, going again when `driveTo` gives up at a wall. */
 export async function chaseSomebody(
   host: Host,
   chaser: Player,
@@ -641,16 +524,7 @@ export async function chaseSomebody(
   return false
 }
 
-/**
- * That a blob still answers its joystick, whatever is on the floor.
- *
- * It tries each way in turn and is satisfied by the first that moves the blob,
- * because the question is "does the joystick still drive" and not "is this
- * particular direction open". Several tasks put walls down — hot potato and
- * keep the crown both get an arena, and a bar across the middle is 794 units
- * wide at the top of the ladder — so a test that picks one direction and
- * insists on it is a test that passes on four layouts out of five.
- */
+/** That the joystick still drives, in whichever direction is open first: several tasks put walls down. */
 export async function expectDrives(host: Host, player: Player, name: string): Promise<void> {
   const ways = [
     { dx: 0, dy: 1 },

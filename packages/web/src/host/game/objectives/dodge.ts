@@ -13,56 +13,35 @@ import {
 } from './types.js'
 
 /**
- * Dodge. Things drift across the floor and a blob that is caught by one loses
- * a life. At zero it goes **fuzzy**: still driving, no longer hittable, and no
- * longer fuzzy the instant the task is over.
- *
- * That is the shape every "you are out" idea has to take here. Nobody is ever
- * eliminated and no task may put a child in a state they cannot drive out of,
- * so being hit three times is somewhere to drive about rather than a chair to
- * sit on — the same shape as being shoved off the sumo island.
- *
- * The room wins if anybody is still solid at the buzzer, which means the
- * youngest player hiding in a corner all game is a perfectly good plan and a
- * contribution.
+ * Dodge: a blob caught by a thrown thing loses a life. Nobody is out: losing the last life makes
+ * a blob fuzzy — still driving, not hittable — until the task ends. The room wins if anybody is solid.
  */
 
 export interface DodgeObjective extends ObjectiveBase {
   kind: 'dodge'
-  /** What is left of everybody's three, by `playerId`. */
   lives: Record<string, number>
-  /** How long each blob is still safe for after being caught, in ms. */
+  /** How long each blob is still safe for after being caught. */
   safeMs: Record<string, number>
-  /** How long until the next thing comes over. */
   nextMs: number
-  /** How often they come, and how fast, at this level. */
   everyMs: number
   speed: number
-  /** What is being thrown, for the brief and for the pictures. */
   things: string
   glyph: string
 }
 
-/** Worn by a blob that has run out of lives, and by one that still has some. */
 export const FUZZY_BADGE = '✨'
 export const LIFE_BADGE = '♥'
 
-/** Everybody starts with three. */
 const LIVES = 3
 /** How long after a hit a blob cannot be hit again: one tomato, one life. */
 const SAFE_MS = 1_800
-/**
- * How often something comes over, and how fast it crosses. Slowly, and not many
- * of them: a three-year-old has to be able to watch one coming and drive out of
- * the way, which is the whole game. A tomato nobody can see coming is not a
- * harder game, it is a game nobody is playing.
- */
+/** Slow and sparse enough that a three-year-old can watch one coming and drive out of the way. */
 const EVERY = { easy: 1_400, hard: 900 }
 const SPEED = { easy: 140, hard: 220 }
 const TIME_LIMIT = { easy: 35_000, hard: 45_000 }
 const HAZARD_SIZE = 44
 
-/** What is being thrown. All of it friendly: nothing here is a weapon. */
+/** All of it friendly: nothing here is a weapon. */
 export const THROWN = [
   { things: 'tomatoes', glyph: '🍅' },
   { things: 'raindrops', glyph: '💧' },
@@ -74,7 +53,6 @@ export const THROWN = [
 export const dodge: ObjectiveTemplate<DodgeObjective> = {
   kind: 'dodge',
   title: 'Dodge',
-  /** One blob dodging on its own is a screensaver. */
   minPlayers: 2,
   minLevel: 5,
 
@@ -113,7 +91,6 @@ export const dodge: ObjectiveTemplate<DodgeObjective> = {
   step(objective, state, dtMs) {
     const present = activePlayers(state)
     if (present.length === 0) return
-    // A blob that arrived halfway through gets its three like everybody else.
     for (const player of present) objective.lives[player.playerId] ??= LIVES
 
     objective.hazards = stepHazards(objective.hazards ?? [], state.world, dtMs)
@@ -127,14 +104,11 @@ export const dodge: ObjectiveTemplate<DodgeObjective> = {
       const safe = Math.max(0, (objective.safeMs[player.playerId] ?? 0) - dtMs)
       objective.safeMs[player.playerId] = safe
       const left = objective.lives[player.playerId] ?? LIVES
-      // A fuzzy blob is not there to be hit, and neither is one that has just
-      // been: one tomato may cost one life and no more.
+      // A fuzzy blob cannot be hit, and a blob just hit is safe for `SAFE_MS`.
       if (left <= 0 || safe > 0) continue
       if (!objective.hazards.some((hazard) => catches(hazard, player))) continue
       objective.lives[player.playerId] = left - 1
       objective.safeMs[player.playerId] = SAFE_MS
-      // You feel your own hit without looking down, which is the one place all
-      // evening where a private signal genuinely earns itself.
       state.objectives.sounds.push({ to: player.playerId, cue: 'hit' })
     }
 
@@ -145,11 +119,9 @@ export const dodge: ObjectiveTemplate<DodgeObjective> = {
 
     const solid = present.length - objective.fuzzy.length
     if (objective.remainingMs <= 0) {
-      // Anybody still standing wins it for the room.
       objective.outcome = solid > 0 ? 'done' : 'expired'
       objective.note = solid > 0 ? `${solid} of you dodged the lot!` : 'Everybody got splatted!'
     } else if (solid === 0) {
-      // Nothing left to dodge for. Cheerful, and out of the way.
       objective.outcome = 'expired'
       objective.note = 'Everybody got splatted!'
     }
@@ -170,13 +142,12 @@ export const dodge: ObjectiveTemplate<DodgeObjective> = {
   },
 }
 
-/** Everybody's lives, as hearts beside their name. */
+/** Everybody's lives as hearts beside their name, or the fuzzy badge at zero. */
 function pips(lives: Record<string, number>, only?: string[]): Mark[] {
   const marks: Mark[] = []
   for (const [playerId, left] of Object.entries(lives)) {
     if (only && !only.includes(playerId)) continue
     if (left <= 0) {
-      // Fuzzy rather than out: it is a thing to drive about in, not a chair.
       marks.push({ playerId, badge: FUZZY_BADGE })
       continue
     }
@@ -185,11 +156,7 @@ function pips(lives: Record<string, number>, only?: string[]): Mark[] {
   return marks
 }
 
-/**
- * One more thing on its way over, from an edge and across the floor. It always
- * crosses rather than grazing a corner, so everything that appears is
- * something somebody has to get out of the way of.
- */
+/** A new thing from one edge, always crossing the floor rather than grazing a corner. */
 function thrownAt(objective: DodgeObjective, rng: Rng, world: World): Hazard {
   const fromLeft = rng.next() < 0.5
   const across = rng.next() < 0.5

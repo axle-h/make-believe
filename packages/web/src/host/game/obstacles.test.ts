@@ -32,7 +32,6 @@ const WALL: Obstacle = { id: 'w', x: 640, y: 360, width: 200, height: 40 }
 describe('standing in a wall', () => {
   it('knows a blob overlapping one from a blob beside it', () => {
     expect(insideObstacle(WALL, 640, 360)).toBe(true)
-    // Edge to edge is out: the blob's own width is half of the sum.
     expect(insideObstacle(WALL, 640, 360 + (BLOB_SIZE + WALL.height) / 2)).toBe(false)
     expect(insideObstacle(WALL, 640, 360 + (BLOB_SIZE + WALL.height) / 2 - 1)).toBe(true)
   })
@@ -63,11 +62,7 @@ describe('pushing a blob out of a wall', () => {
     expect(player.y).toBe(360)
   })
 
-  /**
-   * The walls arrive with the task, on top of whoever was standing there. A
-   * blob that vanished and reappeared somewhere else would be a blob whose
-   * child has no idea what happened to it.
-   */
+  /** A wall arriving on top of a blob slides it out over frames rather than teleporting it. */
   it('slides a blob out over several frames rather than teleporting it', () => {
     const state = room(1)
     const big: Obstacle = { id: 'w', x: 640, y: 360, width: 400, height: 400 }
@@ -114,7 +109,6 @@ describe('pushing a blob out of a wall', () => {
 })
 
 
-/** A bar that slides up and down its own line. */
 function bobbingBar(): Obstacle {
   return {
     id: 'bar',
@@ -126,13 +120,7 @@ function bobbingBar(): Obstacle {
   }
 }
 
-/**
- * Walls that move. The bar the race puts in the middle of its course is the
- * only thing in the game with an angle, and it is a real oriented box rather
- * than a row of little squares pretending to be a bar: the model is what the
- * e2e reads and what the TV draws, and the two must not disagree about where a
- * wall is.
- */
+/** Walls that move, and the turning bar as a real oriented box. */
 describe('a wall that moves', () => {
   it('comes back to where it started after a whole period', () => {
     const bar = bobbingBar()
@@ -152,8 +140,7 @@ describe('a wall that moves', () => {
       travelled.push(Math.abs(bar.drift?.dy ?? 0))
     }
 
-    // A quarter of the way round is the far end: it is barely moving there,
-    // and moving fastest through the middle. A sine is the whole of it.
+    // A quarter of the way round is the far end, where it is barely moving.
     expect(Math.min(...travelled)).toBeLessThan(Math.max(...travelled) / 3)
   })
 
@@ -187,10 +174,7 @@ describe('a wall that moves', () => {
 })
 
 describe('a wall that is turned', () => {
-  /**
-   * At every angle it can be at, and from every direction: the separation
-   * works in the bar's own frame and turns the answer back out again.
-   */
+  /** Separation works in the bar's own frame at every angle and from every direction. */
   it('puts a blob outside it, whichever way round it is', () => {
     for (let turn = 0; turn < 16; turn++) {
       const angle = (turn / 16) * Math.PI * 2
@@ -227,12 +211,10 @@ describe('a wall that is turned', () => {
     for (let frame = 0; frame < 40; frame++) {
       stepObstacles([bar], 50)
       pushOutOfObstacles(state, [bar], 50)
-      // The first few frames are it being slid out of where it was standing,
-      // which is deliberately not instant; after that it stays out.
+      // The first few frames are the deliberate slide out; after that it stays out.
       if (frame > 4) expect(insideObstacle(bar, blob.x, blob.y)).toBe(false)
     }
 
-    // And it has been carried somewhere, rather than left where it stood.
     expect(Math.hypot(blob.x - 640, blob.y - (360 - 150))).toBeGreaterThan(20)
   })
 })
@@ -245,13 +227,7 @@ const wall = (id: string, x: number, y: number, width: number, height: number): 
   height,
 })
 
-/**
- * One wall, drawn as one wall. A maze emits a rectangle per cell wall, and a
- * straight run of four of them brought four sets of rounded corners and four
- * outlines with it — which is what the messy joins in the third play test
- * were. Merging changes how many rectangles there are and not one pixel of
- * where the wall lies.
- */
+/** Merging changes how many rectangles there are and not one pixel of where the wall lies. */
 describe('folding a run of walls into one', () => {
   it('joins two that abut along the same line', () => {
     const merged = mergeWalls([wall('a', 100, 50, 18, 100), wall('b', 100, 150, 18, 100)])
@@ -288,10 +264,7 @@ describe('folding a run of walls into one', () => {
     expect(merged).toHaveLength(2)
   })
 
-  /**
-   * Two walls in the same place *now* are not the same wall if one of them is
-   * about to move, or is turned so that its edges are not where they look.
-   */
+  /** Moving or turned walls are never merged, even where they touch a still one. */
   it('never folds anything that moves or is turned', () => {
     const bobbing: Obstacle = {
       ...wall('b', 100, 150, 18, 100),

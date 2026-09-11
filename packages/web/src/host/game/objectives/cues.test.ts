@@ -15,19 +15,12 @@ import { askFor, stepObjectives } from './director.js'
 import type { FetchObjective } from './fetch.js'
 import type { Objective } from './types.js'
 
-/**
- * A cue is a *difference*: what changed between one step and the next. Nothing
- * asks a task to report anything, which is why adding the thirteenth earns its
- * noises for free — and why nothing can repeat every frame by accident.
- */
-
 function room(count: number): GameState {
   const state = createGame(3)
   for (let index = 1; index <= count; index++) joinPlayer(state, `p${index}`, `B${index}`)
   return state
 }
 
-/** Put a fetch task up and hand it over, with everything still on the floor. */
 function fetching(state: GameState): FetchObjective {
   expect(askFor(state, 'fetch')).toBe(true)
   return state.objectives.current as FetchObjective
@@ -52,10 +45,6 @@ describe('what is worth a noise', () => {
     expect(cuesFrom(before, objective)).toEqual([{ to: 'p1', cue: 'pickup' }])
   })
 
-  /**
-   * Arriving is what puts a parcel down, so by the time anybody looks nobody
-   * is holding it. The cue goes to whoever was holding it a moment before.
-   */
   it('is a delivery, for whoever was carrying it a moment ago', () => {
     const state = room(2)
     const objective = fetching(state)
@@ -98,10 +87,6 @@ describe('what is worth a noise', () => {
   })
 })
 
-/**
- * Six phones beeping at once is a lot, and a blob dragged through a heap of
- * parcels should not sound like a fire alarm.
- */
 describe('how often one phone may beep', () => {
   it('lets the first through and holds the next for a quarter of a second', () => {
     const limiter = createCueLimiter()
@@ -143,7 +128,6 @@ describe('how often one phone may beep', () => {
   })
 })
 
-/** Put "everybody on the spot" up and actually solve it, as a room would. */
 function standOnTheSpot(state: GameState): Sound[] {
   expect(askFor(state, 'onTheSpot')).toBe(true)
   const spot = state.objectives.current?.zones[0]
@@ -159,7 +143,6 @@ function standOnTheSpot(state: GameState): Sound[] {
   return heard
 }
 
-/** And the ones the director makes on its own account, out of `stepObjectives`. */
 describe('the noises the world itself makes', () => {
   it('cheers for everybody when the room does it', () => {
     const heard = standOnTheSpot(room(2))
@@ -177,10 +160,6 @@ describe('the noises the world itself makes', () => {
     expect(sounds).toContainEqual({ to: '*', cue: 'miss' })
   })
 
-  /**
-   * A rung takes the noise as well as the headline: it is the bigger news, and
-   * a cheer and a fanfare in the same frame is one of them wasted.
-   */
   it('makes one noise for everybody when the room goes up a rung', () => {
     const state = room(2)
     state.objectives.streak = LEVEL_UP_AFTER - 1
@@ -192,7 +171,6 @@ describe('the noises the world itself makes', () => {
     expect(heard).not.toContainEqual({ to: '*', cue: 'win' })
   })
 
-  /** A number to say out loud together, and one blip to say each with. */
   it('counts the last few seconds out once each, not once a frame', () => {
     const state = room(2)
     const objective = fetching(state)

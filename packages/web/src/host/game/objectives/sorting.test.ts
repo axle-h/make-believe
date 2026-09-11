@@ -111,10 +111,7 @@ describe('sorting', () => {
   })
 })
 
-/**
- * Socks, or eggs, or presents. The colour is still the rule and the picture
- * rides on top of it: a blue sock is a sock on a blue square.
- */
+/** The colour is still the rule; the theme's picture rides on top of it. */
 describe('what is being sorted', () => {
   it('gives every parcel the same picture, whatever colour it is', () => {
     const objective = make(room(3))
@@ -137,7 +134,6 @@ describe('what is being sorted', () => {
   })
 })
 
-/** The same corners fetch gets, for the same reason. Sorting unlocks at 6. */
 describe('sorting: what is in the way', () => {
   it('gives a room at the top of the ladder something to carry things round', () => {
     let seen = 0

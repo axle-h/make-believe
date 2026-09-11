@@ -100,10 +100,7 @@ describe('join', () => {
   })
 })
 
-/**
- * A colour is asked for, not handed out. The world grants it, says who has it,
- * or says there is no room — and the phone only ever shows what it was told.
- */
+/** A colour is asked for and the world grants or refuses it. */
 describe('asking for a colour', () => {
   it('grants the one asked for', () => {
     const state = createGame()
@@ -129,10 +126,7 @@ describe('asking for a colour', () => {
     expect(ask(state, 'p1', 'Wilf', '#123456')).toMatchObject({ refused: 'colour' })
   })
 
-  /**
-   * An away blob is still standing on the floor waiting for its phone. Giving
-   * its colour away while it stood there would be giving its blob away.
-   */
+  /** An away blob keeps its colour. */
   it('keeps a colour for a blob whose phone has merely gone quiet', () => {
     const state = createGame()
     ask(state, 'p1', 'Wilf', PALETTE[4] as string)
@@ -170,10 +164,7 @@ describe('asking for a colour', () => {
   })
 })
 
-/**
- * One blob per name, on the same terms as one blob per colour. Two blobs
- * called Ivy are two labels a child cannot tell apart.
- */
+/** One blob per name, on the same terms as one blob per colour. */
 describe('asking for a name', () => {
   it('refuses a name somebody already has, whatever the case', () => {
     const state = createGame()
@@ -204,11 +195,7 @@ describe('asking for a name', () => {
   })
 })
 
-/**
- * Finishing is the one thing a phone can undo, and it undoes everything: the
- * blob, its name, its picture and its place. What comes back afterwards is
- * somebody new, which is the whole point of pressing it.
- */
+/** Finishing undoes the blob, its name, its picture and its place. */
 describe('finish', () => {
   it('forgets the blob entirely, drawing and all', () => {
     const state = createGame()
@@ -233,9 +220,7 @@ describe('finish', () => {
     say(state, 'p1', 'bye')
     finish(state, 'p1')
 
-    // The same phone, back with a new identity, as the player page mints one.
-    // It may well pick the colour it just gave up — that is a child choosing,
-    // and it is the picture and the name that had to go.
+    // The same phone with a new identity, free to pick the colour it just gave up.
     const after = playerOf(join(state, 'p1-again', 'Ted'))
     expect(after.skin).toBeNull()
     expect(after.bubble).toBeNull()
@@ -275,8 +260,7 @@ describe('input', () => {
     const stillSpot = { x: second.x, y: second.y }
     const movedFrom = first.x
 
-    // Short of reaching them: a blob that ran into the other one would shove
-    // it along, which is a collision rather than an input going astray.
+    // Short of reaching them, so a collision cannot pass for input going astray.
     input(state, 'p1', 1, 0)
     tick(state, 100)
 

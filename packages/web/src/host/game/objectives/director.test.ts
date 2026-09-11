@@ -24,11 +24,7 @@ import type { DrawItObjective } from './drawIt.js'
 import type { Brief, Objective } from './types.js'
 import { joinPlayer } from '../testRoom.js'
 
-/**
- * The director is the thing that must never turn the game into rounds, so
- * these tests are as much about what it does *not* do — make anybody wait,
- * take anything away, punish anyone — as about what it does.
- */
+// As much about what the director never does (make anybody wait, take anything away) as what it does.
 
 function room(names: string[], seed = 1): GameState {
   const state = createGame(seed)
@@ -38,12 +34,10 @@ function room(names: string[], seed = 1): GameState {
   return state
 }
 
-/** The briefs one step produced, which is what most of these are about. */
 function briefsFrom(state: GameState, dtMs: number): Brief[] {
   return stepObjectives(state, dtMs).briefs
 }
 
-/** Make an objective appear, and hand it over. */
 function started(state: GameState): Objective {
   stepObjectives(state, 16)
   const objective = state.objectives.current
@@ -51,15 +45,8 @@ function started(state: GameState): Objective {
   return objective
 }
 
-/**
- * Start the task this test is about. Which of the eligible templates the
- * director asks for is its own business, so a test that wants a particular one
- * puts back everything else until that one comes round — which it does, since
- * it never asks for the same thing twice running.
- */
+/** Puts tasks back until the wanted one comes round, which it must since none repeats. */
 function startedKind(state: GameState, kind: Objective['kind']): Objective {
-  // Patient enough for the top of the ladder, where a dozen tasks are eligible
-  // and the one wanted comes round about one roll in eleven.
   for (let attempt = 0; attempt < 200; attempt++) {
     const objective = started(state)
     if (objective.kind === kind) return objective
@@ -72,12 +59,7 @@ function startedOnTheSpot(state: GameState): Objective {
   return startedKind(state, 'onTheSpot')
 }
 
-/**
- * Watch a few tasks go by, however each of them ends, and say what they were.
- * The level is held where the test put it: this is about what one rung of the
- * ladder allows, and a room that levelled up halfway through would be answering
- * a different question.
- */
+/** The level is held where the test put it, so the answer is about that one rung. */
 function kindsOverTime(state: GameState, count: number): Objective['kind'][] {
   const { level } = state.objectives
   const kinds: Objective['kind'][] = []
@@ -90,7 +72,6 @@ function kindsOverTime(state: GameState, count: number): Objective['kind'][] {
   return kinds
 }
 
-/** Stand everybody on the first zone, exactly as driving there would. */
 function standOnIt(state: GameState, objective: Objective): void {
   const zone = objective.zones[0]
   if (!zone) throw new Error('expected a zone')
@@ -100,7 +81,6 @@ function standOnIt(state: GameState, objective: Objective): void {
   }
 }
 
-/** Run the objective until it is over, or give up after a simulated minute. */
 function runUntilFinished(state: GameState, stepMs = 100): void {
   for (let elapsed = 0; elapsed < 120_000; elapsed += stepMs) {
     stepObjectives(state, stepMs)
@@ -170,8 +150,6 @@ describe('finishing one', () => {
     expect(first.note).toBeTruthy()
     expect(banner(state)?.tone).toBe('win')
 
-    // The finished one stays up a moment, then the next appears with nobody
-    // touching a thing.
     stepObjectives(state, INTERLUDE_MS + 1)
     stepObjectives(state, 16)
 
@@ -209,7 +187,6 @@ describe('finishing one', () => {
 })
 
 describe('running out of time', () => {
-  /** The youngest player is three. Nothing is ever taken away from anybody. */
   it('ends without taking anything away', () => {
     const state = room(['Wilf', 'Ida'])
     state.objectives.score = 30
@@ -234,11 +211,6 @@ describe('running out of time', () => {
   })
 })
 
-/**
- * More than one thing to do. The level decides what the room is allowed to be
- * asked for, and the director decides which of those it actually asks — never
- * the same thing twice running while there is anything else going.
- */
 describe('a ladder of tasks', () => {
   it('keeps the harder task off the floor until the room has levelled up', () => {
     const state = room(['Wilf', 'Ida', 'Ted'], 3)
@@ -267,17 +239,12 @@ describe('a ladder of tasks', () => {
     }
   })
 
-  /** With nothing else eligible, repeating is not a fault — it is all there is. */
   it('repeats itself only when there is nothing else it could ask for', () => {
     const state = room(['Wilf', 'Ida'], 5)
 
     expect(kindsOverTime(state, 3)).toEqual(['onTheSpot', 'onTheSpot', 'onTheSpot'])
   })
 
-  /**
-   * "Brilliant!" is what the world says when a task has nothing of its own to
-   * say. Who was left holding the potato is better, so the task's own words win.
-   */
   it('lets a task say for itself how it ended', () => {
     const state = room(['Wilf', 'Ida', 'Ted'], 5)
     state.objectives.level = 2
@@ -290,7 +257,6 @@ describe('a ladder of tasks', () => {
     expect(state.objectives.score).toBe(SCORE_PER_OBJECTIVE)
   })
 
-  /** The potato has to reach the screen, and it rides on the blob wearing it. */
   it('puts what the task has pinned to a blob into the snapshot', () => {
     const state = room(['Wilf', 'Ida', 'Ted'], 5)
     state.objectives.level = 2
@@ -302,11 +268,6 @@ describe('a ladder of tasks', () => {
   })
 })
 
-/**
- * Some tasks have something to say to one phone that they are not saying to
- * the room. It is still only words: the phone it reaches can drive, talk and
- * draw exactly as every other phone can, and the TV still has its own line.
- */
 describe('a line for one phone only', () => {
   function findingColours(state: GameState): Objective {
     state.objectives.level = 4
@@ -322,7 +283,6 @@ describe('a line for one phone only', () => {
 
     expect(mine?.to).toBe('p1')
     expect(mine?.detail).not.toBe(theirs?.detail)
-    // ...and the TV is not told anybody's secret.
     expect(banner(state)?.to).toBe('*')
     expect(banner(state)?.detail).toBe('0 of 3 home')
   })
@@ -337,11 +297,6 @@ describe('a line for one phone only', () => {
     expect(briefFor(state, 'p3')?.detail).toContain('pad')
   })
 
-  /**
-   * A phone left holding a private line about a task that is over would be the
-   * one bit of the game that remembers a mode. When it ends, that phone is
-   * given the line the room has, so it reads the cheer with everybody else.
-   */
   it('puts the private line back to the room\'s as soon as the task is over', () => {
     const state = room(['Wilf', 'Ida'], 12)
     findingColours(state)
@@ -358,12 +313,7 @@ describe('a line for one phone only', () => {
     expect(briefFor(state, 'p1')?.to).toBe('*')
   })
 
-  /**
-   * The same thing, but in the middle of a task rather than at the end of one.
-   * The crown moves from blob to blob, so the phone wearing it has a private
-   * countdown one moment and not the next — and a child who has just had it
-   * taken off them must not be the one person in the room with a blank strip.
-   */
+  /** From a crown taken off one blob by another, which must not leave its phone blank. */
   it('hands a phone the room\'s line when its private one moves on mid-task', () => {
     const state = room(['Wilf', 'Ida'], 12)
     state.objectives.level = MAX_LEVEL
@@ -371,7 +321,6 @@ describe('a line for one phone only', () => {
     const wearing = () => state.objectives.current?.marks[0]?.playerId
     const wearer = wearing()
 
-    // Stood right up against each other, as driving into somebody leaves them.
     const [first, second] = activePlayers(state)
     if (!first || !second) throw new Error('expected two blobs')
     second.x = first.x + BLOB_SIZE
@@ -384,7 +333,6 @@ describe('a line for one phone only', () => {
     expect(wearing()).not.toBe(wearer)
     expect(state.objectives.current?.outcome).toBe('running')
 
-    // The phone that has just lost it is told what everybody else is told.
     const mine = last.find((brief) => brief.to === wearer)
     expect(mine?.headline).toBe(crown.headline)
     expect(mine?.detail).toBe(last.find((brief) => brief.to === '*')?.detail)
@@ -392,12 +340,7 @@ describe('a line for one phone only', () => {
   })
 })
 
-/**
- * Two tasks are about what a phone *says* rather than where it drives, and
- * they hear it through `applyMessage` — the same path a speech bubble takes.
- * Nothing about the Say box changes when one is running: it is the world that
- * has started listening, not the phone that has been handed a form to fill in.
- */
+// Talking tasks hear through `applyMessage`, the path a speech bubble takes; the phone changes nothing.
 describe('a task that listens', () => {
   it('hears what a phone said, and can be finished by it', () => {
     const state = room(['Wilf', 'Ida', 'Ted'], 12)
@@ -409,7 +352,6 @@ describe('a task that listens', () => {
     applyMessage(state, { type: 'text', playerId: guesser.playerId, value: objective.word })
 
     expect(objective.outcome).toBe('done')
-    // ...and it is still a speech bubble, exactly as it would be at any other moment.
     expect(guesser.bubble?.text).toBe(objective.word)
 
     stepObjectives(state, 16)
@@ -433,10 +375,6 @@ describe('a task that listens', () => {
 })
 
 describe('coming and going', () => {
-  /**
-   * Children wander off and phones lock. The task is judged against whoever is
-   * present right now, so the ones still playing can always finish it.
-   */
   it('lets the blobs still here finish it after somebody puts their phone down', () => {
     const state = room(['Wilf', 'Ida', 'Ted'])
     const objective = started(state)
@@ -460,7 +398,6 @@ describe('coming and going', () => {
     expect(brief?.headline).toBe(objective.headline)
     expect(brief?.detail).toBe('2 of 3 on the spot')
 
-    // And the new blob is genuinely part of it: it is not done until they are on it too.
     stepObjectives(state, 5_000)
     expect(objective.outcome).toBe('running')
     standOnIt(state, objective)
@@ -468,17 +405,12 @@ describe('coming and going', () => {
     expect(objective.outcome).toBe('done')
   })
 
-  /**
-   * The other half of "a child who wanders off never leaves the others with
-   * something they cannot finish": five blobs cannot be put in twos, so the
-   * task goes rather than standing there being impossible.
-   */
+  /** From five blobs asked to pair up. */
   it('drops a task the room has stopped suiting, once it is sure', () => {
     const state = room(['Wilf', 'Ida', 'Bo', 'Ada'])
     expect(askFor(state, 'pairs')).toBe(true)
     joinPlayer(state, 'p5', 'Ted')
 
-    // A moment's grace first: a phone that blinks is not a child who left.
     stepObjectives(state, 100)
     expect(state.objectives.current?.kind).toBe('pairs')
 
@@ -506,12 +438,6 @@ describe('coming and going', () => {
     expect(state.objectives.current).toBe(running)
   })
 
-  /**
-   * A task can hold the clock while there is something to do before the timed
-   * part of it starts. The race gathers everybody on the start line that way,
-   * because a countdown already running while people arrive is a countdown
-   * that punishes whoever was slowest to pick their phone up.
-   */
   it('does not count the clock down while a task is holding it', () => {
     const state = room(['Wilf', 'Ida'])
     expect(askFor(state, 'race')).toBe(true)
@@ -524,7 +450,6 @@ describe('coming and going', () => {
     expect(gathering?.remainingMs).toBe(gathering?.totalMs)
   })
 
-  /** And a held clock at zero is not a task that has run out of time. */
   it('does not run a held task out of time', () => {
     const state = room(['Wilf', 'Ida'])
     askFor(state, 'race')
@@ -545,14 +470,12 @@ describe('coming and going', () => {
     stepObjectives(state, 16)
 
     expect(state.objectives.current).toBeNull()
-    // No failure, no lost score, and a line explaining the quiet.
     expect(state.objectives.score).toBe(0)
     expect(banner(state)?.headline).toBe('Waiting for another blob…')
     expect(banner(state)?.tone).toBe('task')
   })
 })
 
-/** Play a crown game through to the buzzer, and hand back who won it. */
 function crowned(state: GameState): string {
   askFor(state, 'keepTheCrown')
   const game = state.objectives.current as KeepTheCrownObjective
@@ -563,11 +486,6 @@ function crowned(state: GameState): string {
   return state.objectives.crown as string
 }
 
-/**
- * The one thing a task leaves behind it. Everything else about a task is over
- * when it is over; the crown stays on somebody's head, which is what makes it
- * a title rather than a badge that lasted half a minute.
- */
 describe('the crown', () => {
   it('stays on its wearer through the breather and into the next task', () => {
     const state = room(['Wilf', 'Ida'])
@@ -579,14 +497,9 @@ describe('the crown', () => {
 
     expect(state.objectives.current?.kind).not.toBe('keepTheCrown')
     expect(state.objectives.crown).toBe(wearer)
-    // And it is on the TV, beside that blob's name, while something else runs.
     expect(objectives(state).marks).toEqual([{ playerId: wearer, badge: CROWN_BADGE }])
   })
 
-  /**
-   * While the room is playing for it, the game moves it about and draws it
-   * itself. Two crowns on screen at once is a question nobody can answer.
-   */
   it('is drawn once, by the game that is playing for it', () => {
     const state = room(['Wilf', 'Ida'])
     crowned(state)
@@ -607,7 +520,6 @@ describe('the crown', () => {
     expect(objectives(state).marks).toEqual([])
   })
 
-  /** A blob the world has waited long enough for takes it with it. */
   it('is nobody\'s once its wearer has been forgotten for good', () => {
     const state = room(['Wilf', 'Ida'])
     const wearer = crowned(state)
@@ -630,10 +542,6 @@ describe('what the phones are told', () => {
     expect(second).toEqual([])
   })
 
-  /**
-   * A brief that changes only which word of it is painted has still changed:
-   * the word is the whole instruction, so the phone has to hear about it.
-   */
   it('says it again when only the painted word changes', () => {
     const state = room(['Wilf', 'Ida'])
     askFor(state, 'fetch')
@@ -657,10 +565,6 @@ describe('what the phones are told', () => {
     expect(briefs[0]?.detail).toBe('Hold it… 2')
   })
 
-  /**
-   * A brief is information. There is no field in it that could move a phone off
-   * its joystick, and this is the test that says so out loud.
-   */
   it('never carries anything that could put a phone into a mode', () => {
     const state = room(['Wilf', 'Ida'])
     const briefs = briefsFrom(state, 16)
@@ -683,13 +587,12 @@ describe('what the phones are told', () => {
     const state = room(['Wilf', 'Ida'])
     started(state)
 
-    // The everybody line is what a stranger gets, because there is only ever one.
     expect(briefFor(state, 'ghost')?.to).toBe('*')
   })
 })
 
 describe('through the world', () => {
-  /** `tick` is the only thing the renderer calls, so it has to carry the briefs. */
+  /** `tick` is all the renderer calls, so it has to carry the briefs. */
   it('steps the objective and hands back what the phones need to hear', () => {
     const state = room(['Wilf', 'Ida'])
     const result = tick(state, 16)
@@ -705,8 +608,7 @@ describe('through the world', () => {
     const zone = objective.zones[0]
     if (!zone) throw new Error('expected a zone')
 
-    // Park them just off the spot and drive them onto it with the joystick,
-    // stopping when they arrive exactly as a thumb coming off the pad would.
+    // Driven on with the joystick and let go on arrival, as a thumb would.
     for (const player of activePlayers(state)) {
       player.x = zone.x
       player.y = zone.y - 300
@@ -724,11 +626,6 @@ describe('through the world', () => {
   })
 })
 
-/**
- * The hidden debug menu on the TV. It is a grown-up with a keyboard wanting to
- * look at the twelfth task without a room of children climbing to it first,
- * and it does nothing the director does not already do to itself.
- */
 describe('asking for one task in particular', () => {
   it('puts that one up, whatever the ladder would have picked', () => {
     const state = room(['Wilf', 'Ida'])
@@ -742,18 +639,12 @@ describe('asking for one task in particular', () => {
 
   it('does it at whatever level the world is on, gate or no gate', () => {
     const state = room(['Wilf', 'Ida'])
-    // The crown is the top of the ladder and the world has climbed nothing.
     expect(state.objectives.level).toBe(1)
 
     expect(askFor(state, 'keepTheCrown')).toBe(true)
     expect(state.objectives.current?.kind).toBe('keepTheCrown')
   })
 
-  /**
-   * The one thing it will not do. A task judged against two children when it
-   * needs three is a task nobody in the room can finish, and the point of the
-   * menu is to look at a task working.
-   */
   it('refuses one the room is too small for, and leaves what is running alone', () => {
     const state = room(['Wilf', 'Ida'])
     const running = started(state)
@@ -797,13 +688,7 @@ describe('moving the ladder by hand', () => {
   })
 })
 
-/**
- * Going up a rung. It is the one thing all evening that is about the children
- * rather than about the game, so it is the one thing the world stops to say —
- * and it says it by asking them for whatever it has just unlocked.
- */
 describe('going up a level', () => {
-  /** Solve the simple spot until the room climbs a rung. */
   function climb(state: GameState): void {
     for (let round = 0; round < LEVEL_UP_AFTER; round++) {
       const objective = startedOnTheSpot(state)
@@ -820,8 +705,6 @@ describe('going up a level', () => {
     const line = banner(state)
     expect(line?.headline).toBe('Level 2!')
     expect(line?.tone).toBe('level')
-    // What the task itself had to say drops to the second line rather than
-    // being lost: both are worth reading.
     expect(line?.detail).toBeTruthy()
   })
 
@@ -833,7 +716,6 @@ describe('going up a level', () => {
     expect(LEVEL_UP_INTERLUDE_MS).toBeGreaterThan(INTERLUDE_MS)
   })
 
-  /** A level that unlocks something and then asks for the same old spot has not visibly done anything. */
   it('asks for whatever that level just unlocked, before anything else', () => {
     const state = room(['Wilf', 'Ida', 'Ted'])
     climb(state)
@@ -843,11 +725,9 @@ describe('going up a level', () => {
     stepObjectives(state, 16)
 
     expect(state.objectives.current?.kind).toBe(unlockedAt(2)[0])
-    // Taken off the queue: what is left is whatever that rung also unlocked.
     expect(state.objectives.pending).toEqual(unlockedAt(2).slice(1))
   })
 
-  /** The level message belongs to the breather, not to the task behind it. */
   it('stops saying it once the next task is up', () => {
     const state = room(['Wilf', 'Ida', 'Ted'])
     climb(state)
@@ -858,22 +738,16 @@ describe('going up a level', () => {
     expect(banner(state)?.tone).toBe('task')
   })
 
-  /**
-   * A room of two cannot play hot potato, and a new task nobody ever saw is a
-   * level that did nothing. It waits on the queue instead of being thrown away.
-   */
   it('holds a newly unlocked task back until there are blobs enough for it', () => {
     const state = room(['Wilf', 'Ida'])
     climb(state)
     stepObjectives(state, LEVEL_UP_INTERLUDE_MS + 1)
     const instead = started(state)
 
-    // Whatever that rung unlocked that a room of two *can* play goes first;
-    // hot potato wants three, so it waits rather than being thrown away.
+    // Hot potato wants three, so it waits.
     expect(instead.kind).not.toBe('hotPotato')
     expect(state.objectives.pending).toEqual(['hotPotato'])
 
-    // A third blob turns up, and the moment there is room for it, it is next.
     joinPlayer(state, 'p3', 'Ted')
     standOnIt(state, instead)
     runUntilFinished(state)
@@ -883,7 +757,6 @@ describe('going up a level', () => {
     expect(state.objectives.current?.kind).toBe('hotPotato')
   })
 
-  /** Two unlock together at some rungs; both go first, one after the other. */
   it('queues everything a rung unlocks, not just the first of them', () => {
     const state = room(['Wilf', 'Ida', 'Ted'])
     state.objectives.level = 2
@@ -897,7 +770,6 @@ describe('going up a level', () => {
     expect(state.objectives.pending.length).toBeGreaterThan(1)
   })
 
-  /** At the top there is nothing left to unlock and nothing to announce. */
   it('says nothing at the top of the ladder, where the level stops moving', () => {
     const state = room(['Wilf', 'Ida', 'Ted'])
     state.objectives.level = MAX_LEVEL
@@ -913,11 +785,6 @@ describe('going up a level', () => {
   })
 })
 
-/**
- * The breather between one task and the next. It is not a gap in play — every
- * phone can still drive, talk and draw right through it — but it is long
- * enough that the room has to be told the game has not stopped.
- */
 describe('counting down to the next task', () => {
   function finishOne(state: GameState): void {
     const objective = startedOnTheSpot(state)
@@ -946,7 +813,6 @@ describe('counting down to the next task', () => {
       said.push(banner(state)?.detail)
     }
 
-    // Every whole second is said once, in order, and never a nought.
     expect([...new Set(said)]).toEqual([
       'Next game in 5s',
       'Next game in 4s',

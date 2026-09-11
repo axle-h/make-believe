@@ -12,46 +12,12 @@ import bounce9 from './bounce/9.ogg?url'
 import { play } from './sounds.js'
 
 /**
- * The phone's speaker: one `AudioContext`, woken whenever anybody touches
- * anything, and the cues played through it.
- *
- * It is a module of its own so that the waking can be tested. An
- * `AudioContext` is a `window`, so the context is injected — `main.ts` passes
- * `() => new AudioContext()` and a test passes a fake whose `state` it
- * controls.
- *
- * **A browser only starts a context inside a gesture**, and through the third
- * play test the only gesture we listened for was the Join tap. That is the
- * bug this exists to fix: a phone that has played before walks straight back
- * into its blob without being asked anything — session matches, hello, blob,
- * play screen — and never sees the join screen at all. Every phone after the
- * first reload, after a wifi blip, after the TV came back, and every installed
- * app opened a second time, which in a real evening is all of them.
- *
- * So `play` wakes first, every time. It is idempotent, `resume()` on a running
- * context costs nothing, and it is also what catches a context the operating
- * system suspended again while the phone was locked — nothing else ever would.
- *
- * Silence is always an acceptable outcome. A cue that arrives while the
- * context is still coming back is dropped without a word, because nothing in
- * the game depends on being heard.
- *
- * ## The bounce
- *
- * Every cue but one is a shape drawn by the synth in `sounds.ts`. `bounce` is
- * ten short recordings — a synthesiser has nothing to say about the sound of
- * something landing — and **which one a phone plays is its blob's `slot`**.
- * The host already sends that in `assigned`, slots are 0–9 and there are ten
- * colours, so every blob in the room lands differently, the same child in the
- * same colour gets the same voice back, and the host is still the one that
- * decided: the phone is only playing what it was told it is.
- *
- * The TV makes no noise at all, here as everywhere. Six phones around a sofa
- * *are* the chorus, spread about the room rather than coming out of the
- * television — and a blob whose phone is muted is silent, which is right.
+ * A browser only starts a context inside a gesture, and most phones never see the join screen,
+ * so the first touch anywhere must wake it. `play` wakes first too, which also catches a context
+ * the OS suspended while the phone was locked. The phone makes every noise; the TV makes none.
  */
 
-/** The ten landing voices, in slot order. See `bounce/README.md`. */
+/** A blob's landing voice is its `slot`, which the host sends in `assigned`. */
 export const BOUNCE_URLS: readonly string[] = [
   bounce0,
   bounce1,
@@ -65,25 +31,18 @@ export const BOUNCE_URLS: readonly string[] = [
   bounce9,
 ]
 
-/** About the volume of the synth cues, which are all quiet on purpose. */
 const BOUNCE_GAIN = 0.35
 
 export interface Speaker {
-  /** Make a context, or bring back one that has gone to sleep. */
   wake(): void
   play(cue: SoundCue): void
-  /**
-   * The ☰ menu's switch. A muted speaker never makes a context at all, which
-   * is the point of it: no context, no waking, nothing.
-   */
+  /** A muted speaker never makes a context at all. */
   muted: boolean
-  /** Which blob this phone is, which is which landing voice it has. */
   slot: number
 }
 
 export function createSpeaker(make: () => AudioContext, muted: boolean): Speaker {
   let context: AudioContext | null = null
-  /** Decoded once, the first time a context wakes; `null` until then. */
   let landings: (AudioBuffer | null)[] | null = null
 
   const speaker: Speaker = {
@@ -97,8 +56,6 @@ export function createSpeaker(make: () => AudioContext, muted: boolean): Speaker
         if (context.state === 'suspended') void context.resume()
         decodeLandings(context)
       } catch {
-        // No WebAudio here at all. The game is played in silence, and plays
-        // exactly the same.
         context = null
       }
     },
@@ -110,17 +67,11 @@ export function createSpeaker(make: () => AudioContext, muted: boolean): Speaker
       try {
         if (cue === 'bounce') land(context, speaker.slot)
         else play(context, cue)
-      } catch {
-        // A context that has been closed or refused. Silence is fine.
-      }
+      } catch {}
     },
   }
 
-  /**
-   * Fetch and decode the ten landings, once. Any that fails stays `null` and
-   * that blob simply lands quietly — as does every blob until the decoding
-   * finishes, which is a second at the start of an evening.
-   */
+  /** A landing that fails to decode stays `null`, and that blob lands in silence. */
   function decodeLandings(on: AudioContext): void {
     if (landings) return
     const decoded: (AudioBuffer | null)[] = BOUNCE_URLS.map(() => null)
@@ -132,13 +83,10 @@ export function createSpeaker(make: () => AudioContext, muted: boolean): Speaker
         .then((buffer) => {
           decoded[slot] = buffer
         })
-        .catch(() => {
-          // One voice missing is one blob that lands quietly.
-        })
+        .catch(() => {})
     }
   }
 
-  /** This blob's landing, if it is decoded and there is anything to play it on. */
   function land(on: AudioContext, slot: number): void {
     if (on.state !== 'running') return
     const buffer = landings?.[((slot % BOUNCE_URLS.length) + BOUNCE_URLS.length) % BOUNCE_URLS.length]

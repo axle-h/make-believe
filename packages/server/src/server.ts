@@ -11,7 +11,6 @@ import {
 } from '@make-believe/shared'
 import { createRelay, type Connection, type Relay } from './relay.js'
 
-/** Close codes we use to tell a client why we hung up. */
 const CLOSE_BAD_REQUEST = 4000
 const CLOSE_REJECTED = 4001
 
@@ -22,12 +21,7 @@ export interface StartedServer {
   close(): Promise<void>
 }
 
-/**
- * Where the built web pages live. In the container the server is at
- * `/app/server/index.js` and the pages at `/app/web/`; in the repo the server
- * runs from `packages/server/{src,dist}` and the pages are in
- * `packages/web/dist`.
- */
+/** The container has `/app/server/index.mjs` beside `/app/web/`; the repo has `packages/web/dist`. */
 export function findWebDist(scriptPath = process.argv[1] ?? process.cwd()): string | null {
   const fromEnv = process.env['WEB_DIST']
   const scriptDir = dirname(resolve(scriptPath))
@@ -39,24 +33,14 @@ export function findWebDist(scriptPath = process.argv[1] ?? process.cwd()): stri
   return candidates.find((candidate) => existsSync(candidate)) ?? null
 }
 
-/**
- * How long the browser may keep a file without asking again.
- *
- * Vite hashes every asset filename, so those can be kept forever: a new build
- * means new names. Everything else — the two pages, the worker, the manifest —
- * must be revalidated, or a phone can hold yesterday's page across a deploy
- * and never find out, which is exactly what the worker exists to prevent.
- */
+// Only hashed `/assets/*` may be kept without asking. Everything else is revalidated, or a phone
+// can hold yesterday's page across a deploy and never find out.
 function setHeaders(res: ServerResponse, pathname: string): void {
   const forever = pathname.startsWith('/assets/')
   res.setHeader('cache-control', forever ? 'public, max-age=31536000, immutable' : 'no-cache')
 }
 
-/**
- * What build the pages beside us came from. The web build writes it there, so
- * the page and this answer can never disagree — which is the whole point of
- * it, since a phone compares the two to notice a deploy while it is open.
- */
+/** Read from beside the pages the web build wrote, so the page and `/version` can never disagree. */
 export function readBuildVersion(webDist: string | null): string {
   if (!webDist) return 'unknown'
   try {
@@ -81,8 +65,7 @@ export function buildServer(): { server: Server; relay: Relay } {
       res.end('ok')
       return
     }
-    // What a phone asks to find out it is running yesterday's build. Never
-    // cached: a stale answer here is worse than no answer.
+    // Never cached: a stale answer here is worse than none.
     if (req.method === 'GET' && req.url === '/version') {
       res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
       res.end(version)
@@ -130,11 +113,7 @@ function toConnection(ws: WebSocket): Connection {
   }
 }
 
-/**
- * A socket says only what it is and, for a phone, who it is. There is no code
- * in the query: the relay answers with the session on the way in, which is the
- * whole of the negotiation.
- */
+/** No session code in the query: the relay answers with it on the way in, and that is the negotiation. */
 function handleConnection(relay: Relay, ws: WebSocket, params: URLSearchParams): void {
   const role = params.get('role')
 

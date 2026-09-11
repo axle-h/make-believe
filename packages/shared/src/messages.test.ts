@@ -76,10 +76,7 @@ describe('join', () => {
   })
 })
 
-/**
- * The join screen, as the TV describes it: every colour there is and who has
- * it. The phone draws exactly this and decides nothing.
- */
+/** The join screen as the TV describes it; the phone draws exactly this and decides nothing. */
 describe('palette', () => {
   const swatches = [
     { hex: '#ff5d5d', name: 'red', takenBy: 'Wilf' },
@@ -112,10 +109,6 @@ describe('palette', () => {
   })
 })
 
-/**
- * "Not that one." Its own message rather than something the phone works out
- * from a palette, because a palette can arrive while a join is in flight.
- */
 describe('refused', () => {
   it('carries one of the three reasons there are', () => {
     for (const reason of ['colour', 'name', 'full']) {
@@ -135,11 +128,7 @@ describe('refused', () => {
   })
 })
 
-/**
- * A grown-up reaching for the two functions the TV's `d` key already calls.
- * The host grants the privilege and the phone never claims it, so all this
- * has to do is be a well-formed thing to ask for.
- */
+/** The host grants the privilege, so this only has to be a well-formed thing to ask for. */
 describe('command', () => {
   it('asks for a task by name, or for the ladder to start again', () => {
     expect(
@@ -172,12 +161,7 @@ describe('command', () => {
     ).toBe(false)
   })
 
-  /**
-   * It is something a phone may say and something the TV socket receives —
-   * and deliberately *not* something the world hears: `route()` in `apply.ts`
-   * switches exhaustively over what the model acts on, and this is a grown-up
-   * reaching for the director rather than a thing that happened in the world.
-   */
+  /** A phone may say it and the TV socket receives it, but the world never hears it. */
   it('is in both unions that carry it, and in neither that must not', () => {
     const message = { type: 'command', playerId: 'p1', command: 'restart' }
     expect(PlayerToHostMessageSchema.safeParse(message).success).toBe(true)
@@ -186,10 +170,6 @@ describe('command', () => {
   })
 })
 
-/**
- * The grown-up's sheet, as the TV describes it. It is only ever sent to one
- * blob, and a phone that never receives it builds nothing.
- */
 describe('grownup', () => {
   const sheet = {
     type: 'grownup',
@@ -226,10 +206,6 @@ describe('grownup', () => {
   })
 })
 
-/**
- * A socket with nobody on it yet. It reaches the TV and stops there: the game
- * model has no case for it, because there is no blob to hear about.
- */
 describe('arrived', () => {
   it('is something the host socket can receive, and the world cannot', () => {
     const message = { type: 'arrived', playerId: 'p1' }
@@ -334,8 +310,7 @@ describe('assigned and waiting', () => {
   })
 
   it('makes the host say whether it has the drawing, rather than guessing', () => {
-    // A phone that cannot tell would either lose its picture or resend it on
-    // every hello, so the answer is required and must be a boolean.
+    // Without it a phone would either lose its picture or resend it on every hello.
     expect(AssignedMessageSchema.safeParse({ type: 'assigned', colour: '#f00', slot: 0 }).success).toBe(
       false,
     )
@@ -399,10 +374,7 @@ describe('brief', () => {
     expect(BriefMessageSchema.safeParse({ type: 'brief', headline: 'ok' }).success).toBe(false)
   })
 
-  /**
-   * The strip is information. Nothing in it can move a phone off its
-   * controller, so there is no screen, mode or flag anywhere in the shape.
-   */
+  /** The strip is information: no screen, mode or flag anywhere in the shape. */
   it('carries no instruction to change screens', () => {
     const parsed = BriefMessageSchema.parse({ type: 'brief', headline: 'Hold it!', tone: 'task' })
     // `Object.keys` is already a fresh array, so sorting it mutates nothing.
@@ -416,11 +388,6 @@ describe('brief', () => {
     ).toBe(true)
   })
 
-  /**
-   * One word of the headline, painted in the brief's colour. The word has to
-   * be in the sentence it is a word of: anything else is a renderer told to
-   * find something that is not there.
-   */
   it('accepts a word of its own headline to paint, and refuses any other', () => {
     expect(
       BriefMessageSchema.safeParse({
@@ -580,11 +547,6 @@ describe('unions', () => {
     expect(HostToPlayerMessageSchema.safeParse({ type: 'left', playerId: 'p1' }).success).toBe(false)
   })
 
-  /**
-   * `session` is about the connection, not the world, so the host socket takes
-   * it and the game model never sees it. Keeping the two unions apart is what
-   * stops the model growing a case for it.
-   */
   it('keeps session off the union the game model is fed', () => {
     expect(HostInboundMessageSchema.safeParse({ type: 'session', session: 'AB23' }).success).toBe(
       true,

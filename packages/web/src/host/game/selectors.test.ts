@@ -72,10 +72,7 @@ describe('snapshot', () => {
   })
 })
 
-/**
- * What a join screen is made of. The phone draws exactly this: which colours
- * there are, what to call them, and who has one.
- */
+/** The palette is the whole of what a join screen is made of. */
 describe('the palette', () => {
   it('lists every colour there is, with the name of whoever has it', () => {
     const state = createGame()

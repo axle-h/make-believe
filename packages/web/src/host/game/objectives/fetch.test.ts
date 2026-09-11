@@ -29,11 +29,7 @@ function make(state: GameState, level = 4, seed = 61): FetchObjective {
   })
 }
 
-/**
- * Drive a blob to a thing and on to the depot, exactly as a child would —
- * except that a parcel somebody else has already picked up is theirs to
- * deliver, which is how it works on the floor as well.
- */
+/** Drive a blob to a parcel and on to the depot; one already carried is delivered by its carrier. */
 function fetchOne(state: GameState, objective: FetchObjective, playerId: string, parcel: Parcel): void {
   const depot = objective.zones[0]!
   const player = state.players.get(parcel.carriedBy ?? playerId)!
@@ -48,10 +44,6 @@ function fetchOne(state: GameState, objective: FetchObjective, playerId: string,
 }
 
 describe('the depot', () => {
-  /**
-   * "Take it home" is a sentence a three-year-old already has, and a roof is
-   * how the floor says it without anybody reading the brief.
-   */
   it('is a house, and stays wholly on the floor with its roof on', () => {
     for (let seed = 0; seed < 20; seed++) {
       const depot = make(room(3), 4, seed).zones[0]!
@@ -142,22 +134,14 @@ describe('fetching', () => {
 
     expect(brief?.to).toBe('*')
     expect(brief?.detail).toContain(`1 of ${objective.parcels}`)
-    // Where they go, said in the word for it: apples go in the pie.
     expect(brief?.detail).toContain(objective.home)
-    // The strip is the colour of the things, not of the house: it is what to
-    // go and look for that a child who cannot read the sentence needs.
+    // The strip is the colour of the things, not of the house.
     expect(brief?.colour).toBe(objective.thingColour)
     expect(brief?.emphasis).toBe(objective.things)
     expect(brief?.headline).toContain(objective.things)
   })
 })
 
-/**
- * Apples into a pie rather than parcels in a depot. It is the same game and a
- * good deal easier to understand without reading: the thing has a picture on
- * it, the house has one too, and the word for what they are is painted in the
- * colour they are.
- */
 describe('what is being carried', () => {
   it('gives every parcel the same picture, and the house one of its own', () => {
     const objective = make(room(2))
@@ -183,17 +167,11 @@ describe('what is being carried', () => {
     }
   })
 
-  /** The picture on the house *is* the instruction, so it is drawn like one. */
   it('draws the house picture big enough to read across a room', () => {
     expect(make(room(2)).zones[0]?.labelSize).toBeGreaterThan(40)
   })
 })
 
-/**
- * Carrying an apple across an empty floor is a straight line; carrying it round
- * a corner is a game. Not on the first outing, though — fetch unlocks at level
- * 4, and a four-year-old who cannot find the corner is not playing anything.
- */
 describe('fetching: what is in the way', () => {
   it('gives a room at the top of the ladder something to carry things round', () => {
     let seen = 0

@@ -15,29 +15,16 @@ import {
 } from './types.js'
 
 /**
- * Find your colour. A pad for every colour of blob in the room, each one
- * painted that colour — so the answer to "where do I go?" is on the floor,
- * where a three-year-old who cannot read a word of the brief can see it.
- *
- * The pad **is** the blob, which is the whole idea: no other task in the list
- * can be understood without either a word or a demonstration. Two children who
- * happen to be wearing the same colour share a pad and have to squeeze.
- *
- * Each phone is still told its own pad in words as well, for whoever wants
- * telling. Higher up the ladder it is told **somebody else's** instead — which
- * with coloured pads is not a secret so much as an errand: go and tell Ted.
- * The Say box starts doing real work, and nothing about the task requires it:
- * a room that solves it by shouting across the sofa has solved it properly.
+ * Find your colour: one pad per colour present, painted that colour, so the answer is on the
+ * floor for a child who cannot read. Blobs sharing a colour share a pad.
+ * From `SWAP_FROM_LEVEL` each phone is told somebody else's pad instead, so the room has to talk.
  */
 
 export interface FindYourColourObjective extends ObjectiveBase {
   kind: 'findYourColour'
-  /** Which pad each blob belongs on, by playerId. */
+  /** Pad id each blob belongs on, by playerId. */
   homes: Record<string, string>
-  /**
-   * Whose home each phone is told about. Its own, usually; somebody else's
-   * once the world is being difficult, which is what makes them talk.
-   */
+  /** Whose pad each phone is told about, by playerId. */
   tells: Record<string, string>
   holdMs: number
   heldMs: number
@@ -47,24 +34,18 @@ const ROOMINESS = { easy: 1.6, hard: 1 }
 const HOLD = { easy: 1_200, hard: 2_500 }
 const TIME_LIMIT = { easy: 55_000, hard: 35_000 }
 
-/** Above this, a phone is told where somebody *else* goes. */
 const SWAP_FROM_LEVEL = 6
 
 export const findYourColour: ObjectiveTemplate<FindYourColourObjective> = {
   kind: 'findYourColour',
   title: 'Find your own pad',
-  /** Being told where you go only means anything if somebody else is told something different. */
   minPlayers: 2,
   minLevel: 4,
 
   generate(context: GenerateContext): FindYourColourObjective {
     const hard = difficulty(context.level, MAX_LEVEL)
-    // One pad per colour of blob in the room, in palette order so the floor
-    // does not reshuffle itself between one go and the next. Two of the same
-    // colour get one pad between them, which is a squeeze rather than a bug.
     const colours = coloursPresent(context.players)
-    // One pad per colour, exactly: a pad traded away for room would be a
-    // child sent to look for a pad that is not on the floor.
+    // `exactly`: a pad dropped for lack of room would send a child looking for a pad that is not there.
     const zones = makePads(
       context,
       colours.length,
@@ -99,12 +80,7 @@ export const findYourColour: ObjectiveTemplate<FindYourColourObjective> = {
     return objective
   },
 
-  /**
-   * Judged against whoever is here now. A blob that arrives halfway through is
-   * given a pad of its own on the spot and told about it, and one that leaves
-   * takes its pad out of the sum — nobody is ever standing on their spot
-   * waiting for a child who has wandered off to the kitchen.
-   */
+  /** Judged against whoever is present: late arrivals get a pad, and leavers drop out of the sum. */
   step(objective, state, dtMs) {
     const present = activePlayers(state)
     if (present.length === 0) return
@@ -131,7 +107,6 @@ export const findYourColour: ObjectiveTemplate<FindYourColourObjective> = {
       },
     ]
 
-    // The private half: one line each, and the only place the answer exists.
     for (const player of present) {
       const about = objective.tells[player.playerId]
       if (about === undefined) continue
@@ -153,20 +128,16 @@ export const findYourColour: ObjectiveTemplate<FindYourColourObjective> = {
   },
 }
 
-/**
- * Which colours are in the room, in palette order and each one once. Two blobs
- * the same colour count for one pad, which is what puts them on it together.
- */
+/** Colours present, each once and in palette order so the floor does not reshuffle between goes. */
 function coloursPresent(players: Player[]): string[] {
   const worn = new Set(players.map((player) => player.colour))
   const known = PALETTE.filter((colour) => worn.has(colour))
-  // A colour off the palette should not be possible, but a pad nobody can
-  // stand on would be, so anything unexpected still gets one.
+  // A colour off the palette still gets a pad, so no blob is left with nowhere to go.
   const strays = [...worn].filter((colour) => !PALETTE.includes(colour))
   return [...known, ...strays]
 }
 
-/** How many blobs the busiest pad has to hold, which is what sizes them all. */
+/** How many blobs the busiest pad has to hold, which sizes them all. */
 function sharing(players: Player[], colours: string[]): number {
   let most = 1
   for (const colour of colours) {
@@ -175,15 +146,7 @@ function sharing(players: Player[], colours: string[]): number {
   return most
 }
 
-/**
- * Everybody present is on the pad their own colour, and nobody who has gone
- * still holds one.
- *
- * A blob that joins after the pads were laid out may be wearing a colour none
- * of them is. Rather than leave it with nowhere to go, it shares the pad
- * nearest its own colour — which is a rule that can be said out loud ("go on
- * the closest one to you") and is far better than a blob standing about.
- */
+/** Give every present blob a pad and forget the absent. A colour with no pad takes the nearest one. */
 function settle(objective: FindYourColourObjective, present: Player[]): void {
   const here = new Set(present.map((player) => player.playerId))
   for (const playerId of Object.keys(objective.homes)) {
@@ -194,17 +157,13 @@ function settle(objective: FindYourColourObjective, present: Player[]): void {
 
   for (const player of present) {
     objective.homes[player.playerId] = padForColour(objective, player.colour)
-    // A phone that has only just arrived is told about itself, whatever the
-    // rest of the room was told: it has nobody to have heard it from.
+    // A newcomer, or a phone whose errand has left, is told about itself.
     objective.tells[player.playerId] ??= player.playerId
-    // The blob it was told about has gone. It gets told about itself instead,
-    // rather than being left with an errand there is nobody left to run.
     const about = objective.tells[player.playerId]
     if (about === undefined || !here.has(about)) objective.tells[player.playerId] = player.playerId
   }
 }
 
-/** The pad of this colour, or failing that the one that looks most like it. */
 function padForColour(objective: FindYourColourObjective, colour: string): string {
   const exact = objective.zones.find((zone) => zone.colour === colour)
   if (exact) return exact.id
@@ -221,12 +180,7 @@ function padForColour(objective: FindYourColourObjective, colour: string): strin
   return nearest?.id ?? ''
 }
 
-/**
- * Pass every phone the next blob's pad rather than its own, in one ring. It is
- * a ring rather than a shuffle so that nobody is told about themselves and
- * everybody is told about by somebody — the room can always solve it, provided
- * they talk.
- */
+/** Tell each phone the next blob's pad, in a ring, so nobody is told about themselves and nobody is left out. */
 function shuffleTells(objective: FindYourColourObjective, players: Player[]): void {
   if (players.length < 2) return
   for (const [index, player] of players.entries()) {

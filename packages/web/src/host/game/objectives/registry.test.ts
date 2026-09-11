@@ -9,11 +9,7 @@ import { eligibleTemplates, templateFor, TEMPLATES, unlockedAt } from './registr
 import type { ObjectiveTemplate } from './types.js'
 import { joinPlayer } from '../testRoom.js'
 
-/**
- * What every task has to be true of, whatever it is. The catalogue is meant to
- * grow — a file and a line in the registry — so the rules that hold for all of
- * them are worth asserting once here rather than remembering each time.
- */
+// What must hold of every task; a new one inherits all of it by being in `TEMPLATES`.
 
 function room(count: number, seed = 1): GameState {
   const state = createGame(seed)
@@ -23,11 +19,7 @@ function room(count: number, seed = 1): GameState {
   return state
 }
 
-/**
- * The tasks whose pads are meant to hold the whole room at once. Everything
- * else puts down pads for a couple, or somewhere to bring a parcel, and is not
- * being asked to fit six blobs inside one circle.
- */
+/** Tasks whose pad must hold the whole room at once; one that gathers everybody adds its kind here. */
 const GATHERS_EVERYBODY = new Set<string>(['followTheChain', 'movingPad'])
 
 function generate(template: ObjectiveTemplate, state: GameState, level: number, seed: number) {
@@ -56,7 +48,6 @@ describe('the catalogue', () => {
     for (const template of first) expect(template.minPlayers).toBeLessThanOrEqual(2)
   })
 
-  /** The debug menu lists them by name, and an unnamed task is a blank row. */
   it('gives every one of them a name a grown-up can pick out of a list', () => {
     const titles = TEMPLATES.map((template) => template.title)
 
@@ -64,10 +55,6 @@ describe('the catalogue', () => {
     expect(new Set(titles).size).toBe(titles.length)
   })
 
-  /**
-   * A task fussier than a headcount has to be askable of *some* room, or it is
-   * a file nobody ever plays. Adding the thirteenth inherits this.
-   */
   it('never lets a task quietly become unaskable', () => {
     for (const template of TEMPLATES) {
       const suits = template.suits
@@ -83,16 +70,11 @@ describe('the catalogue', () => {
     for (const template of TEMPLATES) {
       expect(template.minLevel).toBeGreaterThanOrEqual(1)
       expect(template.minLevel).toBeLessThanOrEqual(MAX_LEVEL)
-      // Nothing is for one blob on its own: this is a game for a room.
       expect(template.minPlayers).toBeGreaterThanOrEqual(2)
     }
   })
 })
 
-/**
- * Going up a rung asks the room for whatever that rung unlocked, before
- * anything else. That only works if every task is on exactly one rung.
- */
 describe('what each rung of the ladder unlocks', () => {
   it('hands every task out exactly once, across the whole ladder', () => {
     const unlocked = Array.from({ length: MAX_LEVEL }, (_, at) => unlockedAt(at + 1)).flat()
@@ -119,13 +101,10 @@ describe('every task, at every level, in every size of room', () => {
           for (let seed = 0; seed < 12; seed++) {
             const state = room(template.minPlayers + (seed % 5), seed)
             const objective = generate(template, state, level, seed)
-            // Per axis rather than as a circle around the middle: a start pad
-            // is a tall thin rectangle, and treating it as a square that wide
-            // says it is off the side of a floor it is nowhere near.
+            // Per axis, since a start pad is a tall thin rectangle.
             for (const zone of objective.zones) {
               const across = zone.shape === 'circle' ? zone.radius : zone.width / 2
               const down = zone.shape === 'circle' ? zone.radius : zone.height / 2
-              // A roof rises above the body it sits on.
               const up = down + (zone.shape === 'house' ? roofHeight(zone) : 0)
               expect(zone.x - across).toBeGreaterThanOrEqual(0)
               expect(zone.y - up).toBeGreaterThanOrEqual(0)
@@ -134,8 +113,7 @@ describe('every task, at every level, in every size of room', () => {
             }
             expect(new Set(objective.zones.map((zone) => zone.id)).size).toBe(objective.zones.length)
 
-            // Walls too, and never one that shuts half the floor off: a blob
-            // that cannot drive round it is a blob out of the game.
+            // Never a wall that shuts half the floor off.
             for (const wall of objective.obstacles) {
               expect(wall.x - wall.width / 2).toBeGreaterThanOrEqual(0)
               expect(wall.y - wall.height / 2).toBeGreaterThanOrEqual(0)
@@ -148,8 +126,6 @@ describe('every task, at every level, in every size of room', () => {
               objective.obstacles.length,
             )
 
-            // Whatever it has put on the floor has to be reachable too: a
-            // parcel half off the screen is one nobody can be driven into.
             for (const thing of objective.carryables) {
               expect(thing.x).toBeGreaterThan(0)
               expect(thing.y).toBeGreaterThan(0)
@@ -164,15 +140,6 @@ describe('every task, at every level, in every size of room', () => {
         }
       })
 
-      /**
-       * The tasks that want the whole room standing on one pad at once have to
-       * put down a pad the whole room fits on. A pad is clamped to its own
-       * square of floor so that two of them never overlap, and that clamp used
-       * to win silently: six blobs were sent to gather on a pad with room for
-       * three, which is not a hard task but an impossible one.
-       *
-       * A task that gathers everybody onto a pad adds its kind to the list.
-       */
       it('puts down a pad the whole room fits on, where the room is asked onto one', () => {
         if (!GATHERS_EVERYBODY.has(template.kind)) return
         for (let level = 1; level <= MAX_LEVEL; level++) {
@@ -206,28 +173,22 @@ describe('every task, at every level, in every size of room', () => {
           const here = new Set(activePlayers(state).map((player) => player.playerId))
           const briefs = template.briefs(objective, state)
 
-          // Every task tells the room something: the TV has one line, always.
+          // The TV is the primary signal: exactly one line for the room, always.
           expect(briefs.filter((brief) => brief.to === '*')).toHaveLength(1)
           for (const brief of briefs) {
             expect(brief.to === '*' || here.has(brief.to)).toBe(true)
             expect(brief.headline.length).toBeLessThanOrEqual(MAX_HEADLINE_LENGTH)
             expect(brief.detail?.length ?? 0).toBeLessThanOrEqual(MAX_DETAIL_LENGTH)
           }
-          // Nobody is told two different things at once.
           expect(new Set(briefs.map((brief) => brief.to)).size).toBe(briefs.length)
         }
       })
 
-      /**
-       * A room that stands still and does nothing must never be stuck: the
-       * clock is the director's, so a task's own step has to leave it running
-       * rather than declaring anything.
-       */
+      /** The clock is the director's, so a task's own step never ends it for an idle room. */
       it('is still running after a while of nobody doing anything about it', () => {
         const state = room(template.minPlayers + 1)
         const objective = generate(template, state, 3, 8)
         for (const player of activePlayers(state)) {
-          // Somewhere that is nowhere in particular.
           player.x = 40
           player.y = 40
         }

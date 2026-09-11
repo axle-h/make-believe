@@ -8,11 +8,7 @@ import { activePlayers } from './selectors.js'
 import { createGame, type GameState } from './state.js'
 import { joinPlayer } from './testRoom.js'
 
-/**
- * A blob called Daddy gets the debug menu on its phone. The host grants the
- * privilege and the phone never claims it, which is the whole of what makes it
- * safe — and the word itself lives in the host, so it never ships to a phone.
- */
+/** Only the blob the host named Daddy gets the sheet; the phone never claims it. */
 
 /** How many rows of the sheet this room could actually play. */
 function playable(state: GameState): number {
@@ -39,7 +35,6 @@ describe('who the grown-up is', () => {
     expect(isDaddy('')).toBe(false)
   })
 
-  /** Five characters is exactly the cap, so it fits with nothing to spare. */
   it('is a name a phone can actually type', () => {
     expect(isDaddy('Daddy')).toBe(true)
     expect('Daddy'.length).toBe(5)
@@ -68,11 +63,7 @@ describe('the sheet', () => {
     for (const task of tasks) expect(task.title.length).toBeGreaterThan(0)
   })
 
-  /**
-   * A greyed row the TV would have accepted, or a live row it refuses, is a
-   * menu that lies. `askFor` checks a headcount and deliberately not `suits`,
-   * so this has to agree with it exactly — at every room size, for every task.
-   */
+  /** `playable` agrees exactly with `askFor` (a headcount, not `suits`) at every room size. */
   it('greys exactly the rows the TV would refuse', () => {
     for (let size = 2; size <= 10; size += 1) {
       const state = room(Array.from({ length: size }, (_, at) => `B${at}`))
@@ -100,11 +91,7 @@ describe('the sheet', () => {
   })
 })
 
-/**
- * A command from anybody else does nothing at all. The relay tags what a phone
- * says with the id its *socket* arrived under, so a phone cannot claim to be
- * Daddy — and this checks the name anyway, because the phone decides nothing.
- */
+/** A command from any blob not named Daddy does nothing. */
 describe('who may ask', () => {
   it('does what the grown-up asked', () => {
     const state = room(['Wilf', 'Daddy'])
@@ -161,10 +148,7 @@ describe('who may ask', () => {
   })
 })
 
-/**
- * The two things the sheet can do. Both are the ones the TV's `d` key already
- * calls, and both do exactly what the director does to itself.
- */
+/** The sheet's two commands do exactly what the director does to itself. */
 describe('what a grown-up can ask for', () => {
   it('puts any task up, wherever the ladder is', () => {
     const state = room(['Wilf', 'Daddy'])
@@ -201,10 +185,7 @@ describe('what a grown-up can ask for', () => {
     expect(state.objectives.level).toBe(1)
   })
 
-  /**
-   * The crown is a title somebody won, not a number on the ladder. Starting
-   * again does not take it off their head.
-   */
+  /** Starting the ladder again does not take the crown off anybody's head. */
   it('leaves the crown where it is', () => {
     const state = room(['Wilf', 'Daddy'])
     state.objectives.crown = 'p1'

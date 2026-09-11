@@ -34,15 +34,13 @@ import {
 } from './squelch.js'
 
 /**
- * The one scene. It renders the model and nothing else: the model moves the
- * blobs, so this layer stays thin enough that it needs no tests of its own.
+ * Renders the model and nothing else. Arcade physics is deliberately off: the
+ * model owns every position, and a second integrator here would fight it.
  */
 
-/** A white rounded square, generated once and tinted per blob. */
+/** Generated once and tinted per blob. */
 const BLOB_TEXTURE = 'blob'
-/** Pixels between the top of a blob and its name. */
 const NAME_GAP = 14
-/** Pixels between a name and the bubble above it. */
 const BUBBLE_GAP = 10
 const BUBBLE_PADDING = 14
 const BUBBLE_RADIUS = 16
@@ -51,62 +49,41 @@ const BUBBLE_WRAP = 360
 const BUBBLE_FADE_MS = 250
 const AWAY_ALPHA = 0.3
 
-/** How far in from the top of the screen the banner sits. */
 const BANNER_TOP = 24
-/** The banner keeps clear of the QR code in the corner. */
+/** Keeps the banner clear of the QR code in the corner. */
 const BANNER_WIDTH = 800
-/** The timer bar: how wide it can get, and how thick it is. */
 const TIMER_WIDTH = 520
 const TIMER_HEIGHT = 8
-/** Gap between the banner's last line and the bar under it. */
 const TIMER_GAP = 12
-/** How see-through a zone's fill is. Enough to read, never enough to hide a blob. */
+/** Never enough to hide a blob. */
 const ZONE_FILL_ALPHA = 0.14
-/**
- * A wall is solid, which is the opposite of a zone: a zone is a place to stand
- * and a wall is a place you cannot. It is drawn opaque and a shade lighter than
- * the floor so that it reads as furniture rather than as a spot to aim at.
- */
+/** Opaque and a shade lighter than the floor, so a wall reads as furniture, not a zone. */
 const WALL_FILL = 0x2c_33_50
 const WALL_EDGE = 0x4a_54_7d
 const WALL_EDGE_WIDTH = 4
 const WALL_CORNER = 10
 const ZONE_EDGE_WIDTH = 6
-/** How much of itself a zone keeps while it is waiting its turn to light up. */
 const ZONE_DIM = 0.35
-/** How far the score sits from the corner it lives in. */
 const SCORE_MARGIN = 26
 
-/** A parcel is a small bright square; a crate is a big one with a cross on it. */
 const THING_CORNER = 8
 const THING_EDGE_WIDTH = 4
-/** The name written on a depot, for whoever in the room can read it. */
 const ZONE_LABEL_ALPHA = 0.5
-/** How far under a labelled zone its tally sits, when it cannot go in the middle. */
 const TALLY_GAP = 10
 
-/** The floor is under everything; blobs, names and bubbles stack over it. */
 const DEPTH_ZONE = -10
-/** Over the floor markings but under everything else: the ring in hot potato. */
 const DEPTH_DANGER = -8
-/** Things lying about are on the floor; things being carried are held up. */
 const DEPTH_THING_DOWN = -5
 const DEPTH_BLOB = 0
 const DEPTH_THING_HELD = 5
 const DEPTH_NAME = 10
 const DEPTH_BUBBLE = 20
-/** What the world is asking for goes over the lot; it is the point of looking up. */
 const DEPTH_BANNER = 30
 
-/**
- * The ring behind a blob the task wants the room to notice. A hot red-orange
- * that is in neither `BLOB_COLOURS` nor `ZONE_COLOURS`, so it can never be
- * mistaken for somebody's blob or for a spot to stand on.
- */
+/** In neither `BLOB_COLOURS` nor `ZONE_COLOURS`, so it is never taken for a blob or a spot. */
 const DANGER_COLOUR = 0xff_2a_1c
 const DANGER_ALPHA = 0.85
 const DANGER_WIDTH = 6
-/** How big it is, and how much it grows and shrinks by, around the blob. */
 const DANGER_RADIUS = BLOB_SIZE * 0.9
 const DANGER_SWELL = BLOB_SIZE * 0.22
 const DANGER_PERIOD_MS = 900
@@ -126,11 +103,7 @@ const WAITING_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   color: 'rgba(244, 241, 234, 0.45)',
 }
 
-/**
- * How big the banner's first line is: the usual size, and the size a new level
- * gets. Going up a rung is the only thing all evening that is about the
- * children rather than the game, so it is the only thing that grows.
- */
+/** A level is the only brief drawn bigger than the rest. */
 const HEADLINE_SIZE = 44
 const LEVEL_SIZE = 96
 
@@ -155,7 +128,6 @@ const BANNER_DETAIL_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   wordWrap: { width: BANNER_WIDTH },
 }
 
-/** The banner is tinted by what has just happened, so a glance is enough. */
 const TONE_COLOURS: Record<Brief['tone'], string> = {
   task: '#f4f1ea',
   win: '#5ddf7f',
@@ -163,14 +135,6 @@ const TONE_COLOURS: Record<Brief['tone'], string> = {
   level: '#ffd23f',
 }
 
-
-/**
- * How well the room is doing. It is deliberately the quietest thing on screen:
- * a number to notice going up, never a scoreboard to play towards, and nothing
- * a child has to be able to read to play.
- */
-/** What a depot is called, written across it. */
-/** The usual size for a word written on the floor. Some zones ask for more. */
 const ZONE_LABEL_SIZE = 22
 
 const ZONE_LABEL_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
@@ -182,12 +146,9 @@ const ZONE_LABEL_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
 }
 
 /**
- * How many things have been brought to a depot: one number, big, in the middle
- * of it. The parcels themselves used to stay where they landed and pile up
- * into a heap nobody could count, which told a room less than a numeral does
- * and looked like a mess on the floor.
+ * Every picture is an emoji drawn in `system-ui`, so only glyphs in `SAFE_GLYPHS`
+ * (Emoji 5.0, for the TV stick's Emoji 11 font) may reach this style.
  */
-/** What a thing is, drawn on it: an apple, a bone, a slice of bread. */
 const THING_GLYPH_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'system-ui, sans-serif',
   fontSize: '30px',
@@ -218,46 +179,28 @@ const BUBBLE_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   wordWrap: { width: BUBBLE_WRAP },
 }
 
-/** What a blob is saying, drawn as a rounded box with a tail. */
 interface BubbleView {
   container: Phaser.GameObjects.Container
-  /** The words this bubble was built for, so it is only rebuilt when they change. */
   said: string
 }
 
-/** Everything on screen that belongs to one blob. */
 interface BlobView {
   image: Phaser.GameObjects.Image
   label: Phaser.GameObjects.Text
   bubble: BubbleView | null
-  /** The drawing this blob is wearing, or being given: a texture key. */
   skinKey: string | null
-  /** Its bounce, and where it was last frame so the hop can be paced by it. */
   squelch: Squelch
+  /** Last frame's position, so the hop is paced by distance actually moved. */
   atX: number
   atY: number
 }
 
-/** What the scene does with the model beyond drawing it. */
+/** The scene knows nothing about the socket; `main.ts` sends what these hand over. */
 export interface SceneOptions {
-  /**
-   * What the phones need to hear, handed over as `tick` produces it. The scene
-   * still knows nothing about the socket; `main.ts` owns that and does the
-   * sending.
-   */
   onBriefs?: (briefs: Brief[]) => void
-  /**
-   * Blobs the world has waited long enough for and given up on. Their colours
-   * and names have gone back into the palette, and a phone sitting on a join
-   * screen wants to know. Same arrangement as `onBriefs`: the scene knows
-   * nothing about the socket.
-   */
+  /** Blobs the world gave up on; their colours and names are back in the palette. */
   onForgotten?: (playerIds: string[]) => void
-  /**
-   * Noises for the phones, handed over as `tick` produces them. The TV makes
-   * none of them itself: the sound is in six hands rather than in one speaker,
-   * which is the only way a private signal costs nobody a bowed head.
-   */
+  /** The TV makes no sound itself; every cue is played on a phone. */
   onSounds?: (sounds: Sound[]) => void
 }
 
@@ -266,32 +209,15 @@ export class WorldScene extends Phaser.Scene {
   private readonly options: SceneOptions
   private readonly views = new Map<string, BlobView>()
   private waiting: Phaser.GameObjects.Text | null = null
-  /** The floor markings, redrawn only when the zones themselves change. */
   private floor: Phaser.GameObjects.Graphics | null = null
-  /** What the floor was last drawn for, so it is not redrawn every frame. */
   private floorFor = ''
-  /** What each zone is called, written on it. Kept by zone id. */
   private readonly zoneLabels = new Map<string, Phaser.GameObjects.Text>()
-  /** How many parcels each depot is holding, written on it. Kept by zone id. */
   private readonly tallies = new Map<string, Phaser.GameObjects.Text>()
-  /** What each thing on the floor actually is — an apple, a bone — by its id. */
   private readonly glyphs = new Map<string, Phaser.GameObjects.Text>()
-  /**
-   * The ring behind whoever the task wants the room to notice. Redrawn every
-   * frame rather than cached like the floor, because the whole of it is that
-   * it pulses.
-   */
   private danger: Phaser.GameObjects.Graphics | null = null
-  /** Parcels and crates: on the floor, and in somebody's arms. */
   private thingsDown: Phaser.GameObjects.Graphics | null = null
   private thingsHeld: Phaser.GameObjects.Graphics | null = null
-  /**
-   * The banner's first line, in three pieces. Most briefs use only the first
-   * and it is centred on its own; a brief that names one word of its headline
-   * — "everybody go **green**" — gets that word in the middle piece, painted,
-   * with the three of them laid out along one baseline. Phaser's `Text` has no
-   * rich text in it, so three objects is what a coloured word costs.
-   */
+  /** Three pieces, because Phaser's `Text` cannot paint one word of a line. */
   private headline: Phaser.GameObjects.Text | null = null
   private headlineWord: Phaser.GameObjects.Text | null = null
   private headlineAfter: Phaser.GameObjects.Text | null = null
@@ -305,11 +231,7 @@ export class WorldScene extends Phaser.Scene {
     this.options = options
   }
 
-  /**
-   * Which texture each blob is actually wearing. The model says which drawing
-   * a blob *should* have; this says what reached the screen, which is the only
-   * way an end-to-end test can tell the two apart.
-   */
+  /** What reached the screen, as opposed to what the model says; e2e compares the two. */
   wornTextures(): Record<string, string> {
     const worn: Record<string, string> = {}
     for (const [playerId, view] of this.views) worn[playerId] = view.image.texture.key
@@ -357,8 +279,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   override update(_time: number, delta: number): void {
-    // A backgrounded tab hands back an enormous delta on its first frame;
-    // capping it here is what stops everyone teleporting into a wall.
+    // A backgrounded tab returns an enormous delta; capping it stops blobs teleporting.
     const step = Math.min(delta, MAX_STEP_MS)
     const result = tick(this.state, step)
     if (result.briefs.length > 0) this.options.onBriefs?.(result.briefs)
@@ -369,19 +290,12 @@ export class WorldScene extends Phaser.Scene {
 
   private render(step: number): void {
     const list = players(this.state)
-    // One read of the objective for the whole frame; four separate ones would
-    // rebuild the same snapshot four times over.
     const director = objectives(this.state)
     const seen = new Set<string>()
 
-    // Whatever the task has pinned to particular blobs, ready to be read out of
-    // in the loop below: a badge is part of a blob's name, not a thing sitting
-    // on top of it.
     const badges = badgesByPlayer(director)
 
-    // A blob the task has made fuzzy is still driving and still theirs: it is
-    // drawn faint so that the room can see it cannot be hit, and it stops
-    // being faint the instant the task is over.
+    // Fuzzy is the task's "out": still driving, drawn faint, and gone when the task ends.
     const fuzzy = new Set(director.objective?.fuzzy ?? [])
     for (const player of list) {
       seen.add(player.playerId)
@@ -394,9 +308,6 @@ export class WorldScene extends Phaser.Scene {
         .setDisplaySize(BLOB_SIZE * pose.scaleX, BLOB_SIZE * pose.scaleY)
         .setRotation(pose.rotation)
         .setAlpha(alpha)
-      // The name rides the bounce rather than hanging in the air over it: a
-      // blob and its label are one character, and a fixed gap from the top of
-      // the blob is the only way they never end up on top of each other.
       view.label.setPosition(player.x, drawnTop(player.y, pose) - NAME_GAP).setAlpha(alpha)
       const named = nameWithBadges(player.name, badges.get(player.playerId))
       if (view.label.text !== named) view.label.setText(named)
@@ -423,7 +334,6 @@ export class WorldScene extends Phaser.Scene {
     this.renderScore(director)
   }
 
-  /** How the room is doing, in the corner, for whoever cares to look. */
   private renderScore(director: DirectorSnapshot): void {
     const score = this.score
     if (!score) return
@@ -432,17 +342,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * A pulsing ring behind whoever the task wants the room to notice — which so
-   * far is only the blob holding the potato.
-   *
-   * **Behind, never over.** The middle of a blob is the child's own drawing and
-   * that is the one thing in the game they made; nothing may be painted on top
-   * of it and its texture is never swapped for a state.
-   *
-   * It exists because a three-year-old who cannot read was looking at a screen
-   * where nothing said *away*. A badge beside a name says who has it; a ring
-   * that grows and shrinks says to get away from them, and the TV is where
-   * heads are up.
+   * Behind the blob, never over it: the middle of a blob is the child's drawing,
+   * and nothing is painted on it nor its texture swapped for a state.
    */
   private renderDanger(objective: ObjectiveSnapshot | null, list: readonly Player[]): void {
     const ring = this.danger
@@ -451,8 +352,6 @@ export class WorldScene extends Phaser.Scene {
     const marked = new Set(objective?.danger ?? [])
     if (marked.size === 0) return
 
-    // A sine on the frame clock: it hangs at each end for free, which reads as
-    // breathing rather than as a strobe.
     const along = Math.sin((this.time.now / DANGER_PERIOD_MS) * Math.PI * 2)
     const radius = DANGER_RADIUS + along * DANGER_SWELL
     ring.lineStyle(DANGER_WIDTH, DANGER_COLOUR, DANGER_ALPHA)
@@ -462,11 +361,6 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * The zones on the floor. They are the objective as far as a three-year-old
-   * is concerned — the banner explains, but the spot is the thing they look at
-   * — so they are drawn plainly and under everybody's feet.
-   */
   private renderFloor(objective: ObjectiveSnapshot | null): void {
     const zones = objective?.zones ?? []
     const walls = objective?.obstacles ?? []
@@ -478,28 +372,19 @@ export class WorldScene extends Phaser.Scene {
     if (!floor) return
     floor.clear()
     for (const zone of zones) this.drawZone(floor, zone)
-    // Every outline first, then every fill. Even merged, a maze has T-junctions
-    // where one wall's outline crosses another's middle, and an outline that
-    // falls inside another wall is painted over by the second pass — so only
-    // the outer silhouette of a run of walls survives.
+    // All outlines, then all fills, so an outline inside another wall is painted
+    // over and a maze's T-junctions show only the outer silhouette.
     for (const wall of walls) strokeWall(floor, wall)
     for (const wall of walls) fillWall(floor, wall)
     this.renderZoneLabels(zones)
   }
 
-  /**
-   * What a zone is called, written across it — HOME, or the colour a depot
-   * takes. Most zones have no name at all: the spot to stand on is a spot to
-   * stand on, and a word on it would be a word nobody needs to read.
-   */
   private renderZoneLabels(zones: Zone[]): void {
     const named = new Set<string>()
     for (const zone of zones) {
       if (!zone.label) continue
       named.add(zone.id)
       const label = this.zoneLabels.get(zone.id) ?? this.createZoneLabel(zone.id)
-      // A house asking for the next slice of bread asks with a picture, and
-      // the picture is the whole instruction, so it is drawn the size of one.
       const size = zone.labelSize ?? ZONE_LABEL_SIZE
       if (label.style.fontSize !== `${size}px`) label.setFontSize(size)
       if (label.text !== zone.label) label.setText(zone.label)
@@ -521,14 +406,7 @@ export class WorldScene extends Phaser.Scene {
     return label
   }
 
-  /**
-   * The parcels and the crates. They move every frame, so unlike the floor
-   * they are redrawn every frame — there are never more than a handful, and a
-   * thing being carried has to keep up with the blob carrying it.
-   *
-   * What is being held is drawn over its carrier and what is lying about is
-   * drawn under everybody, so "who has got one" needs no reading either.
-   */
+  /** Redrawn every frame, unlike the floor: a carried thing must keep up with its carrier. */
   private renderThings(objective: ObjectiveSnapshot | null): void {
     const down = this.thingsDown
     const held = this.thingsHeld
@@ -537,8 +415,6 @@ export class WorldScene extends Phaser.Scene {
     held.clear()
 
     const drawn = new Set<string>()
-    // Things drifting across the floor. Drawn over everything, because getting
-    // out of the way of one is the whole game while there are any.
     for (const hazard of objective?.hazards ?? []) {
       drawn.add(hazard.id)
       this.renderGlyph({ id: hazard.id, x: hazard.x, y: hazard.y, glyph: hazard.glyph })
@@ -546,9 +422,7 @@ export class WorldScene extends Phaser.Scene {
       held.fillCircle(hazard.x, hazard.y, hazard.size / 2)
     }
     for (const thing of objective?.carryables ?? []) {
-      // A delivered parcel is counted rather than drawn: a dozen of them
-      // landing on one spot used to stack into a heap that said less about how
-      // far the room had got than the number written over it does.
+      // A delivered parcel is counted by its depot's tally rather than drawn.
       if (thing.kind === 'parcel' && thing.home !== null) continue
       const carried = thing.kind === 'parcel' && thing.carriedBy !== null
       this.drawThing(carried ? held : down, thing)
@@ -564,14 +438,7 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * What a thing on the floor actually is, drawn over it. The square underneath
-   * is still the colour that matters — sorting is played by colour — and the
-   * picture is what makes it an apple rather than a parcel.
-   *
-   * They move every frame, so like the things themselves they are placed every
-   * frame; they are kept by carryable id, exactly as the tallies are by zone.
-   */
+  /** The square underneath keeps the colour that matters; sorting is played by colour. */
   private renderGlyph(thing: { id: string; x: number; y: number; glyph?: string }): void {
     const glyph = this.glyphs.get(thing.id) ?? this.createGlyph(thing.id)
     if (glyph.text !== thing.glyph) glyph.setText(thing.glyph ?? '')
@@ -587,14 +454,7 @@ export class WorldScene extends Phaser.Scene {
     return glyph
   }
 
-  /**
-   * The number on each depot. It changes as things arrive rather than when the
-   * floor does, so unlike the labels it is placed every frame — there are never
-   * more than a handful of depots.
-   *
-   * It goes in the middle of a depot that has nothing written on it, and just
-   * under one that has, so a word and a number never sit on top of each other.
-   */
+  /** Under a labelled depot rather than in its middle, so word and number never overlap. */
   private renderTallies(objective: ObjectiveSnapshot | null): void {
     const parcels = (objective?.carryables ?? []).filter((thing) => thing.kind === 'parcel')
     const counted = new Set<string>()
@@ -633,8 +493,6 @@ export class WorldScene extends Phaser.Scene {
     const size = thing.kind === 'crate' ? CRATE_SIZE : PARCEL_SIZE
     const left = thing.x - size / 2
     const top = thing.y - size / 2
-    // A delivered thing sits quietly: it is done with, and the eye should go
-    // to whatever is still out on the floor.
     const alpha = thing.home === null ? 1 : 0.55
 
     into.fillStyle(colour, alpha)
@@ -643,15 +501,12 @@ export class WorldScene extends Phaser.Scene {
     into.strokeRoundedRect(left, top, size, size, THING_CORNER)
 
     if (thing.kind !== 'crate') return
-    // The tape across a crate, which is what stops it reading as a big parcel.
     into.lineBetween(left, thing.y, left + size, thing.y)
     into.lineBetween(thing.x, top, thing.x, top + size)
   }
 
   private drawZone(floor: Phaser.GameObjects.Graphics, zone: Zone): void {
     const colour = Phaser.Display.Color.HexStringToColor(zone.colour).color
-    // A dim pad is one that is on the floor but is not what the world is
-    // asking for this second. It has to be plainly there and plainly not lit.
     const lit = zone.dim !== true
     floor.fillStyle(colour, lit ? ZONE_FILL_ALPHA : ZONE_FILL_ALPHA * ZONE_DIM)
     floor.lineStyle(ZONE_EDGE_WIDTH, colour, lit ? 0.9 : 0.9 * ZONE_DIM)
@@ -664,22 +519,15 @@ export class WorldScene extends Phaser.Scene {
     const top = zone.y - zone.height / 2
     floor.fillRoundedRect(left, top, zone.width, zone.height, 18)
     floor.strokeRoundedRect(left, top, zone.width, zone.height, 18)
-    // A roof, and nothing else: the body is the whole of where a parcel counts
-    // as home, and the triangle over it is what makes that legible without a
-    // word of the brief being read.
+    // Only the body counts as home; the roof is decoration.
     if (zone.shape !== 'house') return
     const roof = roofHeight(zone)
-    // Overhanging eaves, so it reads as a house rather than as a hat.
     const eaves = zone.width * 0.08
     floor.fillTriangle(left - eaves, top, zone.x + zone.width / 2 + eaves, top, zone.x, top - roof)
     floor.strokeTriangle(left - eaves, top, zone.x + zone.width / 2 + eaves, top, zone.x, top - roof)
   }
 
-  /**
-   * What the world is asking for, across the top. It is the same line the
-   * phones are told, so a child looking down and a child looking up are reading
-   * the same thing.
-   */
+  /** The same line the phones are told. */
   private renderBanner(objective: ObjectiveSnapshot | null): void {
     const headline = this.headline
     const word = this.headlineWord
@@ -692,8 +540,7 @@ export class WorldScene extends Phaser.Scene {
     const text = line?.headline ?? ''
     const parts = splitHeadline(text, line?.emphasis)
     const painted = parts.word.length > 0
-    // Setting the size re-wraps and re-measures the text, so it is only ever
-    // touched when it has actually changed.
+    // Setting the size re-wraps and re-measures, so only when it has changed.
     const size = tone === 'level' ? LEVEL_SIZE : HEADLINE_SIZE
     for (const piece of [headline, word, after]) {
       if (piece.style.fontSize !== `${size}px`) piece.setFontSize(size)
@@ -716,12 +563,6 @@ export class WorldScene extends Phaser.Scene {
     )
   }
 
-  /**
-   * Where the pieces of the first line sit. One piece is centred on the screen
-   * as it always was; three are laid end to end and the group is centred, so
-   * the painted word stays part of the sentence rather than becoming a caption
-   * of its own.
-   */
   private layOutHeadline(painted: boolean): void {
     const headline = this.headline
     const word = this.headlineWord
@@ -739,14 +580,11 @@ export class WorldScene extends Phaser.Scene {
     after.setX(left + headline.width + word.width)
   }
 
-  /** How much of the clock is left, as a bar rather than a number to read. */
   private renderTimer(objective: ObjectiveSnapshot | null, top: number): void {
     const timer = this.timer
     if (!timer) return
     timer.clear()
 
-    // A held clock is not counting, so there is nothing to draw a bar of: the
-    // race gathers everybody on the start line with no time limit at all.
     if (!objective || objective.outcome !== 'running' || objective.totalMs <= 0) return
     if (objective.clock === 'held') return
 
@@ -756,15 +594,13 @@ export class WorldScene extends Phaser.Scene {
     const filled = TIMER_WIDTH * share
     timer.fillStyle(0xf4f1ea, 0.18)
     timer.fillRoundedRect(left, y, TIMER_WIDTH, TIMER_HEIGHT, TIMER_HEIGHT / 2)
-    // A rounded rectangle narrower than its own corners draws as a smudge; the
-    // last few pixels of the clock are not worth one.
+    // A rounded rectangle narrower than its corners draws as a smudge.
     if (filled >= TIMER_HEIGHT) {
       timer.fillStyle(0xf4f1ea, 0.7)
       timer.fillRoundedRect(left, y, filled, TIMER_HEIGHT, TIMER_HEIGHT / 2)
     }
   }
 
-  /** A blob arrives on screen: a tinted square with its name above it. */
   private createView(player: Player): BlobView {
     const image = this.add
       .image(player.x, player.y, BLOB_TEXTURE)
@@ -788,14 +624,6 @@ export class WorldScene extends Phaser.Scene {
     return view
   }
 
-  /**
-   * Advance one blob's bounce and say how to draw it this frame.
-   *
-   * The model has already moved everybody by the time this runs, so what paces
-   * the hop is how far a blob actually got — which means a blob shoved across
-   * the floor by somebody else bounces along too, and one driving into a wall
-   * stands there and does not.
-   */
   private squelchOf(view: BlobView, player: Player, step: number): Pose {
     view.squelch = stepSquelch(view.squelch, player.x - view.atX, player.y - view.atY, step)
     view.atX = player.x
@@ -803,12 +631,6 @@ export class WorldScene extends Phaser.Scene {
     return poseOf(view.squelch)
   }
 
-  /**
-   * A drawing from a phone becomes this blob's texture. It is cut to the
-   * blob's rounded outline on the way — the phone lets a child draw right out
-   * to the corners of a square, and the shape is put back on here — which
-   * needs the PNG decoded first, so the swap waits on that.
-   */
   private renderSkin(view: BlobView, player: Player): void {
     const skin = player.skin
     if (!skin || view.skinKey === skin.key) return
@@ -822,18 +644,14 @@ export class WorldScene extends Phaser.Scene {
       return
     }
     void cropToBlob(skin.png).then((cropped) => {
-      // A quick second drawing can land while the first is still decoding, and
-      // a blob can leave altogether; either way this one is no longer wanted.
+      // A newer drawing, or the blob leaving, makes this one unwanted.
       if (view.skinKey !== key || this.textures.exists(key)) return
       if (cropped) {
         this.textures.addCanvas(key, cropped)
         this.wearSkin(view, playerId, key, previous)
         return
       }
-      // A picture that would not decode into a canvas is handed to Phaser as
-      // it arrived rather than dropped: an uncropped blob is a great deal
-      // better than a blank one. That decodes in the background too, so the
-      // swap waits for the texture manager to say the key is ready.
+      // Uncropped is better than blank, so a picture the canvas could not take goes to Phaser as it came.
       this.textures.once(`addtexture-${key}`, () =>
         this.wearSkin(view, playerId, key, previous),
       )
@@ -853,7 +671,6 @@ export class WorldScene extends Phaser.Scene {
     if (previous !== key) this.forgetSkin(previous)
   }
 
-  /** Drawings are one per player at a time; the old one leaves the GPU. */
   private forgetSkin(key: string | null): void {
     if (key && this.textures.exists(key)) this.textures.remove(key)
   }
@@ -866,17 +683,14 @@ export class WorldScene extends Phaser.Scene {
       return
     }
     if (view.bubble?.said !== said) {
-      // New words: the old bubble goes at once rather than fading under the new.
       this.destroyBubble(view)
       view.bubble = this.createBubble(said)
     }
     view.bubble.container
-      // The tail hangs below the box, so it is part of the gap above the name.
       .setPosition(player.x, view.label.y - view.label.height - BUBBLE_GAP - BUBBLE_TAIL)
       .setAlpha(player.away ? AWAY_ALPHA : 1)
   }
 
-  /** A rounded box with a tail, sized to the words inside it. */
   private createBubble(said: string): BubbleView {
     const label = this.add.text(0, 0, said, BUBBLE_STYLE).setOrigin(0.5, 1)
     const width = label.width + BUBBLE_PADDING * 2
@@ -892,7 +706,6 @@ export class WorldScene extends Phaser.Scene {
     return { container, said }
   }
 
-  /** Let a bubble that has run out of time drift away rather than blink out. */
   private fadeBubble(view: BlobView): void {
     const bubble = view.bubble
     if (!bubble) return
@@ -912,14 +725,7 @@ export class WorldScene extends Phaser.Scene {
   }
 }
 
-/**
- * Whatever has been pinned to each blob, by `playerId`. Usually empty and
- * never more than one each, but the shape allows for two so that a task which
- * wants to hand out a second badge does not have to change this.
- *
- * Two sources: the running task's own marks, and the world's — which is the
- * crown, still on the head of whoever won it several games ago.
- */
+/** The world's marks (the crown) and the running task's, by `playerId`. */
 function badgesByPlayer(director: DirectorSnapshot): Map<string, string> {
   const badges = new Map<string, string>()
   for (const mark of [...director.marks, ...(director.objective?.marks ?? [])]) {
@@ -928,31 +734,16 @@ function badgesByPlayer(director: DirectorSnapshot): Map<string, string> {
   return badges
 }
 
-/**
- * A blob's name with its badge on the front of it: "🥔 Wilf".
- *
- * The badge used to be drawn over the middle of the blob, which put it on top
- * of the one thing a child had made themselves — the drawing they are wearing.
- * Above their head it sits beside the name, where the room is already looking
- * to find out who is who, and the picture underneath stays theirs.
- */
+/** Badges go beside the name, never over the blob's middle, which is the child's drawing. */
 function nameWithBadges(name: string, badges: string | undefined): string {
   return badges ? `${badges} ${name}` : name
 }
 
-/** How far it is from a zone's middle to its bottom edge. */
 function zoneFoot(zone: Zone): number {
   return zone.shape === 'circle' ? zone.radius : zone.height / 2
 }
 
-/**
- * A wall's outline, and a wall's fill. They are two functions because they are
- * two passes over the whole list rather than one pass doing both: see
- * `renderFloor`.
- *
- * Solid and plainly not a zone: the floor markings are places to go and this is
- * a place to go round.
- */
+/** Two functions for the two passes in `renderFloor`. */
 function strokeWall(floor: Phaser.GameObjects.Graphics, wall: Obstacle): void {
   floor.lineStyle(WALL_EDGE_WIDTH, WALL_EDGE, 1)
   aboutItsMiddle(floor, wall, (left, top, radius) => {
@@ -968,12 +759,8 @@ function fillWall(floor: Phaser.GameObjects.Graphics, wall: Obstacle): void {
 }
 
 /**
- * Drawn about its own middle, so that a bar which is turned is drawn turned —
- * the model and the screen must not disagree about where a wall is.
- *
- * The corner radius is cut back on a thin wall: a radius of 10 on an
- * eighteen-thick maze wall is very nearly a lozenge, and a row of lozenges is
- * exactly what a bad join between two walls looks like.
+ * About its own middle, so a turned bar is drawn turned. The radius is cut back
+ * on thin walls, or a row of maze walls reads as lozenges.
  */
 function aboutItsMiddle(
   floor: Phaser.GameObjects.Graphics,
@@ -991,27 +778,17 @@ function aboutItsMiddle(
   floor.restore()
 }
 
-/**
- * Enough of a wall to tell whether the floor needs redrawing. A bar that bobs
- * or turns changes by nothing else, so both are in here — leave the angle out
- * and a turning bar is drawn once and never again.
- */
+/** Must include position and angle, or a bobbing or turning bar is never redrawn. */
 function wallSignature(wall: Obstacle): string {
   const turn = Math.round((wall.angle ?? 0) * 100)
   return `${wall.id}:${Math.round(wall.x)}:${Math.round(wall.y)}:${wall.width}x${wall.height}:${turn}`
 }
 
-/** Enough of a zone to tell whether the floor needs redrawing. */
+/** Must include position, size, dimming and label, or those changes are never redrawn. */
 function zoneSignature(zone: Zone): string {
-  // Rounded, like the position: a shrinking island changes its radius by a
-  // fraction of a pixel every frame, and redrawing the floor for a change
-  // nobody can see is a redraw for nothing.
+  // Rounded, so a shrinking island does not redraw the floor every frame.
   const size =
     zone.shape === 'circle' ? Math.round(zone.radius) : `${zone.width}x${zone.height}`
-  // The dimming is in here because a chain of lights moves by nothing else
-  // changing: leave it out and the floor never redraws as the light travels.
   const at = `${Math.round(zone.x)}:${Math.round(zone.y)}`
-  // And the label, because a house that is asking for the next thing changes
-  // by nothing else: leave it out and it goes on asking for the first one.
   return `${zone.id}:${zone.shape}:${at}:${size}:${zone.colour}:${zone.dim === true}:${zone.label ?? ''}`
 }

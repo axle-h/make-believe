@@ -4,14 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
 
 /**
- * Turns `packages/web/public/icons/blob.svg` into the two images the TV app
- * needs: the 320x180 banner the leanback launcher shows, and a launcher icon
- * for everywhere else.
- *
- * Run by hand — `node androidtv/scripts/banner.mjs` — whenever the blob
- * changes; the PNGs it writes are committed, so building the APK needs no
- * Node at all. Same approach, and same source image, as the phone's icons in
- * `packages/web/scripts/icons.mjs`.
+ * Renders `blob.svg` into the TV banner and launcher icon. Run by hand when the blob changes; the
+ * PNGs are committed, so building the APK needs no Node.
  */
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -46,11 +40,7 @@ async function shoot(file, width, height, body) {
   console.log(`[banner] ${file} (${width}x${height})`)
 }
 
-/*
- * The banner is the app on the TV home screen, and TV launchers do not always
- * print the name underneath — so the banner says it itself. 320x180 at xhdpi
- * is what Android TV asks for.
- */
+// TV launchers do not always print the name underneath, so the banner says it itself.
 await shoot(
   'drawable-xhdpi/banner.png',
   320,
@@ -64,7 +54,6 @@ await shoot(
    </div>`,
 )
 
-/* The plain icon, for launchers that want one as well as the banner. */
 await shoot('mipmap-xhdpi/ic_launcher.png', 192, 192, `<div style="width: 150px;">${blob}</div>`)
 
 await browser.close()

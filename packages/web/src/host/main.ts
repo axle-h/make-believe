@@ -30,33 +30,20 @@ import { joinUrl, qrSvg } from './qr.js'
 import './host.css'
 
 /**
- * The TV. It owns every scrap of game state: phones only ever send inputs.
- * The state itself lives in `game/`, Phaser draws it, and this file is the
- * socket and the wiring between the two.
- *
- * The TV takes no input of its own — no buttons, nothing to click. It is a
- * window onto the world and the phones run everything. The single exception is
- * a debug menu hidden behind the `d` key, which is for a grown-up looking at a
- * task out of order and is no part of playing.
+ * The TV owns all game state; phones only send inputs. It takes no input of its
+ * own except the debug menu behind `d`.
  */
 
 const state: GameState = createGame()
 
 declare global {
   interface Window {
-    /** Test seam: the e2e suite reads the world from here rather than pixels. */
+    /** Test seam: e2e reads the world here rather than from pixels. */
     __game?: {
       state: GameState
       snapshot: () => GameSnapshot
-      /** The texture each blob is wearing on screen, keyed by `playerId`. */
       worn: () => Record<string, string>
-      /** The world the relay gave us, or '' before it has said. Never shown. */
       session: () => string
-      /**
-       * Every kind of task there is. The e2e suite reads it so that a test
-       * about all of them need keep no list of its own — and so that adding
-       * the eighteenth is covered by the same test as the other seventeen.
-       */
       kinds: () => string[]
     }
   }
@@ -72,16 +59,12 @@ function requireElement<T extends Element>(selector: string): T {
   return element
 }
 
-/**
- * Which world we are running. The relay mints it when this socket attaches and
- * says so straight away; the TV keeps it only for the test seam and for
- * anybody reading a log. It is never drawn and there is nowhere to type it.
- */
+/** Kept only for the test seam; the session is never drawn. */
 let session = ''
 
 const url = joinUrl(window.location.origin)
 if (qrEl) {
-  // Parsed rather than assigned as HTML: the page never sets innerHTML.
+  // The page never sets innerHTML.
   const svg = new DOMParser().parseFromString(qrSvg(url), 'image/svg+xml').documentElement
   qrEl.replaceChildren(svg)
   qrEl.setAttribute('aria-label', `Scan to open ${url}`)
@@ -92,17 +75,13 @@ const client = connect({
   schema: HostInboundMessageSchema,
   onMessage: handleMessage,
   onStatus: (status) => {
-    // A socket is the cheapest moment to wonder whether a deploy has happened
-    // — it is exactly when the phones ask — and a TV that lost the server for
-    // a minute is a TV that may have lost it *to* a deploy.
     if (status === 'open') void checkForNewBuild()
     if (!statusEl) return
     statusEl.textContent =
       status === 'open' ? '' : status === 'connecting' ? 'Connecting…' : 'Lost the server, retrying…'
   },
   onFatal: ({ reason }) => {
-    // Another TV opened the host page and took the world. This one steps
-    // aside rather than reconnecting and fighting for it.
+    // Replaced by another TV: step aside rather than reconnect and fight for the world.
     if (statusEl) {
       statusEl.textContent =
         reason === 'replaced'
@@ -116,67 +95,29 @@ function send(message: HostOutboundMessage): void {
   client.send(message)
 }
 
-/**
- * What the world is asking for, out to the phones. A brief is words and
- * nothing else: it changes no screen, disables no tool and puts no phone into
- * a mode. Every phone can still drive, talk and draw while it is up.
- */
+/** A brief is words only: it changes no screen, disables no tool and puts no phone into a mode. */
 function sendBriefs(briefs: Brief[]): void {
   for (const brief of briefs) send({ ...brief, type: 'brief' })
-  // A new task or a new level is exactly a brief that changed, so this is
-  // where the grown-up's sheet finds out about both.
+  // A new task or level always comes with a changed brief.
   refreshGrownup()
 }
 
-/**
- * Every colour and who has it, which is the whole of what a join screen is
- * made of. It goes to one phone when its socket turns up, and to everybody
- * whenever the roster changes — so an open join screen greys itself out live,
- * and the eleventh phone watches a colour come free without anybody refreshing
- * anything.
- */
 function sendPalette(to: Recipient): void {
   send({ type: 'palette', colours: palette(state), to })
 }
 
-/**
- * A phone said something. The model decides what it means; the only things the
- * TV has to answer are a socket arriving and a hello.
- *
- * The answer to a hello is which blob you are, and it doubles as the phone's
- * cue to put its controller up, so it goes out on a rejoin as well — a phone
- * that has just reloaded is waiting for it. It carries whether this blob
- * already has its drawing, because a world that has just been created has
- * forgotten every one of them and the phones are the only place they exist.
- *
- * A hello the world cannot grant is refused in as many words — the colour has
- * gone, the name is somebody else's, or there are already ten blobs — and the
- * fresh palette goes out **first**, so that the phone showing the refusal
- * already knows who has what.
- *
- * A blob that has walked in halfway through a task is told what is going on
- * right behind it, because the announcement it needed has already been made.
- */
 function handleMessage(message: HostInboundMessage): void {
-  // Which world this is, not something that happened in it: the model never
-  // sees it.
+  // `session`, `command` and `arrived` are not things the world hears; the model never sees them.
   if (message.type === 'session') {
     session = message.session
     return
   }
-  // A grown-up reaching for the debug menu from the sofa. Also not something
-  // the world hears: it is the same two director functions the TV's `d` key
-  // calls, and `debug.ts` calls them exactly like this.
   if (message.type === 'command') {
-    // The TV shows nothing at all: a task asked for from the sofa starts
-    // exactly as the director's own choice would, and a restart is visible
-    // only as the level and score being back where they started.
+    // The TV shows nothing: the command does exactly what the director does to itself.
     obeyGrownup(state, message)
     refreshGrownup()
     return
   }
-  // A socket with nobody on it yet. Also not something that happened in the
-  // world — there is no blob to hear about — so the model never sees it either.
   if (message.type === 'arrived') {
     sendPalette(message.playerId)
     return
@@ -184,19 +125,14 @@ function handleMessage(message: HostInboundMessage): void {
   const result = applyMessage(state, message)
   if (!result.applied) {
     if (!('refused' in result)) return
+    // The palette goes first, so the refused phone already knows who has what.
     sendPalette('*')
     send({ type: 'refused', reason: result.refused, to: result.playerId })
     return
   }
-  // Whatever just happened may have changed who is here, which changes what
-  // the grown-up's sheet may ask for.
   refreshGrownup()
   if (result.kind === 'finished') {
-    // A colour has come free, and somebody may be sitting on a join screen
-    // waiting for exactly that.
     sendPalette('*')
-    // That may have been the last blob, which is the only moment a waiting
-    // build is allowed to take the TV over.
     reloadIfSafe()
     return
   }
@@ -210,20 +146,15 @@ function handleMessage(message: HostInboundMessage): void {
     to: player.playerId,
   })
   if (result.kind === 'joined') sendPalette('*')
+  // A blob arriving mid-task missed the announcement.
   const brief = briefFor(state, player.playerId)
   if (brief) send({ ...brief, type: 'brief', to: player.playerId })
 }
 
 /**
- * The grown-up's sheet, out to the one blob the host decided was Daddy — and
- * to nobody else, ever. A phone that never receives this builds nothing, which
- * is the whole of how the sheet stays a secret: it is not in the markup, so
- * there is nothing on any other phone to find.
- *
- * It is re-sent when the roster changes, when the level changes and when a
- * task starts, which is what the signature below is for: a sheet that says the
- * room is too small for hot potato after a third child arrived is a sheet that
- * lies.
+ * The grown-up's sheet goes only to the blob the host decided was Daddy; a phone
+ * that never receives it builds nothing, which is the whole of the secret.
+ * Re-sent only when this signature of roster, ladder and tasks changes.
  */
 let grownupSaid = ''
 
@@ -243,12 +174,6 @@ function refreshGrownup(): void {
   send({ type: 'grownup', tasks, ...ladder, to: daddy.playerId })
 }
 
-/**
- * And the noises. A cue is information exactly as a brief is: it changes no
- * screen, takes no tool away, and a phone with its sound off plays the game
- * identically. It is the one signal that can be private without bowing six
- * heads, because you hear your own without looking down.
- */
 function sendSounds(sounds: Sound[]): void {
   for (const sound of sounds) send({ type: 'sound', cue: sound.cue, to: sound.to })
 }
@@ -256,43 +181,25 @@ function sendSounds(sounds: Sound[]): void {
 const phaser = startPhaser(world, state, {
   onBriefs: sendBriefs,
   onSounds: sendSounds,
-  // A blob the world has waited long enough for is gone, and its colour with
-  // it. Anybody on a join screen should see that swatch go live.
   onForgotten: () => {
     sendPalette('*')
     refreshGrownup()
-    // The world has just got emptier, and possibly empty.
     reloadIfSafe()
   },
 })
 
 // --- keeping the TV on the build the server is serving ---------------------
 
-/** Set when a newer build is out there but there are still blobs to lose. */
 let updatePending = false
-/** Set once a reload is on its way; asking twice only races the first. */
 let reloading = false
 
-/**
- * Take a waiting build, but only into an empty world.
- *
- * The TV holds every blob there is — names, colours, the pictures the children
- * drew — and reloading throws the lot away, so this waits however long it has
- * to. See `updates.ts`.
- */
+/** Only into an empty world, however long that takes: see `updates.ts`. */
 function reloadIfSafe(): void {
   if (reloading || !shouldReload(playerCount(state), updatePending)) return
   reloading = true
   window.location.reload()
 }
 
-/**
- * Is this page the build the server is serving?
- *
- * Asked on every socket and every couple of minutes besides, because a TV is
- * not carried about: it is switched on, left, and would otherwise sit on
- * whatever build it started with until somebody pressed Menu on the remote.
- */
 async function checkForNewBuild(): Promise<void> {
   try {
     const response = await fetch('/version', { cache: 'no-store' })
@@ -301,20 +208,13 @@ async function checkForNewBuild(): Promise<void> {
     updatePending = true
     reloadIfSafe()
   } catch {
-    // The server is unreachable. Nothing to do: the next poll asks again, and
-    // a TV that cannot reach the server has a louder problem than being stale.
+    // Unreachable: the next poll asks again.
   }
 }
 
-// No check on load: the host page is served `no-cache`, so a page that has
-// just loaded *is* the served build. What this is for is the hours afterwards.
+// Checked on every socket open (above) and polled here for the hours afterwards.
 setInterval(() => void checkForNewBuild(), VERSION_POLL_MS)
 
-/**
- * The one thing on the TV that answers a key. It is hidden behind `d`, it is
- * for a grown-up with a keyboard, and it is not part of the game: see
- * `debug.ts` for why the "no input at all" rule makes an exception of it.
- */
 startDebugMenu(document.body, state)
 window.__game = {
   state,

@@ -1,8 +1,4 @@
-# ⚠️ Traefik resolves a middleware by `<namespace>-<name>@kubernetescrd`, so this has to live in the
-# same namespace as the Ingress that names it — which is why every app in this cluster has its own
-# copy rather than sharing one. `k8s/ingress.yml` names it as
-# `make-believe-redirect-http-https@kubernetescrd`, and that string is only correct while the
-# namespace is `make-believe`.
+# Must share the Ingress's namespace: traefik resolves it as `<namespace>-<name>@kubernetescrd`.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:

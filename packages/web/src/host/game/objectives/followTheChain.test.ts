@@ -63,11 +63,6 @@ describe('lighting the chain', () => {
     expect(make(room(2), 8).chain.length).toBeGreaterThan(make(room(2), 1).chain.length)
   })
 
-  /**
-   * Six lights was too many to hold in a head, and the room ran out of clock
-   * long before the end of it. Four is the top of it now, at every level and
-   * in every size of room.
-   */
   it('never asks for more than four lights', () => {
     for (let level = 1; level <= MAX_LEVEL; level++) {
       for (let players = 2; players <= PALETTE.length; players++) {
@@ -78,11 +73,7 @@ describe('lighting the chain', () => {
     }
   })
 
-  /**
-   * A longer chain must not also be a tighter one. It was the other way round:
-   * the hardest version asked for twice the lights in three quarters of the
-   * time, which is where a room of six got stuck.
-   */
+  /** A longer chain must not also be a tighter one. */
   it('gives the room time for each light rather than for the task', () => {
     const easy = make(room(4), 1)
     const hard = make(room(4), MAX_LEVEL)

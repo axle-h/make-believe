@@ -1,8 +1,4 @@
 # Typecheck, lint, unit tests and the Playwright suite, on every push and pull request.
-#
-# The end-to-end tests are here rather than left to a human because they are the only thing that
-# exercises the whole rig — a real server, a real relay, a real TV page and two real phones — and
-# they are what caught the two worst bugs this project has had so far. They cost about a minute.
 name: ci
 
 on:
@@ -30,8 +26,7 @@ jobs:
         with:
           node-version: 22
 
-      # pnpm comes from the `packageManager` field via corepack, so the version in CI is the
-      # version in the repo rather than whatever the runner happens to ship.
+      # pnpm comes from the `packageManager` field via corepack, so CI runs the repo's version.
       - name: Enable pnpm
         run: corepack enable
         env:
@@ -59,16 +54,11 @@ jobs:
       - name: Build
         run: pnpm build
 
-      # ⚠️ Only chromium, and only for this job. Android and desktop Chrome are the targets
-      # (`CLAUDE.md`: iPhone is explicitly not one), so the other two engines would be a minute of
-      # runner time proving something nobody will ever run.
+      # Chromium only: Android and desktop Chrome are the only targets.
       - name: Install the browser Playwright needs
         run: pnpm exec playwright install --with-deps chromium
 
-      # ⚠️ `playwright.config.ts` builds again inside its `webServer` command. That is deliberate
-      # and not worth optimising away: the server serves `packages/web/dist` and sirv reads that
-      # directory once at startup, so the e2e suite insisting on its own fresh build is what stops
-      # it ever testing a stale one.
+      # `playwright.config.ts` builds again in its `webServer` command, so the suite never tests a stale build.
       - name: End-to-end
         run: pnpm test:e2e
 

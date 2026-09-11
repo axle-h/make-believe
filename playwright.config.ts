@@ -1,9 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
-/**
- * The end-to-end suite runs against the built app served by the real server —
- * the same thing the container runs — not against the Vite dev server.
- */
+/** Runs against the built app on the real server, as the container does, not the Vite dev server. */
 export default defineConfig({
   testDir: './e2e',
   // One world, one server: these tests share a deployment and must not overlap.
@@ -23,8 +20,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // Explicitly rebuilt: the server serves `packages/web/dist`, and sirv reads
-    // that directory once at startup, so a stale build would be served whole.
+    // Rebuilt every run: sirv reads `web/dist` once at startup, so a stale build would be served whole.
     command: 'pnpm build && pnpm start',
     url: 'http://localhost:3000/healthz',
     reuseExistingServer: false,

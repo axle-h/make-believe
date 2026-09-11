@@ -48,7 +48,6 @@ describe('handing out the pencil', () => {
     expect(objective.word.length).toBeGreaterThan(2)
   })
 
-  /** The word is on one phone. Half the room is looking at the TV. */
   it('never says the word on the television', () => {
     const state = room(3)
     const objective = make(state)
@@ -120,10 +119,7 @@ describe('guessing it', () => {
 })
 
 describe('coming and going', () => {
-  /**
-   * A phone put down mid-drawing would leave a room guessing at a picture
-   * nobody is drawing. The pencil is handed on, quietly, and the word with it.
-   */
+  /** An away drawer's pencil, and the word with it, is handed to somebody present. */
   it('hands the pencil to somebody else when the artist goes', () => {
     const state = room(3)
     const objective = make(state)

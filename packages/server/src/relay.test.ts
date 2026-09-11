@@ -59,11 +59,7 @@ describe('relay', () => {
     expect(host.sent).toEqual([session('AAAA')])
   })
 
-  /**
-   * A TV that reloads has forgotten every blob on it, so there is no such
-   * thing as the same world coming back. Every attach is a new one, and that
-   * is exactly what the phones need to be told.
-   */
+  /** A reloaded TV has forgotten every blob, so the same world never comes back. */
   it('mints a fresh session for every TV that attaches', () => {
     relay.attachHost(host)
     expect(relay.attachHost(fakeConnection())).toBe('BBBB')
@@ -79,12 +75,7 @@ describe('relay', () => {
     expect(one.sent).toEqual([session('AAAA')])
   })
 
-  /**
-   * A socket with nobody on it yet. The TV has to hear about it, because the
-   * join screen is made of the palette — every colour and who has it — and
-   * only the TV knows that. It is not the mirror of `left`: the world has
-   * nothing to hear here, and the game model has no case for it.
-   */
+  /** The TV must hear of a bare socket so it can answer with the palette. */
   it('tells the TV a phone has turned up, before it has said who it is', () => {
     relay.attachHost(host)
     host.clear()
@@ -101,11 +92,6 @@ describe('relay', () => {
     expect(host.sent).toEqual([])
   })
 
-  /**
-   * The relay does not know or care what a phone was holding: it says which
-   * world this is and the phone works out whether that makes it somebody new.
-   * There is nothing left to be turned away for.
-   */
   it('lets a phone in whatever world it came from', () => {
     relay.attachHost(host)
     relay.attachHost(fakeConnection())
@@ -142,12 +128,7 @@ describe('relay', () => {
     expect(host.sent).toEqual([{ type: 'input', playerId: 'p1', dx: 0, dy: 1 }])
   })
 
-  /**
-   * A phone that has finished is still an ordinary phone as far as the relay is
-   * concerned: it forwards the message and takes no view. Whether the world
-   * forgets that blob is the TV's business, and the socket closing behind it is
-   * an ordinary `left`.
-   */
+  /** Whether the world forgets the blob is the TV's business; the relay takes no view. */
   it('forwards a phone finishing like anything else it says', () => {
     relay.attachHost(host)
     const connection = fakeConnection()
@@ -203,11 +184,6 @@ describe('relay', () => {
     expect(two.sent).toEqual([assigned])
   })
 
-  /**
-   * The relay forwards by `to` and does not look at the rest, so a brief
-   * travels exactly as an assignment does. It is the whole of what objectives
-   * cost the server.
-   */
   it('fans a brief out to every phone without knowing what one is', () => {
     relay.attachHost(host)
     const one = fakeConnection()
@@ -308,11 +284,7 @@ describe('relay', () => {
     expect(relay.playerIds()).toEqual([])
   })
 
-  /**
-   * The phones keep their sockets through a TV taking over. They are simply
-   * told the new session, which is their cue to come back as new players —
-   * without it they would have to sit and knock until somebody noticed.
-   */
+  /** The phones keep their sockets; the new session is their cue to come back as new players. */
   it('tells every phone the new session when a TV takes the world', () => {
     relay.attachHost(host)
     const one = fakeConnection()

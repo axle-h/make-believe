@@ -3,24 +3,14 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
 
-/**
- * Turns `public/icons/blob.svg` into the PNGs the manifest asks for.
- *
- * Run by hand — `node packages/web/scripts/icons.mjs` — whenever the blob
- * changes; the PNGs it writes are committed. Playwright is already a
- * dependency for the e2e suite, so this needs no image library.
- */
+// Run by hand whenever `public/icons/blob.svg` changes; the PNGs it writes are committed.
 
 const here = dirname(fileURLToPath(import.meta.url))
 const icons = resolve(here, '../public/icons')
 
-/** The ground the blob sits on, matching the player page's background. */
 const GROUND = '#10121a'
 
-/**
- * How much of the square the blob covers. A maskable icon may be cropped to a
- * circle by the launcher, so it keeps everything well inside the safe zone.
- */
+/** A maskable icon may be cropped to a circle, so its blob covers less of the square. */
 const SIZES = [
   { file: 'icon-192.png', size: 192, cover: 0.78 },
   { file: 'icon-512.png', size: 512, cover: 0.78 },

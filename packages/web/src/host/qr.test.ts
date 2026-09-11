@@ -10,11 +10,7 @@ describe('joinUrl', () => {
     expect(joinUrl('https://believe.ax-h.com')).toBe('https://believe.ax-h.com/')
   })
 
-  /**
-   * The link is the same one every night. Anything that put a session in it
-   * would make an installed phone's saved address go stale, which is the whole
-   * thing this arrangement exists to avoid.
-   */
+  /** A session in the link would make an installed phone's saved address go stale. */
   it('carries no session of any kind', () => {
     expect(joinUrl('https://believe.ax-h.com')).not.toContain('?')
   })

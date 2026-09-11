@@ -25,7 +25,6 @@ describe('did they guess it', () => {
     expect(guessMatches('a house', 'house')).toBe(true)
   })
 
-  /** A four-year-old typing on a phone gets one letter wrong constantly. */
   it('takes a near miss', () => {
     expect(guessMatches('kat', 'cat')).toBe(true)
     expect(guessMatches('rockat', 'rocket')).toBe(true)

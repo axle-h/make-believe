@@ -9,12 +9,7 @@ import { zoneReach, type CircleZone, type Zone } from '../zones.js'
 import { litter, LITTER_FROM, walls } from './arena.js'
 import { difficulty, type GenerateContext } from './types.js'
 
-/**
- * Things to drive round. A chase across an empty room is a straight line, and
- * carrying an apple across an empty floor is the same straight line — so both
- * shapes of task get something in the way, and neither may ever get something
- * a child cannot get out from behind.
- */
+/** Walls for chases and litter for carrying, none of which may trap a blob. */
 
 function room(count: number): GameState {
   const state = createGame(1)
@@ -33,12 +28,10 @@ function context(state: GameState, seed = 3): GenerateContext {
   }
 }
 
-/** A pad somewhere on the floor, to be kept clear of. */
 function pad(id: string, x: number, y: number, radius = 90): CircleZone {
   return { id, shape: 'circle', x, y, radius, colour: '#f6f0e2' }
 }
 
-/** How much of the ladder a given rung is, which is what `litter` is gated on. */
 const hardAt = (level: number) => difficulty(level, MAX_LEVEL)
 
 describe('the arena', () => {
@@ -61,11 +54,6 @@ describe('the arena', () => {
 })
 
 describe('the litter', () => {
-  /**
-   * Fetch unlocks at level 4, so it gets a clear floor on its first outing and
-   * picks corners up later. A four-year-old carrying an apple round a corner is
-   * a game; one who cannot find the corner is not.
-   */
   it('is nothing at all until the room is halfway up the ladder', () => {
     for (let level = 1; level <= MAX_LEVEL; level++) {
       const hard = hardAt(level)
@@ -82,7 +70,6 @@ describe('the litter', () => {
     expect(late.length).toBeGreaterThan(early.length)
   })
 
-  /** A wall on top of a house is a house nobody can deliver to. */
   it('never lands on a zone it was given', () => {
     const zones: Zone[] = [pad('a', 300, 200), pad('b', 900, 500)]
     for (let seed = 0; seed < 30; seed++) {
@@ -107,7 +94,6 @@ describe('the litter', () => {
     }
   })
 
-  /** Small — a blob and a bit — and plainly a wall rather than a room divider. */
   it('keeps every piece of it small, and inside the floor', () => {
     for (let seed = 0; seed < 30; seed++) {
       for (const wall of litter(context(room(4), seed), 1, [])) {

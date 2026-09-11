@@ -3,12 +3,7 @@ plugins {
   alias(libs.plugins.android.application)
 }
 
-/*
- * The only thing the APK really carries: which page to show. Everything else
- * about the game is downloaded fresh from that URL on every launch, which is
- * the whole point of the wrapper — deploy the web app and the TV is up to date
- * without anybody reinstalling anything.
- */
+// All the APK carries: the page is loaded from this URL on every launch, so deploying the web app updates the TV.
 val hostUrl = providers.gradleProperty("hostUrl").getOrElse("https://believe.ax-h.com/host/")
 
 android {
@@ -30,11 +25,8 @@ android {
     viewBinding = true
   }
 
-  /*
-   * Release builds are signed with a keystore that lives outside this repo.
-   * Set the four properties in ~/.gradle/gradle.properties; without them the
-   * release APK comes out unsigned and `adb install` will refuse it.
-   */
+  // The release keystore lives outside the repo and must never be replaced. Without these
+  // properties (in ~/.gradle/gradle.properties) the release APK is unsigned and will not install.
   val keystorePath = providers.gradleProperty("makeBelieveKeystore").orNull
   signingConfigs {
     if (keystorePath != null) {

@@ -8,50 +8,29 @@ import {
   type SessionMessage,
 } from '@make-believe/shared'
 
-/**
- * The relay is a single-world registry: one host, one session code, a map of
- * players. There is no room lookup and there never will be. It does no I/O —
- * `server.ts` wires real sockets to it, and tests wire fakes.
- *
- * The session code is minted here and handed to whoever connects. Nothing puts
- * it in a URL and nobody types it: a client learns it on connect and keeps it
- * only to notice, next time, that the world has been replaced.
- */
+// A single-world registry with no I/O: one host, one session code, a map of players. There are no
+// rooms and never will be; `server.ts` wires real sockets to it and tests wire fakes.
 
 export interface Connection {
   send(message: unknown): void
-  /** A code and reason travel in the close frame so the client knows why. */
   close(code?: number, reason?: string): void
 }
 
-/**
- * A second TV took over the world. The old one is told so, rather than being
- * closed quietly: a quiet close looks like a network blip, and the old TV would
- * reconnect, take the world back, and the two would fight over it forever.
- */
+// Sent to a replaced TV. A quiet close would look like a blip, and the old TV would reconnect and
+// the two would fight over the world for ever.
 export const CLOSE_REPLACED = 4002
 
-/**
- * The one thing that can stop a phone attaching. A stale session is not on
- * this list: the relay lets that phone in and tells it the current code, which
- * is its cue to come back as a new player.
- */
+/** No TV is the only refusal; a phone is never turned away for a stale session code. */
 export type RejectReason = 'no-host'
 
 export type AttachPlayerResult = { ok: true } | { ok: false; reason: RejectReason }
 
 export interface Relay {
-  /** The code of the world the current host is running, or `null` if no host. */
   readonly session: string | null
   readonly hasHost: boolean
   playerIds(): string[]
-  /** Take the world for this socket under a fresh session code, and return it. */
   attachHost(connection: Connection): string
-  /**
-   * Register a player and tell it which world it has reached. On `{ ok: false }`
-   * the connection has been sent the waiting message but is left open: the
-   * caller closes it, so it can say why.
-   */
+  /** On `{ ok: false }` the connection is sent `waiting` but left open, so the caller can say why. */
   attachPlayer(playerId: string, connection: Connection): AttachPlayerResult
   detachHost(connection: Connection): void
   detachPlayer(playerId: string, connection: Connection): void
@@ -59,11 +38,6 @@ export interface Relay {
   routeFromHost(message: HostOutboundMessage): boolean
 }
 
-/**
- * "There is no TV for you." The only thing the relay says to a phone on its own
- * account: the phone shows its waiting screen and keeps trying until a TV
- * answers.
- */
 const WAITING: HostToPlayerMessage = { type: 'waiting' }
 
 /** `mint` is injected so tests get a session code they can predict. */
@@ -78,7 +52,6 @@ export function createRelay(mint: () => string = generateSessionCode): Relay {
     connection.send(message)
   }
 
-  /** Send every player back to its waiting screen and forget them. */
   function evictAllPlayers(): void {
     for (const connection of players.values()) {
       connection.send(WAITING)
@@ -100,13 +73,8 @@ export function createRelay(mint: () => string = generateSessionCode): Relay {
       return [...players.keys()]
     },
 
-    /**
-     * A TV takes the world. Every attach is a new world — a TV that has
-     * reloaded has forgotten every blob on it — so it always mints a fresh
-     * code, and every phone still holding a socket is told the new one. That
-     * message is what sends them back in as new players; without it they would
-     * have to sit and knock until somebody noticed.
-     */
+    // Every attach is a new world, so it mints a fresh code and tells every phone still on a
+    // socket, which is what sends them back in as new players.
     attachHost(connection) {
       const previous = host
       host = connection
@@ -117,18 +85,8 @@ export function createRelay(mint: () => string = generateSessionCode): Relay {
       return session
     },
 
-    /**
-     * A phone attaches. It is never turned away for the code it is holding —
-     * it is simply told which world this is, and it is the phone that works
-     * out whether that makes it somebody new. The only refusal is that there
-     * is no TV yet.
-     *
-     * The TV is told it has arrived, so that it can answer with the palette
-     * before the phone has any identity at all.
-     *
-     * A rejected connection is told to wait but is left open: the caller closes
-     * it, so that it can say why in the close frame.
-     */
+    // Never turned away for the code it holds: it is told which world this is and works out
+    // for itself whether that makes it somebody new. The only refusal is no TV.
     attachPlayer(playerId, connection) {
       if (host === null || session === null) {
         connection.send(WAITING)
@@ -138,17 +96,15 @@ export function createRelay(mint: () => string = generateSessionCode): Relay {
       players.set(playerId, connection)
       if (previous && previous !== connection) previous.close()
       announceSession(connection)
-      // And the TV is told there is somebody on the end of a socket who has
-      // not said who they are yet, which is its cue to send back the palette:
-      // a join screen is made of who has which colour, and only the TV knows.
+      // A socket, not yet a blob: the TV's cue to answer with the palette.
       const arrived: HostInboundMessage = { type: 'arrived', playerId }
       host.send(arrived)
       return { ok: true }
     },
 
     detachHost(connection) {
-      // A host that was already replaced closing its socket must not tear down
-      // the world its replacement is running.
+      // A replaced host closing late must not tear down its replacement's world. Otherwise the
+      // world is gone and every phone goes back to waiting.
       if (host !== connection) return
       host = null
       session = null
@@ -158,6 +114,7 @@ export function createRelay(mint: () => string = generateSessionCode): Relay {
     detachPlayer(playerId, connection) {
       if (players.get(playerId) !== connection) return
       players.delete(playerId)
+      // Unlike `arrived`, this is a blob going quiet: the world keeps it standing, away.
       const left: ServerToHostMessage = { type: 'left', playerId }
       host?.send(left)
     },
@@ -165,9 +122,8 @@ export function createRelay(mint: () => string = generateSessionCode): Relay {
     routeFromPlayer(playerId, message) {
       if (host === null) return false
       if (!players.has(playerId)) return false
-      // The socket, not the payload, decides who this came from. That is what
-      // makes a grown-up's `command` safe: a phone cannot claim to be somebody
-      // else's `playerId`, because the tag is not the one it sent.
+      // The socket, not the payload, decides who is speaking, which is what makes a grown-up's
+      // `command` safe: a phone cannot claim somebody else's `playerId`.
       const tagged: HostInboundMessage = { ...message, playerId }
       host.send(tagged)
       return true

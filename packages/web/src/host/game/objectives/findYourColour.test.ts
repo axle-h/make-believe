@@ -55,9 +55,7 @@ describe('handing out the pads', () => {
 
   it('puts two blobs of the same colour on one pad between them', () => {
     const state = room(3)
-    // More blobs than there are colours is the only way this happens for real,
-    // and eight of them is a slow test; wearing somebody else's is the same
-    // thing as far as the floor is concerned.
+    // Stands in for more blobs than there are colours.
     state.players.get('p2')!.colour = state.players.get('p1')!.colour
     const objective = make(state)
 
@@ -75,7 +73,6 @@ describe('handing out the pads', () => {
     findYourColour.step(objective, state, 16)
 
     const pad = objective.zones.find((zone) => zone.id === objective.homes['p3'])
-    // Practically the blue one, which is the pad it should have been sent to.
     expect(pad?.colour).toBe('#4ea8ff')
   })
 
@@ -106,12 +103,7 @@ describe('the line only your phone gets', () => {
     expect(everybody[0]?.detail).toBe('0 of 3 home')
   })
 
-  /**
-   * The hard version tells each phone where *somebody else* goes, so the only
-   * way anybody learns their own pad is if the room says it out loud. Nobody is
-   * told about themselves and everybody is told about by somebody: a room that
-   * talks can always solve it.
-   */
+  /** A ring at level 8: nobody is told about themselves and everybody is told about by somebody. */
   it('tells each phone about somebody else once the world is being difficult', () => {
     const state = room(4)
     const objective = make(state, 8)
@@ -160,17 +152,11 @@ describe('getting home', () => {
     findYourColour.step(objective, state, 16)
 
     expect(objective.homes.p3).toBeDefined()
-    // Nobody has heard anything about the newcomer, so it is told about itself
-    // whatever the rest of the room was told.
     expect(objective.tells.p3).toBe('p3')
     expect(lineTo(objective, state, 'p3')?.detail).toContain('Yours is the')
   })
 
-  /**
-   * In the hard version your pad is written down on somebody else's phone. If
-   * that somebody puts their phone down, the answer would be gone from the
-   * room altogether — so the phone left in the dark is told about itself.
-   */
+  /** The phone that was told about p1 is told about itself once p1 leaves. */
   it('tells a phone about itself when the blob who knew its pad has gone', () => {
     const state = room(3)
     const objective = make(state, 8)

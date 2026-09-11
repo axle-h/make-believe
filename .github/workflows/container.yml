@@ -1,9 +1,5 @@
-# Builds the container from a bare checkout, proves the thing it produced actually relays a game,
-# and — on main only — publishes it to ghcr.io/axle-h/make-believe for `k8s/` to pull.
-#
-# The smoke test is the point of the ordering: what reaches the registry is an image that was seen
-# to serve both pages and carry a join from a player socket to a host socket. "It built" is not the
-# claim worth making — an image with an empty `web/dist` builds perfectly and serves 404s.
+# Builds the image, proves it serves both pages and relays a join, and on main pushes it to ghcr.io
+# for `k8s/` to pull. Nothing is pushed that has not passed the smoke test.
 name: container
 
 on:
@@ -18,14 +14,10 @@ concurrency:
 
 permissions:
   contents: read
-  # ⚠️ This is what lets GITHUB_TOKEN push to ghcr.io, and it is per-workflow: the repository's
-  # default token permissions can be read-only and this still works. What it cannot do is make the
-  # published package *public* — that is a one-off in the package's own settings after the first
-  # push creates it. See `k8s/README.md`.
+  # Lets GITHUB_TOKEN push to ghcr.io; making the package public is a one-off in its own settings.
   packages: write
 
-# Derived, not typed: `github.repository` is `axle-h/make-believe`, so this is exactly the string
-# `k8s/make-believe/deployment.yml` pulls.
+# Must equal the image `k8s/make-believe/deployment.yml` pulls.
 env:
   IMAGE: ghcr.io/${{ github.repository }}
 
@@ -37,9 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # ⚠️ Not "install buildx" — the runner has it. This creates a builder on the
-      # `docker-container` driver, which the GHA layer cache below requires; the default `docker`
-      # driver cannot export cache at all.
+      # A `docker-container` builder: the default `docker` driver cannot export the GHA cache below.
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -50,15 +40,13 @@ jobs:
           push: false
           load: true # into the runner's docker, so the smoke test can run it
           tags: make-believe:ci
-          # What the phone compares against `/version` to notice this deploy.
+          # What `/version` answers, so phones notice this deploy.
           build-args: |
             BUILD_VERSION=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       # Exactly how the Deployment runs it: non-root, no capabilities, read-only root filesystem.
-      # If the image ever starts wanting to write something, this is where it is found out, not in
-      # the cluster.
       - name: Start the container the way Kubernetes will
         run: |
           docker run -d --name make-believe-ci \
@@ -76,8 +64,7 @@ jobs:
             sleep 1
           done
 
-          # Both pages, from the build stage's `vite build`. The failure this catches is a
-          # successful build with an empty `web/dist`, which 404s and looks like nothing at all.
+          # Catches a successful build with an empty `web/dist`, which serves 404s.
           host=$(curl -fsS http://localhost:3000/host/)
           case "$host" in
             *'id="world"'*) echo "the host page is there" ;;
@@ -90,8 +77,7 @@ jobs:
             *) echo "::error::/ did not serve the controller page"; exit 1 ;;
           esac
 
-          # An installed phone finds out it is out of date by asking for this, so an image that
-          # answers `unknown` leaves every phone on whatever build it happened to install.
+          # An image answering `unknown` leaves every installed phone on its old build.
           version=$(curl -fsS http://localhost:3000/version)
           if [ "$version" != "$GITHUB_SHA" ]; then
             echo "::error::/version answered '$version', not this commit — the build version did not reach the image"
@@ -99,8 +85,7 @@ jobs:
           fi
           echo "the image knows it is $version"
 
-          # And the relay actually relays. Node 22 has a WebSocket client built in, so this needs
-          # nothing installed.
+          # Node 22 has a WebSocket client built in, so this needs nothing installed.
           node --input-type=module <<'JS'
           const base = 'ws://localhost:3000/ws'
           const open = (url) => new Promise((resolve, reject) => {
@@ -108,7 +93,6 @@ jobs:
             socket.addEventListener('open', () => resolve(socket))
             socket.addEventListener('error', () => reject(new Error(`could not open ${url}`)))
           })
-          // The next message of a given type, ignoring anything before it.
           const awaitType = (socket, type, what) => new Promise((resolve, reject) => {
             socket.addEventListener('message', (event) => {
               const message = JSON.parse(event.data)
@@ -117,19 +101,14 @@ jobs:
             setTimeout(() => reject(new Error(`never heard ${what}`)), 5000)
           })
 
-          // No code in either query: the relay says which world this is on the
-          // way in, and that is the whole of how a client learns it.
           const host = await open(`${base}?role=host`)
           const hostSession = await awaitType(host, 'session', 'the session on the TV socket')
           const heard = awaitType(host, 'join', 'the join')
 
           const player = await open(`${base}?role=player&playerId=ci-1`)
           const playerSession = await awaitType(player, 'session', 'the session on the phone socket')
-          // ⚠️ A join asks for a colour as well as a name, and the relay drops a message
-          // that misses a field its schema requires *in silence* rather than refusing it
-          // loudly — so this payload has to keep up with `JoinMessageSchema` in `shared`,
-          // and the colour is asserted below so that it cannot quietly stop mattering.
-          // `#ff5d5d` is red, the first of the ten in `BLOB_COLOURS`.
+          // The relay silently drops a join missing any field, so this must keep up with
+          // `JoinMessageSchema`. `#ff5d5d` is the first of `BLOB_COLOURS`.
           player.send(JSON.stringify({ type: 'join', playerId: 'ci-1', name: 'Wilf', colour: '#ff5d5d' }))
 
           const message = await heard
@@ -149,29 +128,20 @@ jobs:
           }
           console.log(`both sockets were told they are in ${hostSession.session}`)
           console.log('the relay carried a join from a player socket to the host socket')
-          // ⚠️ Explicitly: an open (or even a closing) WebSocket keeps node's event loop alive, so
-          // a script that merely runs off the end here hangs the step until the job times out.
+          // An open or closing WebSocket keeps the event loop alive; without this the step hangs.
           process.exit(0)
           JS
 
-      # ── publish ────────────────────────────────────────────────────────────────────────────────
-      #
-      # ⚠️ Main only. A pull request from a fork gets a read-only GITHUB_TOKEN — `packages: write`
-      # cannot grant what the fork's token never had — so without this guard every fork PR would
-      # fail on a login it was never going to be allowed to do.
+      # Main only: a fork's pull request gets a read-only token, so this login would always fail.
       - name: Log in to ghcr.io
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
-          # Through the environment rather than interpolated into the command: `${{ }}` inside
-          # `run:` is substituted into the script text before bash sees it.
+          # Via the environment: `${{ }}` inside `run:` is pasted into the script before bash sees it.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
 
-      # `docker tag` + `docker push` of the image already in the runner's docker, rather than a
-      # second build with `push: true`: this pushes bytes that have demonstrably run.
-      #
-      # Two tags: `latest`, which the Deployment pulls with `imagePullPolicy: Always`, and the
-      # commit, which is the only one that can be pinned or rolled back to.
+      # Pushes the image that just ran rather than rebuilding it. `latest` is what the Deployment
+      # pulls; the commit tag is the one to pin or roll back to.
       - name: Push it
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |

@@ -1,29 +1,16 @@
 import type { Recipient, SoundCue } from '@make-believe/shared'
 import type { Objective } from './types.js'
 
-/**
- * The noises the world makes, worked out by looking at what changed.
- *
- * Nothing here asks a task to report anything: a cue is a *difference* between
- * one step and the next — a parcel that has just been picked up, a badge that
- * has just moved — which means adding the thirteenth task earns its cues for
- * free, and means nothing can repeat every frame by accident.
- *
- * The cue is all the world says. What it sounds like is the phone's business,
- * because an `AudioContext` is a thing a browser has and this has none:
- * `purity.test.ts` walks this directory and would say so.
- */
+// A cue is a difference between one step and the next, so no task reports anything and nothing
+// repeats every frame. What it sounds like is the phone's business; `purity.test.ts` keeps audio out.
 
 export interface Sound {
   to: Recipient
   cue: SoundCue
 }
 
-/** The little of an objective that a cue can be a change in. */
 export interface CueSnapshot {
-  /** Who was wearing something. */
   marks: string[]
-  /** Each carryable's carrier, and where it had been delivered. */
   carriedBy: Record<string, string | null>
   home: Record<string, string | null>
 }
@@ -41,13 +28,7 @@ export function cueSnapshot(objective: Objective | null): CueSnapshot {
   return { marks: objective.marks.map((mark) => mark.playerId), carriedBy, home }
 }
 
-/**
- * What is worth a noise, given how things were a step ago.
- *
- * A delivery goes to whoever was carrying it a moment before, because
- * arriving is what puts a parcel down — by the time anybody looks, nobody is
- * holding it. A crate has no carrier at all, so its arrival is the room's.
- */
+/** A delivery goes to whoever carried it a step ago, since arriving puts it down; a crate's is the room's. */
 export function cuesFrom(before: CueSnapshot, objective: Objective | null): Sound[] {
   if (!objective) return []
   const sounds: Sound[] = []
@@ -60,7 +41,6 @@ export function cuesFrom(before: CueSnapshot, objective: Objective | null): Soun
     }
   }
 
-  // Something has been pinned to somebody who was not wearing it before.
   for (const mark of objective.marks) {
     if (!before.marks.includes(mark.playerId)) sounds.push({ to: mark.playerId, cue: 'mine' })
   }
@@ -68,30 +48,11 @@ export function cuesFrom(before: CueSnapshot, objective: Objective | null): Soun
   return sounds
 }
 
-/**
- * How long one phone has to go without a noise before it may have another.
- *
- * Six phones beeping at once is a lot, and a blob dragged through a heap of
- * parcels should not sound like a fire alarm.
- */
+/** The shortest gap between two noises on one phone. */
 export const CUE_GAP_MS = 250
-
-/**
- * And the same for bounces, which get a budget of their own.
- *
- * A blob shoving its way along a wall bounces constantly, and if that shared
- * the limit above it would starve the delivery a child is actually waiting to
- * hear. They are two different kinds of noise: one is the world telling you
- * something and one is your own blob making a sound as it moves.
- */
 export const BOUNCE_GAP_MS = 200
 
-/**
- * Who was last told to make a noise and when. `'*'` is a key like any other,
- * which is a simplification: a room cue and a private one in the same frame
- * both get through. That is one beep and one blip a quarter of a second, which
- * is the case the limiter is not for.
- */
+/** `'*'` is a key like any other, so a room cue and a private one in the same frame both get through. */
 export interface CueLimiter {
   lastAt: Record<string, number>
 }
@@ -100,13 +61,11 @@ export function createCueLimiter(): CueLimiter {
   return { lastAt: {} }
 }
 
-/** The cues that may actually be sent, at this many milliseconds into the world. */
 export function rateLimit(limiter: CueLimiter, sounds: Sound[], atMs: number): Sound[] {
   const allowed: Sound[] = []
   for (const sound of sounds) {
     const bounce = sound.cue === 'bounce'
-    // A bounce keeps its own budget, so a blob scraping along a wall cannot
-    // starve the delivery its owner is waiting to hear.
+    // Bounces keep their own budget so scraping along a wall cannot starve a delivery.
     const key = bounce ? `${sound.to}#bounce` : sound.to
     const gap = bounce ? BOUNCE_GAP_MS : CUE_GAP_MS
     const last = limiter.lastAt[key]

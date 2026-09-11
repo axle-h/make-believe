@@ -124,11 +124,7 @@ describe('picking a parcel up', () => {
     expect((things[0] as Parcel).carriedBy).toBe('p1')
   })
 
-  /**
-   * Children wander off holding things. The parcel is left exactly where it
-   * was let go of, for somebody else to find — never carried off screen by a
-   * blob nobody is driving.
-   */
+  /** A parcel whose carrier goes away stays where it was let go of. */
   it('is put down where it stands when the phone carrying it goes away', () => {
     const state = room(2)
     const things: Carryable[] = [parcel(300, 300)]
@@ -154,11 +150,7 @@ describe('picking a parcel up', () => {
   })
 })
 
-/**
- * The crate is solid and a parcel is not, and that is on purpose: driving into
- * a parcel is how you pick it up, and a parcel you bounce off is a parcel a
- * three-year-old cannot collect.
- */
+/** The crate is solid and a parcel is not, since driving into a parcel is how it is picked up. */
 describe('a parcel is not solid', () => {
   it('lets a blob drive right onto it and carry it away', () => {
     const state = room(2)
@@ -226,7 +218,6 @@ describe('a crate', () => {
     expect(things[0]!.y).toBe(400)
   })
 
-  /** Two children pulling opposite ways get exactly what they deserve. */
   it('goes nowhere while the two of them disagree', () => {
     const state = room(2)
     const things: Carryable[] = [crate(600, 400)]
@@ -238,12 +229,6 @@ describe('a crate', () => {
     expect(things[0]).toMatchObject({ x: 600, y: 400 })
   })
 
-  /**
-   * "Push it together" is the one task built on a thing being in the way, and
-   * for a while the thing was not in the way at all: blobs drove straight
-   * through the crate, which the second play test reported before anybody had
-   * managed to push one anywhere.
-   */
   it('is solid: one blob driving flat out at it neither enters it nor shifts it', () => {
     const state = room(2)
     const things: Carryable[] = [crate(600, 400)]
@@ -255,12 +240,7 @@ describe('a crate', () => {
     expect(insideObstacle(boxOf(things[0]!), state.players.get('p1')!.x, 400)).toBe(false)
   })
 
-  /**
-   * Two blobs drive at 420 and a crate goes at 200, so the separation is what
-   * keeps them leaning on it: it puts them exactly a half-blob and a half-crate
-   * off, and `touching` reaches a little past that. Without it they would be
-   * inside the crate one frame and past it the next.
-   */
+  /** Blobs are faster than a crate, so separation is what keeps them within reach of it. */
   it('keeps its pushers in contact the whole way across the floor', () => {
     const state = room(2)
     const things: Carryable[] = [crate(300, 400)]

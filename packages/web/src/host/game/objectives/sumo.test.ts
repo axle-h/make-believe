@@ -65,10 +65,7 @@ describe('sumo: generating', () => {
     expect(objective.outcome).toBe('running')
   })
 
-  /**
-   * Against a wall, a blob shoved off has nowhere to go and the wall holds it
-   * on, which quietly undoes the one rule of the task.
-   */
+  /** Against a wall, a shoved blob would be held on by the wall. */
   it('leaves floor all the way round it, to be shoved off onto', () => {
     for (let level = 1; level <= 8; level++) {
       const ring = island(make(room(4), level, level))
@@ -195,7 +192,7 @@ describe('sumo: ending', () => {
     expect(objective.outcome).toBe('done')
   })
 
-  /** Being shoved off is the joke, not a loss: the room still scores. */
+  /** Being shoved off is not a loss: the room still scores. */
   it('names whoever is left standing at the buzzer', () => {
     const state = room(2)
     const objective = make(state)
@@ -222,10 +219,7 @@ describe('sumo: ending', () => {
     expect(objective.note).not.toContain('Blob')
   })
 
-  /**
-   * Judged against whoever is present now: a phone put down halfway through
-   * does not win by having been parked in the middle.
-   */
+  /** An away blob parked in the middle does not count as holding on. */
   it('does not count a blob whose phone has gone', () => {
     const state = room(2)
     const objective = make(state)

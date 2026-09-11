@@ -1,26 +1,12 @@
-/**
- * When a new build is allowed to take the *phone* over. Pure, so the rule can
- * be tested without a service worker anywhere near it.
- *
- * How either page tells that the server is serving a different build at all is
- * `isDifferentBuild` in `lib/version.ts`, which the TV asks as well.
- */
-
-/** The three things the phone can be doing. Only one is ever on screen. */
 export type Screen = 'join' | 'waiting' | 'play'
 
-/**
- * The screens where a reload costs nothing. Reloading mid-joystick would leave
- * a blob running across the TV; mid-join it would throw away a half-typed
- * name. Waiting for the TV is the one moment where nobody is holding anything.
- */
+/** A phone reloads for a new build only on the waiting screen, where nobody is holding anything. */
 const SAFE: ReadonlySet<Screen> = new Set(['waiting'])
 
 export function isSafeToReload(screen: Screen): boolean {
   return SAFE.has(screen)
 }
 
-/** Whether to take a waiting update now, or leave it pending a bit longer. */
 export function shouldReload(screen: Screen, updatePending: boolean): boolean {
   return updatePending && isSafeToReload(screen)
 }

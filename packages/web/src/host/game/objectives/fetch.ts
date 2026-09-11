@@ -23,51 +23,36 @@ import {
 } from './types.js'
 
 /**
- * Fetch. Parcels are scattered about the floor and all of them have to reach
- * the depot before the timer runs out.
- *
- * It is the first task built out of carrying, and the friendliest one: it is
- * entirely parallel, so nobody waits for anybody, and the youngest player in
- * the room can genuinely bring one back on their own and be the reason it was
- * finished.
+ * Fetch: every themed parcel on the floor is carried into the house. Delivered parcels are not
+ * drawn in a heap; the house shows a numeral instead (the renderer's tally).
  */
 
 export interface FetchObjective extends ObjectiveBase {
   kind: 'fetch'
-  /** How many there were to start with, so the brief can count them down. */
   parcels: number
-  /** What they are, plural, for the one word of the headline that is painted. */
+  /** Plural, and the one word of the headline painted in `thingColour`. */
   things: string
   thingColour: string
-  /** And where they go — a pie, a postbox — for the line underneath it. */
   home: string
 }
 
-/** Big enough to read across a room: the picture on the house *is* the answer. */
+/** Big enough to read across a room. */
 const HOME_GLYPH_SIZE = 52
 
-/** How many to fetch: an armful at first, a proper job later. */
 const PARCELS = { easy: 3, hard: 7 }
 const TIME_LIMIT = { easy: 60_000, hard: 45_000 }
 
 export const fetch: ObjectiveTemplate<FetchObjective> = {
   kind: 'fetch',
   title: 'Bring it home',
-  /** Carrying things back one at a time is a chore alone and a job shared. */
   minPlayers: 2,
   minLevel: 4,
 
   generate(context: GenerateContext): FetchObjective {
     const hard = difficulty(context.level, MAX_LEVEL)
     const { rng } = context
-    // A house rather than a spot on the floor: "take it home" is a sentence a
-    // three-year-old already has, and a roof says it without a word of the
-    // brief being read. It is squarish and wide enough for the whole room to
-    // crowd into at once, because they will.
+    // Wide enough for the whole room to crowd into at once.
     const across = radiusFor(Math.max(2, context.players.length), 1.4) * 2
-    // What is being carried, and where to. It is the same game either way, but
-    // apples into a pie is funnier than parcels in a depot and a good deal
-    // easier to understand without reading a word of it.
     const theme = pick(rng, THEMES)
     const depot: HouseZone = {
       id: `${context.id}-depot`,
@@ -84,9 +69,7 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
     depot.x = at.x
     depot.y = at.y
 
-    // A few small things in the way, once the room is well up the ladder.
-    // Placed after the house and before the parcels, so that nothing is put
-    // inside a wall and no wall lands on the house.
+    // After the house and before the parcels, so no wall lands on the house and no parcel in a wall.
     const walls = mergeWalls(litter(context, hard, [depot]))
 
     const count = Math.round(scale(PARCELS.easy, PARCELS.hard, hard))
@@ -138,8 +121,6 @@ export const fetch: ObjectiveTemplate<FetchObjective> = {
   briefs(objective) {
     const left = stillOut(objective.carryables).length
     const home = objective.parcels - left
-    // The word for what they are, painted in the colour they are: the one word
-    // of the sentence that says what to go and look for.
     const brief: Brief = {
       to: '*',
       headline: objective.headline,

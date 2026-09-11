@@ -122,7 +122,7 @@ describe('keep the crown: wearing it', () => {
     expect(objective.marks).toEqual([{ playerId: thief, badge: expect.any(String) }])
   })
 
-  /** Otherwise it flickers back and forth every frame two blobs are touching. */
+  /** The grace period stops it flickering between two touching blobs every frame. */
   it('cannot be taken back the instant it changes hands', () => {
     const state = room(2)
     const objective = make(state)
@@ -133,16 +133,10 @@ describe('keep the crown: wearing it', () => {
     playUntilItMoves(state, objective)
     expect(objective.wearer).toBe(thief)
 
-    // Still stood right on top of each other, and it stays theirs anyway.
     play(state, objective, objective.graceMs - 100)
     expect(objective.wearer).toBe(thief)
   })
 
-  /**
-   * Two blobs parked in a huddle trade it every few seconds and neither of
-   * them gets anywhere, which is right: the way to keep the crown is to drive
-   * off with it, not to stand next to whoever has it.
-   */
   it('goes round and round between two blobs that will not move', () => {
     const state = room(2)
     const objective = make(state)
@@ -158,10 +152,6 @@ describe('keep the crown: wearing it', () => {
     expect(objective.outcome).toBe('running')
   })
 
-  /**
-   * Having it stolen costs a child the crown, never the time they already
-   * spent keeping it. Nothing in this game takes anything back.
-   */
   it('keeps what a blob has already worn when the crown is taken off it', () => {
     const state = room(2)
     const objective = make(state)
@@ -172,7 +162,6 @@ describe('keep the crown: wearing it', () => {
     const banked = objective.wornMs[wearer] ?? 0
     expect(banked).toBeGreaterThan(0)
 
-    // Their moment of safety is long gone, so the touch takes it at once.
     shoveInto(state, thief as string, wearer)
     keepTheCrown.step(objective, state, 50)
 
@@ -193,12 +182,10 @@ describe('keep the crown: ending', () => {
     expect(objective.note).toContain(state.players.get(wearer)?.name)
   })
 
-  /** Nobody managed to keep it: still a good game, and still worth a cheer. */
   it('goes to whoever wore it longest when the buzzer beats them to it', () => {
     const state = room(2)
     const objective = make(state)
     const wearer = objective.wearer as string
-    // Long enough to have worn it, nothing like long enough to have won it.
     play(state, objective, 1_000)
     objective.remainingMs = 0
     play(state, objective, 50)
@@ -207,11 +194,6 @@ describe('keep the crown: ending', () => {
     expect(objective.note).toContain(state.players.get(wearer)?.name)
   })
 
-  /**
-   * Judged against whoever is here now: a phone put down while its blob was
-   * wearing the crown hands it straight back to the room rather than running
-   * the clock down in a corner with it.
-   */
   it('gives the crown to somebody still here when its wearer goes away', () => {
     const state = room(3)
     const objective = make(state)
@@ -249,12 +231,7 @@ describe('keep the crown: ending', () => {
   })
 })
 
-/**
- * The crown is the one thing in the game that outlives the task that put it
- * there. One badge that lasts thirty seconds is much like another; a badge
- * that is still on somebody's head two games later is a title, and taking it
- * off them is worth doing.
- */
+/** The crown outlives the task that put it there. */
 describe('keep the crown: between one game and the next', () => {
   it('leaves the crown with whoever won it outright', () => {
     const state = room(2)
@@ -304,7 +281,6 @@ describe('keep the crown: between one game and the next', () => {
     })
 
     expect(objective.wearer).toBe(standing)
-    // And the room is told whose it is, because it is a title by now.
     expect(objective.headline).toBe(`Take the crown off ${state.players.get(standing)?.name}!`)
   })
 
@@ -336,7 +312,6 @@ describe('keep the crown: what the phones are told', () => {
     expect(shared?.colour).toBe(wearer?.colour)
   })
 
-  /** The one phone being chased is the one that wants a countdown. */
   it('counts the wearer down privately, and nobody else', () => {
     const state = room(3)
     const objective = make(state)
@@ -352,11 +327,7 @@ describe('keep the crown: what the phones are told', () => {
   })
 })
 
-/**
- * It is hot potato inside out and it gets hot potato's floor. A chase across
- * an empty room is a straight line and whoever is quickest wins it; a chase
- * around a block is a game, because whoever is being chased can turn a corner.
- */
+/** Hot potato's floor: something to chase round, and none of it moving. */
 describe('keeping the crown: the floor', () => {
   it('puts something on the floor to run round', () => {
     for (let seed = 0; seed < 12; seed++) {
@@ -366,7 +337,6 @@ describe('keeping the crown: the floor', () => {
     }
   })
 
-  /** Nothing in the arena moves: there is enough going on in a chase already. */
   it('leaves all of it standing still', () => {
     for (let seed = 0; seed < 12; seed++) {
       const objective = make(room(4), MAX_LEVEL, seed)

@@ -47,11 +47,7 @@ describe('isValidName', () => {
   })
 })
 
-/**
- * One blob per name. "IVY" and "ivy" are one label on a TV, so the world
- * refuses the second — and both ends share this so that a join screen can be
- * right about it while a child is still typing.
- */
+/** "IVY" and "ivy" are one label on a TV, so the world refuses the second. */
 describe('sameName', () => {
   it('is the same name whatever the case', () => {
     expect(sameName('Ivy', 'ivy')).toBe(true)

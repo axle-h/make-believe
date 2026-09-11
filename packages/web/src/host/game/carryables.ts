@@ -5,68 +5,42 @@ import { activePlayers } from './selectors.js'
 import { clamp, type GameState, type Player, type World } from './state.js'
 import { contains, type Zone } from './zones.js'
 
-/**
- * Things on the floor that are not blobs. A **parcel** is picked up by driving
- * into it, rides along with whoever has it, and is put down where it is taken;
- * a **crate** is too heavy for one blob and only shifts while two of them are
- * leaning on it.
- *
- * There is no button for any of it. Picking up is touching, carrying is
- * driving, and putting down is arriving — which is the whole vocabulary a
- * three-year-old already has, and the reason none of this reaches the phones.
- */
+/** No button for any of it: touching picks up, driving carries and arriving puts down, so none of it reaches a phone. */
 
 export interface CarryableBase {
-  /** Stable for the life of the objective; the renderer keeps its views by it. */
+  /** The renderer keeps its views by it. */
   id: string
   x: number
   y: number
   colour: string
-  /**
-   * What it actually is, drawn over it: an apple, a bone, a slice of bread.
-   * A coloured square with a picture on it is the same game and a good deal
-   * funnier, and the picture says what it is without a word being read.
-   */
   glyph?: string
-  /** Where it has been delivered, if it has: a zone id. Home things stay put. */
+  /** The zone id it was delivered to; a delivered thing stays put. */
   home: string | null
 }
 
 export interface Parcel extends CarryableBase {
   kind: 'parcel'
-  /** Whoever is carrying it, or `null` if it is sitting on the floor. */
   carriedBy: string | null
 }
 
 export interface Crate extends CarryableBase {
   kind: 'crate'
-  /** Who is leaning on it right now, for the renderer and for the brief. */
   pushedBy: string[]
 }
 
 export type Carryable = Parcel | Crate
 
-/** How big each of them is, as a square centred on its position. */
 export const PARCEL_SIZE = 44
 export const CRATE_SIZE = 104
 
-/** Fewest blobs it takes to shift a crate. Two is the whole point of a crate. */
 export const CRATE_PUSHERS = 2
 
-/** How fast a crate goes when it is being shoved, against a blob's own speed. */
 const CRATE_SPEED = 200
 
-/** A little slack on touching, so a brush past is enough to pick something up. */
+/** So a brush past is enough to pick something up. */
 const REACH_SLACK = 6
 
-/**
- * One step of everything on the floor: parcels get picked up, carried and
- * dropped, and crates move if enough blobs are leaning on them.
- *
- * A parcel that has been delivered is finished with — it sits in its zone and
- * cannot be picked up again, so a room cannot undo its own work by driving
- * back through the depot.
- */
+/** A delivered parcel cannot be picked up again, so a room cannot undo its own work. */
 export function stepCarryables(state: GameState, carryables: Carryable[], dtMs: number): void {
   const present = activePlayers(state)
   const carrying = new Set(
@@ -75,35 +49,26 @@ export function stepCarryables(state: GameState, carryables: Carryable[], dtMs: 
     ),
   )
 
-  // A crate is solid, so the same push-out the walls use runs against its box.
-  // The order matters: the crate moves first and the blobs are separated
-  // afterwards, which is a crate shoving a blob rather than swallowing one.
+  // The crate moves before blobs are pushed out of it, so it shoves a blob rather than swallowing one.
   const limit = PUSH_OUT_SPEED * (Math.max(0, dtMs) / 1000)
   for (const thing of carryables) {
     if (thing.kind === 'crate') {
       shove(state, thing, present, dtMs)
-      // The pushers stay pushers: separation leaves a blob exactly a half-crate
-      // and a half-blob away, and `touching` reaches `REACH_SLACK` past that.
+      // Separation leaves a pusher within `REACH_SLACK` of touching, so pushers stay pushers.
       for (const player of present) pushOutOfBox(state, player, boxOf(thing), limit)
     } else carry(thing, present, carrying)
   }
 }
 
-/** A crate as a plain rectangle, for the separation that keeps blobs out of it. */
 function boxOf(crate: Crate): Box {
   return { x: crate.x, y: crate.y, width: CRATE_SIZE, height: CRATE_SIZE }
 }
 
-/** Put a thing down where it stands, whatever was happening to it. */
 export function drop(thing: Carryable): void {
   if (thing.kind === 'parcel') thing.carriedBy = null
 }
 
-/**
- * Deliver anything sitting in a zone it belongs in. `belongs` is what makes
- * fetch different from sorting: everything goes to the one depot, or each
- * colour goes to its own.
- */
+/** `belongs` is the difference between fetch (one depot) and sorting (a depot per colour). */
 export function deliverInto(
   carryables: Carryable[],
   zones: Zone[],
@@ -118,15 +83,7 @@ export function deliverInto(
   }
 }
 
-/**
- * Somewhere to drop a handful of things: on the floor, off the walls, and out
- * of the zones they are meant to be brought to — a parcel that starts in the
- * depot is a parcel nobody got to carry.
- *
- * `walls` is whatever the task has put in the way, if anything. A parcel
- * dropped inside a wall is a parcel nobody can fetch, which is worse than a
- * parcel that starts at home: at least that one is *visibly* already done.
- */
+/** Clear of walls and target zones where it can be; gives up after a few tries rather than hang. */
 export function scatter(
   rng: Rng,
   world: World,
@@ -136,9 +93,7 @@ export function scatter(
   walls: readonly Box[] = [],
 ): { x: number; y: number }[] {
   const margin = size / 2 + BLOB_SIZE / 2
-  // A wall counts as wider than it is by the thing being dropped and the blob
-  // that has to reach it: a parcel wedged against a wall is nearly as bad as
-  // one inside it.
+  // Widened by the thing and a blob, so nothing is wedged where a blob cannot reach it.
   const clear = walls.map((wall) => ({
     ...wall,
     width: wall.width + size + BLOB_SIZE,
@@ -147,8 +102,6 @@ export function scatter(
   const spots: { x: number; y: number }[] = []
   while (spots.length < count) {
     let spot = pointInBounds(rng, world, margin)
-    // A few goes at missing the zones, then take what we have: a parcel that
-    // starts already home is a shame, and a generator that can hang is not.
     for (let attempt = 0; attempt < 12; attempt++) {
       const clash =
         avoid.some((zone) => contains(zone, spot.x, spot.y)) ||
@@ -161,19 +114,16 @@ export function scatter(
   return spots
 }
 
-/** Everything that has not been delivered yet. */
 export function stillOut(carryables: readonly Carryable[]): Carryable[] {
   return carryables.filter((thing) => thing.home === null)
 }
 
-/** A parcel: picked up by touching, carried by driving, dropped by leaving. */
 function carry(parcel: Parcel, present: Player[], carrying: Set<string>): void {
   if (parcel.home !== null) return
 
   if (parcel.carriedBy !== null) {
     const carrier = present.find((player) => player.playerId === parcel.carriedBy)
-    // The phone went away, or the child finished with their blob. The parcel
-    // stays exactly where it was let go of, for somebody else to find.
+    // The carrier has gone, so the parcel stays where it was let go of.
     if (!carrier) {
       parcel.carriedBy = null
       return
@@ -193,12 +143,7 @@ function carry(parcel: Parcel, present: Player[], carrying: Set<string>): void {
   parcel.y = finder.y
 }
 
-/**
- * A crate: it does not move for one blob, however hard they drive. Two of them
- * leaning on it move it by the average of what they are asking for, which
- * means two children have to agree on a direction — the purest "this needs
- * both of you" there is, and no new thing to learn.
- */
+/** Moves only for `CRATE_PUSHERS`, by the average of what they ask for, so they have to agree on a direction. */
 function shove(state: GameState, crate: Crate, present: Player[], dtMs: number): void {
   if (crate.home !== null) {
     crate.pushedBy = []
@@ -211,14 +156,12 @@ function shove(state: GameState, crate: Crate, present: Player[], dtMs: number):
   const dx = pushers.reduce((sum, player) => sum + player.dx, 0) / pushers.length
   const dy = pushers.reduce((sum, player) => sum + player.dy, 0) / pushers.length
   const seconds = dtMs / 1000
-  // Its own width off the walls, rather than a blob's: a crate half off the
-  // screen is a crate two children cannot get behind.
+  // A whole crate off the walls, so two blobs can always get behind it.
   const half = CRATE_SIZE / 2
   crate.x = clamp(crate.x + dx * CRATE_SPEED * seconds, half, state.world.width - half)
   crate.y = clamp(crate.y + dy * CRATE_SPEED * seconds, half, state.world.height - half)
 }
 
-/** Close enough to count as touching it, squarely rather than roundly. */
 function touching(player: Player, thing: CarryableBase, size: number): boolean {
   const reach = (BLOB_SIZE + size) / 2 + REACH_SLACK
   return Math.abs(player.x - thing.x) <= reach && Math.abs(player.y - thing.y) <= reach

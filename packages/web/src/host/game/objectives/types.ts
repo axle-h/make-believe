@@ -21,119 +21,46 @@ import type { SortingObjective } from './sorting.js'
 import type { SumoObjective } from './sumo.js'
 import type { TooHeavyObjective } from './tooHeavyForOne.js'
 
-/**
- * What the world is asking for. There is always exactly one of these running,
- * it is always for everybody, and finishing it makes the next one immediately:
- * an objective is a thing the *world* wants, never a mode a phone is put into.
- *
- * Nothing here can change what a phone offers. Drive, say something, redraw —
- * all three are live in every task, for every player, the whole time, and so is
- * finishing and starting again.
- */
-
-/** How an objective ended, or that it has not. */
 export type Outcome = 'running' | 'done' | 'expired'
 
-/** What one phone is told. `'*'` is everybody, which is most of them. */
 export interface Brief {
   to: Recipient
-  /** One short line. `''` takes the strip down. */
+  /** `''` takes the strip down. */
   headline: string
-  /** The quieter second line: a count, a hint, or the half only you are told. */
   detail?: string
   colour?: string
-  /**
-   * A word of the headline to paint in `colour`, for the tasks whose whole
-   * instruction is one word: "everybody go **green**". Both screens cut the
-   * sentence up with `splitHeadline`, and the word has to be in the headline
-   * — the schema refuses anything else.
-   */
+  /** A word of the headline to paint in `colour`; the schema refuses one that is not in it. */
   emphasis?: string
-  /**
-   * How it should read. `task` is what the world wants, `win` and `miss` are
-   * how the last one ended, and `level` is the room getting better — the one
-   * line all evening that is about the children rather than the game, and the
-   * only one either screen makes bigger than the rest.
-   */
   tone: 'task' | 'win' | 'miss' | 'level'
 }
 
-/**
- * Something the world has pinned to one blob: the potato, the crown, whose
- * turn it is to draw. It is drawn **beside the blob's name**, on the front of
- * it — "👑 Ivy" — and never over the middle of the blob, which is where the
- * child's own drawing is. A badge over the drawing covers the one thing in the
- * game a child made themselves.
- */
+/** Drawn beside the blob's name, never over its middle, which is the child's own drawing. */
 export interface Mark {
   playerId: string
-  /** A character or two. It has to carry across a room at a glance. */
   badge: string
 }
 
 export interface ObjectiveBase {
-  /** Stable across the objective's life; the renderer keeps its views by it. */
   id: string
-  /** The one line across the top of the TV. */
   headline: string
   remainingMs: number
   totalMs: number
-  /**
-   * Whether the clock is counting. `held` stops it — and takes the timer bar
-   * off the TV — for a task with something to do before the timed part of it
-   * starts: the race gathers everybody on the start line with no clock at all,
-   * because a countdown that is already running while people arrive is a
-   * countdown that punishes whoever was slowest to pick their phone up.
-   *
-   * It is optional, and absent means running. Every generator spells out its
-   * own zones, obstacles, marks and carryables by hand, and a required field
-   * here is a required edit to fourteen files.
-   */
+  /** `held` stops the clock and takes the timer bar off the TV; absent means running. */
   clock?: 'running' | 'held'
   zones: Zone[]
-  /**
-   * The walls this task has put on the floor, if any. Blobs cannot drive
-   * through them, and anybody standing where one appears is slid out of it.
-   */
   obstacles: Obstacle[]
-  /** Whatever the world has pinned to particular blobs, if anything. */
   marks: Mark[]
-  /** The parcels and crates this task has put on the floor, if any. */
   carryables: Carryable[]
-  /**
-   * Things drifting across the floor that a blob would rather not be hit by.
-   * Optional in the same way `clock` is, and for the same reason: a required
-   * field here is a required edit to every generator there is.
-   */
   hazards?: Hazard[]
-  /**
-   * Blobs the task has made insubstantial: still driving, no longer hittable,
-   * and drawn faint so that the room can see it. Nobody is ever eliminated, so
-   * this is the shape every "you are out" idea has to take — somewhere to
-   * drive about in rather than a chair to sit on — and it goes the instant the
-   * task is over.
-   */
+  /** Still driving but not hittable, and no longer fuzzy the instant the task ends. */
   fuzzy?: string[]
-  /**
-   * Blobs the task wants the room to *notice*: the one holding the potato, and
-   * nothing else so far. The TV draws a pulsing ring behind them — behind, not
-   * over, because the middle of a blob is the child's own drawing and that is
-   * the one thing in the game they made.
-   *
-   * It exists because a three-year-old who cannot read was looking at a screen
-   * where nothing said *away*: a badge beside a name and a headline in
-   * somebody's colour is not enough on its own.
-   */
+  /** Ringed on the TV from behind, never over the child's drawing. */
   danger?: string[]
   outcome: Outcome
-  /**
-   * What the TV says once it is over — cheerful either way, because running
-   * out of time is not losing. `null` while it is still running.
-   */
+  /** Cheerful either way; `null` while it is still running. */
   note: string | null
 }
 
-/** Every kind of objective there is. One file each, listed in the registry. */
 export type Objective =
   | OnTheSpotObjective
   | RaceObjective
@@ -152,74 +79,44 @@ export type Objective =
   | KeepTheCrownObjective
 
 export interface GenerateContext {
-  /** Minted by the director, so ids are stable and predictable in a test. */
   id: string
   world: World
   rng: Rng
   level: number
-  /** The blobs present when it was made. It is judged against whoever is present later. */
   players: Player[]
-  /**
-   * Who is wearing the standing crown, if anybody. It is the one thing in the
-   * game that outlives the task that put it there, which is what makes it a
-   * title rather than a badge that lasts half a minute — so the task that
-   * plays for it starts from whoever already has it.
-   */
+  /** The standing crown outlives the task that gave it, so keep the crown starts from whoever has it. */
   crown: string | null
 }
 
-/**
- * One kind of task. Small on purpose: adding the tenth one should cost a file
- * and a line in the registry, and nothing else.
- *
- * The methods are written in shorthand deliberately. TypeScript makes method
- * parameters bivariant, which is what lets the registry hold templates for
- * different objectives side by side without a cast at every call.
- */
+// Every task obeys five rules; registry.test.ts asserts what must hold of every task.
+// 1. A task changes only what the world asks for, never what a phone offers: a wall, never ignored input.
+// 2. A task is judged against whoever is present right now.
+// 3. Nobody is eliminated: out means fuzzy, and nothing may leave a blob where it cannot drive out.
+// 4. Failure barely exists: the score only goes up and the level never comes down.
+// 5. The TV is the primary signal; a brief to one phone alone is spent sparingly.
+// The methods are shorthand so their parameters are bivariant, which lets the registry mix kinds without casts.
 export interface ObjectiveTemplate<T extends Objective = Objective> {
   kind: T['kind']
-  /**
-   * What to call it to a grown-up. It is never shown to a child — the banner
-   * says what the world wants, not what the task is called — and exists so
-   * that the TV's debug menu has something to list.
-   */
+  /** For the grown-ups' menus; never shown to a child. */
   title: string
-  /** Fewest present blobs for it to mean anything. */
   minPlayers: number
-  /** The level at which it starts appearing. */
   minLevel: number
-  /**
-   * Whether a room this size can be asked for this at all, beyond simply
-   * being big enough. Checked when one is chosen and again while it runs: a
-   * task that stops suiting the room is dropped, exactly as one the room has
-   * emptied out of already is.
-   *
-   * It is the one place the standing rule — a child who wanders off never
-   * leaves the others with something they cannot finish — is honoured by the
-   * director rather than by the task itself.
-   */
+  /** Checked on choosing and while running; a task that stops suiting the room is dropped. */
   suits?(present: number): boolean
   generate(context: GenerateContext): T
-  /** One step of this task. Sets `outcome` when it is finished. */
   step(objective: T, state: GameState, dtMs: number): void
-  /** What each phone should be told. The director only sends what has changed. */
+  /** The director sends only what has changed. */
   briefs(objective: T, state: GameState): Brief[]
-  /** For the tasks that are about talking or drawing. */
   observe?(objective: T, state: GameState, message: ServerToHostMessage): void
 }
 
-/**
- * How hard the world is being, from 0 at level 1 to 1 at the top of the ladder.
- * Every generator scales its own parameters through this, so "harder" means
- * the same thing everywhere.
- */
+/** 0 at level 1 to 1 at the top of the ladder; every generator scales through it. */
 export function difficulty(level: number, maxLevel: number): number {
   if (maxLevel <= 1) return 0
   const clamped = Math.min(Math.max(level, 1), maxLevel)
   return (clamped - 1) / (maxLevel - 1)
 }
 
-/** Interpolate between two ends of a parameter by `difficulty`. */
 export function scale(easy: number, hard: number, hardness: number): number {
   return easy + (hard - easy) * hardness
 }

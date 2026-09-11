@@ -5,14 +5,7 @@ import { WorldScene, type SceneOptions } from './worldScene.js'
 
 export type { SceneOptions }
 
-/**
- * Boot Phaser over the model. The canvas is scaled to fit whatever the TV
- * gives us, so the world is always 1280x720 as far as everything else is
- * concerned.
- *
- * The clock lives in the scene and the socket lives in `main.ts`, so anything
- * the world wants to say to a phone comes back out through `options`.
- */
+/** The socket lives in `main.ts`, so anything the world says to a phone leaves through `options`. */
 export function startPhaser(
   parent: HTMLElement,
   state: GameState,
@@ -32,7 +25,7 @@ export function startPhaser(
   })
 }
 
-/** What each blob is wearing on screen, or `{}` before the scene has started. */
+/** `{}` before the scene has started. */
 export function wornTextures(game: Phaser.Game): Record<string, string> {
   const scene = game.scene.getScene(WORLD_SCENE_KEY)
   return scene instanceof WorldScene ? scene.wornTextures() : {}

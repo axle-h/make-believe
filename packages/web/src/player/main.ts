@@ -35,53 +35,22 @@ import { isDifferentBuild } from '../lib/version.js'
 import { shouldReload, type Screen } from './updates.js'
 import './player.css'
 
-/**
- * The phone. It is a dumb controller: it sends inputs and does what the TV
- * tells it. No game state lives here.
- *
- * Everything a blob can do is available the whole time — drive, say something,
- * redraw itself, or quit and start again as somebody new. There are
- * no rounds and the TV never tells a phone to switch to anything.
- */
+// The phone is a dumb controller: it sends inputs, does what the TV says and holds no game state.
+// Drive, say, draw and quit are live the whole time; the TV never switches a phone's mode.
 
 const PLAYER_ID_KEY = 'make-believe.playerId'
 const NAME_KEY = 'make-believe.name'
-/**
- * The colour this phone last had. A child comes back to their own blob colour
- * already selected, so getting in is one tap — and if somebody else has taken
- * it in the meantime the swatch is simply greyed and nothing is selected.
- */
 const COLOUR_KEY = 'make-believe.colour'
-/**
- * The world this phone last belonged to. Nobody reads it and there is nowhere
- * to type it: it is kept only so that the next connect can tell "the same TV I
- * was just talking to" from "a world that has been replaced since".
- */
 const SESSION_KEY = 'make-believe.session'
-/**
- * The last drawing this phone sent. The world keeps no state across a restart,
- * so the phone is the only place a picture survives one — and it is kept in
- * storage rather than memory so that reloading the phone does not lose it
- * either.
- */
+/** The phone holds the only copy of its drawing that survives a TV restart. */
 const DRAWING_KEY = 'make-believe.drawing'
-/** Whether this phone makes a noise. Remembered, because it is a preference. */
 const SOUND_KEY = 'make-believe.sound'
 
-/** How long to wait before trying the TV again while it is away. */
 const FIRST_WAIT_RETRY_MS = 800
 const MAX_WAIT_RETRY_MS = 4_000
-
-/** How long "Sent" stays under the box before it clears itself. */
 const SENT_MS = 1_500
-
-/** What colour the phone is before a TV has said which blob it is. */
 const DEFAULT_BLOB = '#4ea8ff'
 
-/**
- * What is open over the joystick, if anything. `options` is only ever built on
- * one phone in the room and does not exist in the markup — see `showOptions`.
- */
 type Sheet = 'say' | 'draw' | 'menu' | 'quit' | 'options'
 
 const screens: Record<Screen, HTMLElement> = {
@@ -90,10 +59,7 @@ const screens: Record<Screen, HTMLElement> = {
   play: requireElement<HTMLElement>('#screen-play'),
 }
 
-/**
- * The things that can sit over the joystick. It is a map rather than a fixed
- * record because one of them is built at runtime and only on one phone.
- */
+/** A map because `options` is built at runtime, on one phone only. */
 const sheets = new Map<Sheet, HTMLElement>([
   ['say', requireElement<HTMLElement>('#sheet-say')],
   ['draw', requireElement<HTMLElement>('#sheet-draw')],
@@ -132,44 +98,27 @@ function requireElement<T extends Element>(selector: string): T {
   return element
 }
 
-/**
- * Who this phone is. It survives a refresh, which is what walks a reload back
- * into the same blob — and it is thrown away and minted again the moment the
- * TV turns out to be running a different world, because an identity from a
- * world that is gone is not an identity at all.
- */
+/** Survives a refresh; minted again when the TV turns out to be running a different world. */
 let playerId = loadPlayerId()
 const throttle = createInputThrottle()
 
 let client: WsClient | null = null
-/** The name and colour we joined with, so a retry can use the same ones. */
 let joined: { name: string; colour: string } | null = null
-/**
- * Every colour and who has it, as last sent by the TV. It is the whole of what
- * the join screen is made of, and this phone never adds to it or reasons about
- * it: the world decides who has what and this draws the answer.
- */
+/** As last sent by the TV. The phone only draws it; the world decides who has what. */
 let palette: PaletteEntry[] = []
-/** The swatch this phone has picked, or `null` while none is. */
 let chosen: string | null = loadStored(COLOUR_KEY)
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 let retryMs = FIRST_WAIT_RETRY_MS
 let screen: Screen = 'join'
-/** What is open over the joystick, or `null` for the joystick itself. */
 let sheet: Sheet | null = null
-/** The pointer holding the pad down, if any. */
 let activePointer: number | null = null
-/** Where the thumb is right now; the send loop drains it. */
 let latest: Vector = ZERO
 
 // --- getting in ----------------------------------------------------------
 
 nameInput.value = loadStored(NAME_KEY) ?? ''
 
-/**
- * The world this phone last belonged to, or '' if it has never been in one.
- * It is only ever compared, never shown.
- */
+/** Only ever compared, never shown: '' if this phone has never been in a world. */
 let lastSession = loadSession()
 
 function loadSession(): string {
@@ -178,10 +127,6 @@ function loadSession(): string {
 }
 
 nameInput.addEventListener('input', () => {
-  // A name somebody already has is worth saying while it is being typed, out
-  // of the palette this phone is already holding. It does not *stop* anything:
-  // the world is the only thing that decides, and this is showing what it last
-  // said rather than making a rule of its own.
   joinError.textContent = nameTaken(palette, nameInput.value) ? TAKEN_NAME : ''
   refreshJoinButton()
 })
@@ -195,12 +140,6 @@ function refreshJoinButton(): void {
   joinButton.disabled = !evaluateJoinForm(nameInput.value, chosen).canJoin
 }
 
-/**
- * The row of swatches: every colour there is, the taken ones greyed with the
- * name of whoever has it. Rebuilt whenever the TV says the roster has changed,
- * so a child watching the screen sees a colour go live the moment somebody
- * quits — and nothing is ever selected on their behalf.
- */
 function renderColours(): void {
   const choice = choosableColours(palette, chosen)
   chosen = choice.chosen
@@ -218,8 +157,6 @@ function swatchButton(swatch: Swatch): HTMLButtonElement {
   button.setAttribute('aria-pressed', String(swatch.hex === chosen))
   button.setAttribute('aria-label', swatch.takenBy ? `${swatch.name}: ${swatch.takenBy}` : swatch.name)
   button.dataset.colour = swatch.hex
-  // Whoever has it, written under it: a child looking for their own colour
-  // gets told why it will not take, without anybody reading a message.
   const who = document.createElement('span')
   who.className = 'swatch-who'
   who.textContent = swatch.takenBy ?? ''
@@ -233,7 +170,6 @@ function swatchButton(swatch: Swatch): HTMLButtonElement {
   return button
 }
 
-/** Ask who is holding the phone, and which blob they want to be. */
 function askForName(note = ''): void {
   joinError.textContent = note
   renderColours()
@@ -248,28 +184,16 @@ function submitJoin(): void {
   }
   joinError.textContent = ''
   store(NAME_KEY, state.name)
-  // The tap that got us here is a gesture, and the earliest one there is on a
-  // phone that has never played before.
   speaker.wake()
   joined = { name: state.name, colour: state.colour as string }
   waitingName.textContent = state.name
-  // The socket has been open since the page loaded — the palette came down it
-  // — so this is a hello rather than a connection. The screen stays where it
-  // is until the TV answers with a blob or a refusal.
+  // The socket is already open; the screen stays put until the TV grants or refuses.
   sayHello()
 }
 
 // --- the connection ------------------------------------------------------
 
-/**
- * Open a socket. Nothing but the role and who we are goes in the query — which
- * world this is comes back from the relay a moment later, and until it does
- * there is nothing to say.
- *
- * It happens on load, before anybody has typed anything: the join screen is
- * made of the palette, and the palette comes from the TV. A phone with no TV
- * to talk to therefore waits before it asks for a name rather than after.
- */
+/** Opened on load, before any name: the join screen is made of the palette only the TV has. */
 function openSocket(): void {
   client?.close()
   client = connect({
@@ -284,9 +208,6 @@ function openSocket(): void {
       void checkForNewBuild()
     },
     onFatal: ({ reason }) => {
-      // The relay hung up for good. A TV that is not there yet is worth
-      // waiting for; anything else is this phone being malformed, and the only
-      // cure for that is somebody starting again.
       if (reason === 'no-host') {
         retryLater()
         return
@@ -299,32 +220,21 @@ function openSocket(): void {
 }
 
 /**
- * The relay has said which world this is. If it is the one we were in, we are
- * the blob we were; if it is not, the world we belonged to is gone and this
- * phone comes back as somebody new — a fresh identity, under the same name,
- * still holding its own drawing.
- *
- * Reconnecting is what makes the new identity real: the relay tags everything
- * this phone says with the id its *socket* arrived under, so a new one has to
- * arrive on a new socket.
+ * A different world means a fresh identity under the same name and drawing. The relay tags
+ * what a phone says with the id its socket arrived under, so a new identity needs a new socket.
  */
 function enterSession(code: string): void {
   const previous = lastSession
   lastSession = code
   store(SESSION_KEY, code)
-  // A phone that has never been anywhere is already somebody new, so only a
-  // code we held and no longer match is worth a fresh identity for.
   if (previous !== '' && previous !== code) {
     playerId = createPlayerId()
     store(PLAYER_ID_KEY, playerId)
     openSocket()
     return
   }
-  // A phone that has already been in *this* world walks straight back into its
-  // blob: a wifi blip, a reload or a TV that came back must not put a child in
-  // front of a name box again. A phone opening on a world it has not been in
-  // picks a name and a colour, however well this page remembers the last one —
-  // its colour may be somebody else's by now, and only the TV knows.
+  // Only a phone already in *this* world walks straight back into its blob; any other asks
+  // again, because its old colour may be somebody else's by now.
   const identity = joined ?? remembered()
   if (previous === code && identity) {
     joined = identity
@@ -335,7 +245,6 @@ function enterSession(code: string): void {
   askForName()
 }
 
-/** The name and colour this phone last played as, if it has played. */
 function remembered(): { name: string; colour: string } | null {
   const name = loadStored(NAME_KEY) ?? ''
   const colour = loadStored(COLOUR_KEY) ?? ''
@@ -343,63 +252,39 @@ function remembered(): { name: string; colour: string } | null {
   return { name, colour }
 }
 
-/**
- * Tell the TV who this phone is, what it is called and which colour it wants.
- * It is said on every socket, not just the first: the client reconnects on its
- * own after a blip, and the hello is how a world that has never heard of this
- * blob learns about it.
- *
- * The world grants it or refuses it. This phone never assumes either.
- */
+/** Said on every socket, not just the first; the world grants or refuses it. */
 function sayHello(): void {
   if (!joined) return
   sendMessage({ type: 'join', playerId, name: joined.name, colour: joined.colour })
 }
 
-/**
- * What comes down the socket. `session` says which world this is and is the
- * cue to say hello; `palette` is what the join screen is made of; `refused` is
- * the world saying no and why; `assigned` means "you are the blue one", and it
- * doubles as the way in, since it only ever arrives in answer to a hello and is
- * therefore proof the TV knows this phone; `waiting` means the TV has gone.
- */
 function applyMessage(message: HostToPlayerMessage): void {
   if (message.type === 'session') {
     enterSession(message.session)
     return
   }
-  // Who has which colour. It changes nothing about where this phone is: a
-  // blob already playing has a join screen it is not looking at.
   if (message.type === 'palette') {
     palette = message.colours
     if (screen === 'join') renderColours()
     return
   }
-  // The world said no. Back to the join screen with the reason under the box —
-  // never left sitting on waiting, which would be a phone with nothing to do
-  // and nothing to read.
+  // A refused phone goes back to the join screen, never to waiting.
   if (message.type === 'refused') {
     const wanted = joined?.colour ?? chosen
     joined = null
     askForName(refusalMessage(message.reason, palette, wanted))
     return
   }
-  // What the world is asking for. It is information and nothing else: no
-  // screen changes on it, no tool is taken away, and the joystick underneath
-  // it carries on exactly as it was. A child who ignores it is still playing.
+  // A brief, like a sound, is information only: no screen changes and no tool goes away.
   if (message.type === 'brief') {
     showBrief(message)
     return
   }
-  // The grown-up's sheet. It only ever arrives on one phone in the room, and
-  // building it is the whole of what this phone knows about it: it has no
-  // opinion about who gets one and never asks for it.
-  // A noise, which is information exactly as a brief is: no screen changes on
-  // it and no tool goes away. A phone with its sound off plays the same game.
   if (message.type === 'sound') {
     makeNoise(message.cue)
     return
   }
+  // The host grants the grown-up's sheet to one phone; a phone never asks for it.
   if (message.type === 'grownup') {
     showOptions(message)
     return
@@ -407,32 +292,21 @@ function applyMessage(message: HostToPlayerMessage): void {
   if (message.type === 'assigned') {
     document.documentElement.style.setProperty('--blob', message.colour)
     blobColour = message.colour
-    // Which blob this is, which is which landing voice it has. The host
-    // decided; the phone is only playing what it was told it is.
     speaker.slot = message.slot
     playName.textContent = joined?.name ?? ''
     if (screen !== 'play') showScreen('play')
-    // A world that has never seen this blob's drawing gets it now: a TV that
-    // has reloaded has forgotten every picture on it, and this phone is
-    // holding the only copy of its own.
     if (!message.hasDrawing && lastDrawing) {
       sendMessage({ type: 'drawing', playerId, png: lastDrawing })
     }
     return
   }
-  // The TV has gone. The relay hangs up right behind this message, so the
-  // close handler is what decides whether to wait or ask for a new code.
-  // Closing the socket here instead would throw that reason away.
+  // `waiting`: the relay hangs up right behind it, and the close handler needs its reason.
   release()
   showBrief(null)
   showScreen('waiting')
 }
 
-/**
- * Put a line above the joystick, or take it down again. An empty headline is
- * how the TV clears it, and `null` is this phone deciding there is nothing to
- * show because there is no world to hear from.
- */
+/** An empty headline is how the TV clears it; `null` means there is no world to hear from. */
 function showBrief(message: BriefMessage | null): void {
   const headline = message?.headline ?? ''
   const detail = message?.detail ?? ''
@@ -445,19 +319,7 @@ function showBrief(message: BriefMessage | null): void {
   brief.hidden = headline.length === 0
 }
 
-/**
- * The headline, with the one word the world has picked out painted in the
- * brief's colour — "everybody go **green**". The word is a `<span>` in the
- * middle and the rest is text either side of it, which is the same three
- * pieces the TV lays out.
- *
- * The whole line is normally tinted, so when there is a word to pick out the
- * rest of the sentence steps back to plain ink and the word keeps the colour:
- * otherwise painting it would be painting what was already painted.
- *
- * The phone decides nothing about which word it is: the world says so, and a
- * brief with no `emphasis` is one flat line exactly as before.
- */
+/** With an emphasised word, only that word keeps the colour and the rest goes to plain ink. */
 function paintHeadline(headline: string, emphasis?: string): void {
   const { before, word, after } = splitHeadline(headline, emphasis)
   briefHeadline.replaceChildren(before)
@@ -470,17 +332,8 @@ function paintHeadline(headline: string, emphasis?: string): void {
 }
 
 /**
- * Sit on the waiting screen and try again shortly, until a TV answers.
- *
- * Nothing here asks whether this phone has ever been in, and that is the point:
- * a phone that has joined nothing is precisely the one that must keep knocking,
- * because it is a phone that was opened before the TV was. `attachHost`
- * announces a new world only to phones still holding a socket, so one that
- * stops knocking is never spoken to again — and an installed phone has no
- * address bar to reload it with and nobody watching it.
- *
- * Giving up for good is `stop()`, which clears this timer. That is what a
- * precondition here would have been for, and it is already somewhere else.
+ * Every phone keeps knocking, including one that has never joined: `attachHost` announces a new
+ * world only to phones holding a socket, so one that stopped would never be spoken to again.
  */
 function retryLater(): void {
   client?.close()
@@ -494,25 +347,10 @@ function retryLater(): void {
 
 // --- the noises ----------------------------------------------------------
 
-/**
- * A blip in your own hand is the cheapest feedback in the game, and the one
- * signal that can be private without bowing six heads — you hear your own
- * without looking down.
- *
- * An `AudioContext` has to be woken inside a gesture. The Join tap is one, and
- * it used to be the only one we listened for — which is why the phones were
- * silent all through the third play test. **Most phones never see the join
- * screen**: a phone that has played before walks straight back into its blob
- * without being asked anything, so the tap never comes and every cue for the
- * rest of the evening was dropped. The first touch anywhere on the page is
- * what catches those, and every child touches the joystick within a second of
- * the play screen appearing.
- *
- * The waking itself lives in `audio.ts`, where it can be tested.
- */
 const speaker = createSpeaker(() => new AudioContext(), loadStored(SOUND_KEY) === 'off')
 
-// The one that actually matters. Every other wake is a nicety on top of it.
+// Most phones never see the join screen, so the Join tap cannot be relied on to wake audio.
+// The first touch anywhere on the page is the wake that matters.
 document.addEventListener('pointerdown', () => speaker.wake(), { once: true })
 
 const soundButton = requireElement<HTMLButtonElement>('#menu-sound')
@@ -520,8 +358,6 @@ soundButton.addEventListener('click', () => {
   speaker.muted = !speaker.muted
   store(SOUND_KEY, speaker.muted ? 'off' : 'on')
   showSoundSwitch()
-  // Turning it on is a tap, and it has to wake a context that was never made
-  // — a muted speaker does not make one.
   speaker.wake()
 })
 
@@ -538,11 +374,7 @@ function makeNoise(cue: SoundCue): void {
 
 let wakeLock: WakeLockSentinel | null = null
 
-/**
- * A controller that goes to sleep mid-game is no fun. Wake Lock needs a secure
- * context, so on a plain-http LAN this quietly does nothing until phase 8 puts
- * HTTPS in front of it.
- */
+/** Wake Lock needs a secure context, so on plain http this quietly does nothing. */
 function keepAwake(): void {
   if (wakeLock) return
   navigator.wakeLock
@@ -553,9 +385,7 @@ function keepAwake(): void {
         wakeLock = null
       })
     })
-    .catch(() => {
-      // Not available, or refused because the page is not visible.
-    })
+    .catch(() => {})
 }
 
 function letSleep(): void {
@@ -568,7 +398,6 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && joined) keepAwake()
 })
 
-/** Give up on the current session entirely. */
 function stop(): void {
   if (retryTimer !== null) clearTimeout(retryTimer)
   retryTimer = null
@@ -576,8 +405,6 @@ function stop(): void {
   client?.close()
   client = null
   joined = null
-  // Nothing is coming back, so the strip that promises a reconnect must not
-  // be left up over whatever screen we are showing instead.
   linkStatus.hidden = true
   letSleep()
 }
@@ -589,11 +416,7 @@ function sendMessage(message: PlayerToHostMessage): void {
 function showScreen(which: Screen): void {
   screen = which
   for (const [name, element] of Object.entries(screens)) element.hidden = name !== which
-  // Nothing but the joystick has a sheet over it, so leaving the controller
-  // takes any sheet with it.
   if (which !== 'play') closeSheet()
-  // A build that arrived while someone was driving gets taken now, if this is
-  // one of the screens where a reload goes unnoticed.
   reloadIfSafe()
 }
 
@@ -611,13 +434,9 @@ for (const selector of ['#say-close', '#draw-close', '#menu-close', '#quit-close
   requireElement<HTMLButtonElement>(selector).addEventListener('click', closeSheet)
 }
 
-// The menu holds the one thing that is not a tool, and asks before it does it.
 requireElement<HTMLButtonElement>('#menu-quit').addEventListener('click', () => openSheet('quit'))
 
-/**
- * Put a tool over the joystick. The blob stops first: a thumb that leaves the
- * pad to press "Say" would otherwise leave it running across the room.
- */
+/** The blob stops first, or a thumb leaving the pad would leave it running. */
 function openSheet(which: Sheet): void {
   release()
   sheet = which
@@ -645,7 +464,6 @@ textForm.addEventListener('submit', (event) => {
   textInput.value = ''
   refreshTextForm()
   announceSent()
-  // The keyboard stays up: the next thing to say is usually right behind.
   textInput.focus()
 })
 
@@ -663,11 +481,7 @@ function announceSent(): void {
   }, SENT_MS)
 }
 
-/**
- * Android's keyboard shrinks the viewport rather than scrolling the page, so
- * the box can end up underneath it. Ask for the keyboard, then keep the box in
- * view as the viewport changes size under it.
- */
+/** Android's keyboard shrinks the viewport rather than scrolling, so the box is kept in view. */
 function openKeyboard(): void {
   textSent.textContent = ''
   refreshTextForm()
@@ -686,17 +500,8 @@ window.visualViewport?.addEventListener('resize', () => {
 // --- the sheet only one phone in the room has ----------------------------
 
 /**
- * The grown-up's sheet: pick any task, or put the ladder back to the start.
- *
- * **Every part of it is built here, at runtime, and only when the TV sends
- * one.** Nothing about it is in `index.html`, because every phone is served
- * the same page and a sheet sitting in the markup is a sheet an older child
- * finds by opening the page on a laptop. It is never rendered greyed or
- * disabled on a phone that does not have it either: a disabled item is an
- * advertisement.
- *
- * Nothing else about this phone changes. It drives, says things and draws like
- * every other phone, and has one extra sheet.
+ * The grown-up's sheet is a secret from the children: it is built only here, at runtime, when the
+ * TV sends one, and is never in the markup nor shown greyed on a phone without it.
  */
 let optionsSheet: HTMLElement | null = null
 let optionsLadder: HTMLElement | null = null
@@ -712,8 +517,6 @@ function showOptions(message: GrownupMessage): void {
       button.className = 'button button-quiet'
       button.dataset.task = task.kind
       button.textContent = task.title
-      // Exactly what the TV would accept: a room too small for a task is a
-      // task nobody in it could finish.
       button.disabled = !task.playable
       button.addEventListener('click', () => {
         sendMessage({ type: 'command', playerId, command: 'task', kind: task.kind })
@@ -728,7 +531,6 @@ function existingOptions(): { tasks: HTMLElement; list: HTMLElement } {
   return { tasks: optionsLadder as HTMLElement, list: optionsTasks as HTMLElement }
 }
 
-/** The sheet itself, and the dull line in the menu that opens it. */
 function buildOptions(): { tasks: HTMLElement; list: HTMLElement } {
   const sheetEl = document.createElement('div')
   sheetEl.id = 'sheet-options'
@@ -770,10 +572,7 @@ function buildOptions(): { tasks: HTMLElement; list: HTMLElement } {
   return { tasks: ladder, list }
 }
 
-/**
- * Back to level 1 with nothing scored. It asks first, exactly as Quit does,
- * because it is the other thing on this phone that throws something away.
- */
+/** Asks first, as Quit does, because it throws something away. */
 function buildRestart(): HTMLElement {
   const row = document.createElement('div')
   row.className = 'sheet-buttons'
@@ -806,47 +605,27 @@ function buildRestart(): HTMLElement {
 
 // --- quitting ------------------------------------------------------------
 
-/**
- * Done with this blob. The TV is asked to forget it outright — the blob, the
- * name, the picture and the place on the floor — and this phone forgets the
- * same things and mints a fresh identity, so that whoever picks it up next
- * starts at the name screen with nothing inherited.
- *
- * There is no answer to wait for. What the phone knows about itself is thrown
- * away either way, and if the message never lands the blob is left standing
- * about like any other phone that walked out of wifi range.
- *
- * The child reads this as "Quit"; on the wire it is still `finish`.
- */
+// Quit is `finish` on the wire. Nothing is waited for: the phone forgets its blob either way.
 quitConfirm.addEventListener('click', () => {
-  // Whoever was driving lets go first, or the blob is left running across the
-  // TV for the moment before the world forgets it.
   release()
   sendMessage({ type: 'finish', playerId })
   closeSheet()
   stop()
   startOver()
   showScreen('waiting')
-  // Straight back onto a socket under the new identity: the join screen is
-  // made of the palette, and the palette only comes down a socket.
   openSocket()
 })
 
-/** Throw away everything this phone knew about the blob it has just quit. */
 function startOver(): void {
   playerId = createPlayerId()
   store(PLAYER_ID_KEY, playerId)
   forget(NAME_KEY)
   forget(DRAWING_KEY)
-  // The colour goes back to the room along with the name: whoever picks this
-  // phone up next chooses their own blob rather than inheriting one.
   forget(COLOUR_KEY)
   chosen = null
   lastDrawing = null
   nameInput.value = ''
   showBrief(null)
-  // The next blob is a different colour, so the drawing has to start again
-  // from that rather than from the last child's picture.
   blobColour = DEFAULT_BLOB
   document.documentElement.style.setProperty('--blob', DEFAULT_BLOB)
   sketch?.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
@@ -864,7 +643,7 @@ function loadPlayerId(): string {
 }
 
 function createPlayerId(): string {
-  // randomUUID needs a secure context, and on the LAN we are plain http.
+  // randomUUID needs a secure context.
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
   return `p-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`
 }
@@ -873,7 +652,6 @@ function loadStored(key: string): string | null {
   try {
     return window.localStorage.getItem(key)
   } catch {
-    // Private browsing, or storage turned off: nothing is remembered.
     return null
   }
 }
@@ -881,29 +659,21 @@ function loadStored(key: string): string | null {
 function store(key: string, value: string): void {
   try {
     window.localStorage.setItem(key, value)
-  } catch {
-    // Nothing to do; the blob just will not survive a refresh.
-  }
+  } catch {}
 }
 
 function forget(key: string): void {
   try {
     window.localStorage.removeItem(key)
-  } catch {
-    // Storage is off, so there was nothing kept to throw away.
-  }
+  } catch {}
 }
 
 // --- drawing a blob ------------------------------------------------------
 
-/** The colour the TV gave this blob; the drawing starts as a square of it. */
 let blobColour = DEFAULT_BLOB
-/** The last drawing sent, ready to put back on a world that has lost it. */
 let lastDrawing = loadStored(DRAWING_KEY)
 let crayon: string = FIRST_CRAYON
-/** The finger that is drawing, if any. */
 let drawPointer: number | null = null
-/** Set once the canvas has a background, so a round trip does not wipe it. */
 let sketchStarted = false
 
 const sketch = drawCanvas.getContext('2d')
@@ -937,14 +707,11 @@ drawCanvas.addEventListener('pointerdown', (event) => {
   drawPointer = event.pointerId
   try {
     drawCanvas.setPointerCapture(event.pointerId)
-  } catch {
-    // Some pointers cannot be captured; drawing still works without it.
-  }
+  } catch {}
   const at = pointAt(event)
   sketch.strokeStyle = crayon
   sketch.beginPath()
   sketch.moveTo(at.x, at.y)
-  // A tap with no drag should still leave a dot.
   sketch.lineTo(at.x, at.y)
   sketch.stroke()
 })
@@ -969,7 +736,6 @@ function pointAt(event: PointerEvent): { x: number; y: number } {
   return pointerToCanvas(drawCanvas.getBoundingClientRect(), { x: event.clientX, y: event.clientY })
 }
 
-/** The drawing starts as a blob-shaped square of this blob's own colour. */
 function paintBackground(): void {
   if (!sketch) return
   sketch.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
@@ -988,11 +754,7 @@ function openSketch(): void {
   if (!sketchStarted) paintBackground()
 }
 
-/**
- * Send the drawing to the TV. A 256x256 doodle is nowhere near the size cap,
- * but a phone with a very high pixel ratio could surprise us, so an oversize
- * PNG is shrunk rather than silently dropped.
- */
+/** An oversize PNG is shrunk rather than silently dropped. */
 function sendDrawing(): void {
   if (!sketch) return
   const png = drawCanvas.toDataURL('image/png')
@@ -1004,12 +766,9 @@ function sendDrawing(): void {
   sendMessage({ type: 'drawing', playerId, png: sendable })
   lastDrawing = sendable
   store(DRAWING_KEY, sendable)
-  // Straight back to the joystick: the drawing appearing on the blob is much
-  // better proof it arrived than a line of text on the phone would be.
   closeSheet()
 }
 
-/** Redraw at half size and hope that fits. Returns null if it still does not. */
 function shrink(png: string): string | null {
   const half = document.createElement('canvas')
   half.width = CANVAS_SIZE / 2
@@ -1027,9 +786,7 @@ pad.addEventListener('pointerdown', (event) => {
   activePointer = event.pointerId
   try {
     pad.setPointerCapture(event.pointerId)
-  } catch {
-    // Some pointers cannot be captured; the pad still works without it.
-  }
+  } catch {}
   aim(event)
   requestAnimationFrame(drain)
 })
@@ -1056,17 +813,12 @@ function aim(event: PointerEvent): void {
   send(latest)
 }
 
-/** Put a vector on the wire if the throttle allows it. */
 function send(vector: Vector): void {
   if (!throttle.shouldSend(performance.now(), vector)) return
   sendMessage({ type: 'input', playerId, dx: vector.dx, dy: vector.dy })
 }
 
-/**
- * While the pad is held, keep sending wherever the thumb is. The pointer
- * handler alone is not enough: the throttle refuses the last move of a quick
- * flick, which would leave the blob running on a stale vector.
- */
+/** The throttle can refuse a flick's last move, so a held pad keeps resending the thumb. */
 function drain(): void {
   if (activePointer === null) return
   send(latest)
@@ -1090,59 +842,29 @@ function moveThumb(vector: Vector): void {
 
 // --- being an app --------------------------------------------------------
 
-/**
- * The phone can install the player page from Chrome's own menu, and from then
- * on it opens fullscreen from an icon. Nothing here offers that: the page has
- * one job, and a button asking to be installed is not it. Installing does make
- * keeping the page up to date our problem rather than the browser's, though —
- * nobody is going to reload an app — which is what the rest of this is for.
- */
-
-/** The service worker registry, or null on a browser or origin without one. */
 const workers = 'serviceWorker' in navigator ? navigator.serviceWorker : null
-
-/** Whether a worker was already driving this page when it loaded. */
 const hadController = Boolean(workers?.controller)
-
-/** Set when a newer build is ready but the phone is busy with something. */
 let updatePending = false
-
-/** Set once a reload is on its way; asking twice only races the first. */
 let reloading = false
 
 workers
   ?.register(`/sw.js?v=${__BUILD_VERSION__}`, { updateViaCache: 'none' })
-  .catch(() => {
-    // No secure context, most likely: plain http on the LAN. The page works
-    // exactly as before, it just cannot spot a deploy on its own.
-  })
+  .catch(() => {})
 
 workers?.addEventListener('controllerchange', () => {
-  // A worker claiming a page that had none is the first install, not an
-  // update; there is nothing newer to go and get.
   if (!hadController) return
-  // A new worker is a reason to look, not a reason to reload: it can be the
-  // very build this page is already running, claiming it a moment late.
+  // A new worker may be this very build claiming the page late, so it only prompts a look.
   void checkForNewBuild()
 })
 
-/** Take a waiting build now if this is a moment where nobody would notice. */
+/** A phone reloads for a new build only on the waiting screen (`updates.ts`). */
 function reloadIfSafe(): void {
   if (reloading || !shouldReload(screen, updatePending)) return
   reloading = true
   window.location.reload()
 }
 
-/**
- * Is this page the build the server is serving? Asked every time the phone
- * gets a socket — a phone left open across a deploy would otherwise sit on the
- * old build until somebody thought to reload it — and again whenever a new
- * worker takes over.
- *
- * The answer from `/version` is the only thing that decides staleness. A new
- * worker on its own does not: it is often this very build claiming the page a
- * moment late, and reloading on that reloads twice for one deploy.
- */
+/** `/version` is the only thing that decides staleness, asked on every socket. */
 async function checkForNewBuild(): Promise<void> {
   try {
     const response = await fetch('/version', { cache: 'no-store' })
@@ -1151,17 +873,9 @@ async function checkForNewBuild(): Promise<void> {
     updatePending = true
     await (await workers?.getRegistration())?.update()
     reloadIfSafe()
-  } catch {
-    // Offline, or a dev server with no /version: try again on the next connect.
-  }
+  } catch {}
 }
 
-// The socket comes first now, before anybody has typed anything: a join screen
-// is a row of swatches with names under the taken ones, and only the TV knows
-// which those are. So the phone waits for a world, then asks for a name and a
-// colour — and a phone that was already in this world walks back into its blob
-// without being asked anything at all.
-//
 // Last, so every handler above is wired before it can fire.
 showSoundSwitch()
 showScreen('waiting')

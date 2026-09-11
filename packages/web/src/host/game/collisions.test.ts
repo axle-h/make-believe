@@ -165,10 +165,7 @@ describe('nearestTouching', () => {
   })
 })
 
-/**
- * The shove a task can ask for on top of separation. It is opt-in, so these
- * call it directly: `tick` never does, and nothing outside sumo should.
- */
+/** `barge` is opt-in, so these call it directly: `tick` never does. */
 describe('barge', () => {
   it('sends the blob being driven into skidding further than it was in the way', () => {
     const state = world({ id: 'a', x: 300, y: 300 }, { id: 'b', x: 300 + BLOB_SIZE, y: 300 })
@@ -177,8 +174,7 @@ describe('barge', () => {
     barge(state, 200, 100)
 
     expect(at(state, 'b').x).toBeCloseTo(300 + BLOB_SIZE + 20, 5)
-    // Whoever is doing the shoving stays exactly where their own driving put
-    // them: the push is something they give, not something they take.
+    // The shover stays where its own driving put it: the push is given, not taken.
     expect(at(state, 'a').x).toBe(300)
   })
 
@@ -224,8 +220,7 @@ describe('barge', () => {
     applyMessage(state, { type: 'input', playerId: 'a', dx: 1, dy: 0 })
 
     for (let frame = 0; frame < 200; frame++) {
-      // A shove is on top of driving, not instead of it: `tick` is what moves
-      // the blob doing the shoving, so this stands in for it.
+      // Stands in for `tick`, which is what moves the blob doing the shoving.
       const a = at(state, 'a')
       a.x = Math.min(WORLD_WIDTH - BLOB_SIZE / 2, a.x + 8)
       barge(state, 400, 16)

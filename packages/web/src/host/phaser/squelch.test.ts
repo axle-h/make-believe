@@ -12,13 +12,6 @@ import {
   type Squelch,
 } from './squelch.js'
 
-/**
- * The bounce never moves a blob — the model does that — so everything here is
- * about what gets drawn: how high, how squashed, how far over, and how quickly
- * each of those comes and goes.
- */
-
-/** Drive a blob at a velocity in world units per second for a while. */
 function run(from: Squelch, vx: number, vy: number, ms: number, stepMs = 16): Squelch {
   let squelch = from
   for (let elapsed = 0; elapsed < ms; elapsed += stepMs) {
@@ -27,7 +20,6 @@ function run(from: Squelch, vx: number, vy: number, ms: number, stepMs = 16): Sq
   return squelch
 }
 
-/** Every pose a blob strikes over a run, for the ones that are about the whole hop. */
 function poses(from: Squelch, vx: number, ms: number, stepMs = 16) {
   let squelch = from
   const seen = []
@@ -56,10 +48,7 @@ describe('a blob standing still', () => {
     expect(pose.scaleY).toBeCloseTo(1)
   })
 
-  /**
-   * Blobs shove each other apart a pixel at a time, so a pair leaning together
-   * is technically moving. If that counted as running, a huddle would shimmer.
-   */
+  /** Separation nudges huddled blobs a pixel at a time; that must not read as running. */
   it('is not set off by being nudged a pixel at a time', () => {
     const squelch = run(restingSquelch(), 10, 0, 2000)
 
@@ -82,16 +71,11 @@ describe('a blob on the move', () => {
     expect(Math.min(...lifts)).toBeGreaterThanOrEqual(0)
   })
 
-  /**
-   * The hop is paced by ground covered rather than by the clock, so half speed
-   * is long slow hops rather than the same scamper in slow motion.
-   */
   it('takes one hop per stretch of floor, whatever speed it covers it at', () => {
     const quick = run(restingSquelch(), SPEED, 0, 400)
     const slow = run(restingSquelch(), SPEED / 2, 0, 800)
 
     expect(quick.phase).toBeCloseTo(slow.phase, 6)
-    // 400ms at full speed is 168 units, which is one hop and a bit over a fifth.
     expect(quick.phase).toBeCloseTo(((SPEED * 0.4) % HOP_DISTANCE) / HOP_DISTANCE, 6)
   })
 

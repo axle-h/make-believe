@@ -1,18 +1,10 @@
-/**
- * Colours as numbers, and how far apart two of them look.
- *
- * There is very little here on purpose. Find-your-own-pad is the one task that
- * asks the question — which of these pads is nearest my colour — and a hex
- * string and a subtraction are the whole of what it needs.
- */
-
 export interface Rgb {
   r: number
   g: number
   b: number
 }
 
-/** `#rrggbb` to numbers. Anything unparseable comes back black. */
+/** Anything unparseable comes back black. */
 export function toRgb(hex: string): Rgb {
   const digits = hex.replace('#', '')
   if (digits.length !== 6) return { r: 0, g: 0, b: 0 }
@@ -23,11 +15,7 @@ export function toRgb(hex: string): Rgb {
   }
 }
 
-/**
- * How far apart two colours look, roughly. The green channel counts for most
- * and the blue for least, which is about how an eye weighs them — near enough
- * for telling a red blob from a blue one, and no cause for a colour space.
- */
+/** Weighted roughly as an eye weighs the channels; near enough for telling blobs apart. */
 export function distance(one: Rgb, other: Rgb): number {
   const r = one.r - other.r
   const g = one.g - other.g
